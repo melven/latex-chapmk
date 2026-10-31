@@ -12,7 +12,7 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-_CONTROL_WORD = re.compile(r"\\([A-Za-z@]+\*?|.)")
+_CONTROL_WORD = re.compile(r"\\([A-Za-z@]+\*?|[\s\S])")
 
 
 def strip_comment(line: str) -> str:

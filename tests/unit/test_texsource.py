@@ -66,3 +66,8 @@ def test_split_lines_only_at_newline() -> None:
     assert split_lines("a\r\nb\x0cc\n\nd") == ["a\r\n", "b\x0cc\n", "\n", "d"]
     assert split_lines("") == []
     assert split_lines("x\n") == ["x\n"]
+
+
+def test_backslash_at_line_end_does_not_stop_scanning() -> None:
+    text = "a\\\n\\include{x}\\"
+    assert [c.name for c in control_sequences(text)] == ["\n", "include"]
