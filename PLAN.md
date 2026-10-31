@@ -215,7 +215,7 @@ Requirements:
    - `G<k>` at `include/after`;
    - for an excluded unit: at `include/excluded` [S3].
 2. **State records.**
-   - The *state vector* is all allocated `\count` registers, determined from the kernel allocation pointers [S4]. It includes the LaTeX counters and, for example, `LT@tables` and `\Hy@linkcounter`.
+   - The *state vector* is all allocated `\count` registers, determined from the kernel allocation pointers [S4], **minus a deny list of scratch registers** (e.g. `\@tempcnta`, `\@tempcntb`, `\count@`, expl3 `\l_tmp*_int`/`\g_tmp*_int`, pgf temporaries, `\@listdepth`). Scratch registers hold arbitrary values at segment boundaries that differ between partial and full runs without affecting output; including them would make condition §6.9.1(d) fire on every build. The vector includes the LaTeX counters and, for example, `LT@tables` and `\Hy@linkcounter`. The deny list is one table in `fastinc.sty`, extensible by config (`[state] ignore`). It is re-evaluated against real documents (S4, `fastinc check` on the benchmark document): a register whose entry values differ between partial and full runs without an output difference is a deny-list candidate; an output difference traced to a denied register removes it from the list.
    - At `\begin{document}` (end of the `AtBeginDocument` hooks), write a baseline `\fastinc@base{...}` to the main aux (`\immediate\write\@mainaux`), as a sparse vector `n=v,...`.
    - At each segment start, write `\fastinc@entry{<seg>}{<sparse vector vs base>}` to the main aux. This happens in every run, for selected and excluded units alike. For excluded units it is written **before** their checkpoints are restored.
    - At each unit end, **after** the final `\clearpage` of `\include` (`include/after`, while the unit aux is still open [S3]), write `\fastinc@ckpt{<unit>}{<registers changed since unit entry: n=v,...>}` to the unit aux. Not at `include/end`: that hook runs before the final `\clearpage`, so the page counter and other changes made by the last shipouts would be missing.
@@ -527,6 +527,8 @@ allow = []                     # e.g. ["\\setlength"]
 [aux]
 self = []                      # extra regexes of aux lines classified "self"
 ignore = []
+[state]
+ignore = []                    # extra \count registers excluded from the state vector
 ```
 
 ### 6.16 Cross-platform
@@ -663,7 +665,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | S1 | mylatexformat with the thesis preamble split before `hyperref`: dump OK? Runtime skip semantics with the marker plus blank lines? SyncTeX OK? Can `hyperref` and `biblatex` go into the format? `\makenomenclature` deferral works? |
 | S2 | `-output-directory` read order (aux and derived files) with cwd = source; stale files in the source directory; `\include` subdirectories; `\graphicspath`; `TEXMF_OUTPUT_DIRECTORY`. S2b: write mode of nomencl's `.nlo` writes. |
 | S3 | Hook order: `include/before` relative to the initial `\clearpage`; pages from the final `\clearpage` before `include/after`; whether the unit aux is still open (`\@auxout` = `\@partaux`) at `include/after`, else where to write `\fastinc@ckpt`; existence and timing of `include/excluded` relative to the checkpoint restore; file hook for TikZ libraries; graphicx inclusion hook point. |
-| S4 | Enumerating allocated `\count` registers (kernel allocation pointers, extended registers); confirm `LT@tables` and `\Hy@linkcounter` are covered; cost of writing vectors. |
+| S4 | Enumerating allocated `\count` registers (kernel allocation pointers, extended registers); confirm `LT@tables` and `\Hy@linkcounter` are covered; cost of writing vectors; initial scratch-register deny list (registers whose segment-entry values differ between a partial and a full run on the corpus). |
 | S5 | biblatex `.bcf` contents after an `\includeonly` run; `.bcf` patch feasibility. |
 | S6 | hyperref: `/Dests` name tree, dummy-destination log format, anchor naming (`section*.N` via `\Hy@linkcounter`), `.out` grammar and write mode, `\HyPL@Entry` semantics. |
 | S7 | Running heads on the first page of a unit (scrbook marks) in a partial run vs a full run; whether A5 suffices; fix if feasible (restoring mark state). |
@@ -734,7 +736,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 
 | Record | File | Format |
 |---|---|---|
-| baseline | main aux | `\fastinc@base{n=v,n=v,...}` (allocated `\count` registers, all) |
+| baseline | main aux | `\fastinc@base{n=v,n=v,...}` (allocated `\count` registers minus the scratch deny list, §6.4.2) |
 | entry | main aux | `\fastinc@entry{<seg>}{n=v,...}` (sparse vs baseline) |
 | glue exit | main aux | `\fastinc@gexit{<seg>}{n=v,...}` (sparse vs baseline) |
 | absolute set | unit aux / main aux | `\fastinc@abs{<seg>}{n,n,...}` |
