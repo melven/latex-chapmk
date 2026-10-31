@@ -248,7 +248,12 @@ pdflatex -fmt=<fmt> -interaction=nonstopmode -halt-on-error -file-line-error \
          .fastinc/runs/<r>/main.tex
 ```
 
-- The working directory is the source directory, so relative `\include`, `\input` and `\graphicspath` resolve as usual.
+- The working directory is the **shadow tree** `.fastinc/src/`, so relative `\include`, `\input` and `\graphicspath` resolve as usual, and stale build files in the user's source directory (left over from manual builds) can never be read.
+  - **Contents:** a mirror of the source tree made of symlinks to regular files. Excluded: the build directory, `.git/`, and the LaTeX outputs of the main job and the units (`<main>.*` except the main `.tex`, and `<unit>.aux`).
+  - **Refresh:** once per build, before the runs. Parallel runs share it read-only.
+  - **Path mapping:** shadow paths map to source paths by prefix substitution, for logs (§6.13) and SyncTeX (§6.12).
+  - **Platforms:** where symlinks are unavailable (Windows without the privilege), use hardlinks, else copies [M7].
+  - **Limitation (accepted in v1):** relative paths that leave the source tree (`\input{../x}`) do not resolve. Absolute paths work.
 - Environment: N4, `max_print_line=10000`, and `TEXMF_OUTPUT_DIRECTORY` if needed [S2].
 
 **Run directory preparation:**
@@ -257,7 +262,7 @@ pdflatex -fmt=<fmt> -interaction=nonstopmode -halt-on-error -file-line-error \
 2. Copy the derived files `.toc .lof .lot .loalg .tdo .bbl .nls`.
 3. Create the subdirectories for `\include` paths.
 
-**[S2] verifies** the read search order: that the output directory is read before the source directory, and what happens with stale `main.aux` / unit aux files in the source directory left over from manual builds. If stale files can shadow, the driver must refuse to run while they exist, or the runs must use a copy of the source tree.
+**[S2] verifies** the read search order: that the output directory is read before the working directory; that the shadow tree works (`\include` subdirectories, `\graphicspath`, graphics and `.bib` through symlinks, SyncTeX `Input:` paths as opened); and, for documentation, whether stale aux files in a plain source directory would be read.
 
 **Outputs per run:** `main.pdf`, `main.synctex.gz`, `main.log`, `main.fls`, `main.aux`, unit aux files, `main.fpg`, `main.ffl`, `main.out`, `main.nlo`, `main.bcf`.
 
@@ -452,7 +457,7 @@ Phase 2: a speculative parallel first pass with composition (needs a model for "
 ### 6.10 External tools
 
 **biber:**
-- Run with cwd = source directory: `biber --output-directory <build>/canon main`. Biber then reads `main.bcf` from `canon/` (the output directory is searched first) and resolves `.bib` paths relative to the source directory. Do not pass `--input-directory`: biber would then look for `main.bcf` only there (missing or stale in the source directory).
+- Run with cwd = shadow tree (§6.5): `biber --output-directory <build>/canon main`. Biber then reads `main.bcf` from `canon/` (the output directory is searched first) and resolves `.bib` paths relative to the working directory. Do not pass `--input-directory`: biber would then look for `main.bcf` only there.
 - Trigger: the citation set or order changed, the `.bib` hash changed, or the `.bcf` structure changed.
 - [S5]: does a partial run's `.bcf` contain only the selected units' citations? If yes, the driver patches the citekey list of the canonical `.bcf` (XML: `bcf:citekey` elements in `bcf:section number="0"`) with the union of all units' `\abx@aux@cite` entries, in document order (main aux and unit aux in reading order). Biber never runs on an unpatched partial `.bcf`.
 - After biber, diff the `.bbl` per `\entry{key}…\endentry` block (content and position) → changed cite values.
@@ -651,7 +656,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | T17 | SyncTeX round trip for every segment | §3.3 item 4 |
 | T18 | `\setlength` in ch2 body | lint warning; ch2 is global; successors recompiled after ch2 changes |
 | T18b | `\setlength` inside a `table` environment and inside `{...}` in ch2 | no lint hit; ch2 not global; §3.3 holds |
-| T19 | stale `main.aux` in the source directory | behaviour per [S2] |
+| T19 | stale `main.aux` and unit aux files in the source directory | ignored (shadow tree); §3.3 holds |
 
 ### 8.3 Unit tests
 
@@ -678,7 +683,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | Spike | Question |
 |---|---|
 | S1 | mylatexformat with the thesis preamble split before `hyperref`: dump OK? Runtime skip semantics with the marker plus blank lines? SyncTeX OK? Can `hyperref` and `biblatex` go into the format? `\makenomenclature` deferral works? |
-| S2 | `-output-directory` read order (aux and derived files) with cwd = source; stale files in the source directory; `\include` subdirectories; `\graphicspath`; `TEXMF_OUTPUT_DIRECTORY`. S2b: write mode of nomencl's `.nlo` writes. |
+| S2 | `-output-directory` read order (aux and derived files); shadow tree (§6.5): `\include` subdirectories, `\graphicspath`, symlinked graphics and `.bib`, SyncTeX paths; stale files in a plain source directory (documentation only); `TEXMF_OUTPUT_DIRECTORY`. S2b: write mode of nomencl's `.nlo` writes. |
 | S3 | Hook order: `include/before` relative to the initial `\clearpage`; pages from the final `\clearpage` before `include/after`; whether the unit aux is still open (`\@auxout` = `\@partaux`) at `include/after`, else where to write `\fastinc@ckpt`; existence and timing of `include/excluded` relative to the checkpoint restore; file hook for TikZ libraries; graphicx inclusion hook point. |
 | S4 | Enumerating allocated `\count` registers (kernel allocation pointers, extended registers); confirm `LT@tables` and `\Hy@linkcounter` are covered; cost of writing vectors; initial scratch-register deny list (registers whose segment-entry values differ between a partial and a full run on the corpus). |
 | S5 | biblatex `.bcf` contents after an `\includeonly` run; `.bcf` patch feasibility. |
@@ -711,7 +716,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 |---|---|
 | mylatexformat incompatibility with a package | Deny list and config `split_before`; S1 |
 | Partial-run differences not captured by the count-register vector (marks, dimens/skips, `\everypar` state, …) | Acceptance tests on every scenario; extend vectors to `\dimen`/`\skip` if needed; S7 |
-| Read-order issues with `-output-directory` | S2; fallback: copy the source tree per run |
+| Read-order issues with `-output-directory` | Shadow tree (§6.5) excludes stale build files; S2 |
 | Text-scan import misses (keys built by macros) | Accepted for v1; `check` detects; config option to mark keys global |
 | PDF merge subtleties (OpenAction, forms, OCGs) | Copy rules §6.11.6; fallback on unknown catalog entries |
 | Glue cost (bibliography, lists) in every run | Measure in benchmarks; phase 2: checkpoint glue segments without macro effects so they can be skipped |
