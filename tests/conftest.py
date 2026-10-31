@@ -44,7 +44,10 @@ def prepare_figures(src: Path) -> None:
     for tex in sorted(src.glob("fig/*.tex")):
         subprocess.run(
             ["pdflatex", "-interaction=batchmode", "-halt-on-error", tex.name],
-            cwd=tex.parent, env=dict(os.environ), check=True, stdout=subprocess.DEVNULL,
+            cwd=tex.parent,
+            env=dict(os.environ),
+            check=True,
+            stdout=subprocess.DEVNULL,
         )
         for ext in (".aux", ".log"):
             tex.with_suffix(ext).unlink(missing_ok=True)
