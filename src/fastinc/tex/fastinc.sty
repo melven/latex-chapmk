@@ -1,0 +1,201 @@
+%% fastinc.sty -- runtime records of incremental runs (PLAN §6.4.2, Appendix B).
+%% Loaded at the format split point of every incremental run (gensrc.run_main). Records and
+%% hooks only, no logic. The version must equal the driver version (fastinc.__version__).
+%% Bookkeeping uses macros only: every \count allocated here would enter the state vector.
+\NeedsTeXFormat{LaTeX2e}[2023/06/01]
+\ProvidesPackage{fastinc}[2026/10/31 v0.1.0 fastinc: runtime records]
+
+\@ifundefined{fastinc@kernelcount}{%
+  \PackageError{fastinc}{fastinc-ini.sty was not loaded before \string\documentclass}{}%
+  \def\fastinc@kernelcount{0}}{}
+% set by the driver before \usepackage{fastinc}: extra run-local register names ([state] ignore)
+\providecommand\fastinc@denynames{}
+
+%% ---------------------------------------------------------------- helpers
+\def\fastinc@seg{G0}%  current segment id
+\def\fastinc@k{0}%     number of \include commands seen so far
+\def\fastinc@wrapped{-1}% \include index whose checkpoint wrapper ran (excluded units)
+\def\fastinc@inc#1{\xdef#1{\the\numexpr#1+1\relax}}
+% \fastinc@idx{<csname>}: index of the \count register \<csname>, -1 otherwise (expandable;
+% parses \meaning = "\count<n>")
+\edef\fastinc@tmp{%
+  \def\noexpand\fastinc@idx@##1\detokenize{count}##2\detokenize{count}##3\noexpand\@nil{%
+    \noexpand\ifx\noexpand\relax##2\noexpand\relax -1\noexpand\else##2\noexpand\fi}}
+\fastinc@tmp
+\edef\fastinc@tmp{% the appended "countcount" must be literal (catcode 12) characters
+  \def\noexpand\fastinc@idx##1{\noexpand\ifcsname##1\noexpand\endcsname
+    \noexpand\expandafter\noexpand\expandafter\noexpand\expandafter\noexpand\fastinc@idx@
+    \noexpand\expandafter\noexpand\meaning\noexpand\csname##1\noexpand\endcsname
+    \detokenize{countcount}\noexpand\@nil
+  \noexpand\else -1\noexpand\fi}}
+\fastinc@tmp
+
+%% ---------------------------------------------------------------- state vector (S4)
+% members: kernel checkpoint counters (\fastinc@kidx, built at \begin{document}) and every
+% register above \fastinc@kernelcount that is not run-local (\fastinc@deny@<n>).
+\def\fastinc@kidx{}
+\def\fastinc@setup@vector{%
+  \def\@elt##1{\edef\fastinc@tmp{\fastinc@idx{c@##1}}%
+    \ifnum\fastinc@tmp>-1 \ifnum\fastinc@tmp>\fastinc@kernelcount\else
+      \xdef\fastinc@kidx{\fastinc@kidx\fastinc@tmp,}\fi\fi}%
+  \cl@@ckpt
+  \let\@elt\relax
+  \edef\fastinc@tmp{Hy@abspage,BKM@id,\fastinc@denynames}%
+  \@for\fastinc@name:=\fastinc@tmp\do{\ifx\fastinc@name\@empty\else
+    \edef\fastinc@tmp{\fastinc@idx{\fastinc@name}}%
+    \ifnum\fastinc@tmp>-1 \expandafter\global\expandafter\let
+      \csname fastinc@deny@\fastinc@tmp\endcsname\@empty\fi\fi}}
+% \fastinc@vec: "n=v," for each vector register whose value differs from its reference value
+% \<\fastinc@pfx>@<n> (0 if unset). Expandable; set \fastinc@pfx before writing.
+\def\fastinc@pfx{fastinc@zero}
+\def\fastinc@ref#1{\ifcsname\fastinc@pfx @#1\endcsname\csname\fastinc@pfx @#1\endcsname
+  \else0\fi}
+% (a space, not \relax, ends the number: \relax would remain in \write output);
+% prefix "all" writes every register (complete vector)
+\def\fastinc@all{all}
+\def\fastinc@one#1{\ifx\fastinc@pfx\fastinc@all#1=\the\count#1,\else
+  \ifnum\count#1=\fastinc@ref{#1} \else#1=\the\count#1,\fi\fi}
+\def\fastinc@vec{\expandafter\fastinc@kvec\fastinc@kidx\@nil,\fastinc@rvec@start}
+\def\fastinc@kvec#1,{\ifx\@nil#1\else\fastinc@one{#1}\expandafter\fastinc@kvec\fi}
+\def\fastinc@rvec@start{%
+  \expandafter\fastinc@rvec\expandafter{\the\numexpr\fastinc@kernelcount+1}}
+\def\fastinc@rvec#1{\ifnum#1>\count10 \else
+  \ifcsname fastinc@deny@#1\endcsname\else\fastinc@one{#1}\fi
+  \expandafter\fastinc@rvec\expandafter{\the\numexpr#1+1\expandafter}\fi}
+% store the current vector under prefix #1 (fastinc@b: baseline)
+\def\fastinc@store#1{\def\fastinc@pfx{#1}%
+  \@for\fastinc@tmp:=\fastinc@kidx\do{\ifx\fastinc@tmp\@empty\else
+    \expandafter\xdef\csname#1@\fastinc@tmp\endcsname{\the\count\fastinc@tmp}\fi}%
+  \xdef\fastinc@i{\the\numexpr\fastinc@kernelcount+1}%
+  \fastinc@store@}
+\def\fastinc@store@{\ifnum\fastinc@i>\count10 \else
+  \expandafter\xdef\csname\fastinc@pfx @\fastinc@i\endcsname{\the\count\fastinc@i}%
+  \fastinc@inc\fastinc@i\expandafter\fastinc@store@\fi}
+
+%% ---------------------------------------------------------------- records
+\newwrite\fastinc@rec
+\immediate\openout\fastinc@rec=\jobname.frec
+\def\fastinc@main#1{\immediate\write\@mainaux{#1}}
+\def\fastinc@entry@rec{\def\fastinc@pfx{fastinc@b}%
+  \fastinc@main{\string\fastinc@entry{\fastinc@seg}{\fastinc@vec}}}
+\def\fastinc@gexit@rec{\def\fastinc@pfx{fastinc@b}%
+  \fastinc@main{\string\fastinc@gexit{\fastinc@seg}{\fastinc@vec}}}
+% segment marker in the nomenclature stream (delayed, like nomencl's own writes; S2b)
+\def\fastinc@mark{\ifdefined\@nomenclaturefile
+  \edef\fastinc@tmp{\noexpand\protected@write\noexpand\@nomenclaturefile{}%
+    {\@percentchar fastinc-seg \fastinc@seg}}\fastinc@tmp\fi}
+% absolute assignments of the current segment (counter names), for prediction (§6.9.3)
+\def\fastinc@absnames{}
+\def\fastinc@abs@add#1{\xdef\fastinc@absnames{\fastinc@absnames#1,}}
+\def\fastinc@abs@rec#1{% #1: write stream
+  \def\fastinc@absidx{}%
+  \@for\fastinc@tmp:=\fastinc@absnames\do{\ifx\fastinc@tmp\@empty\else
+    \edef\fastinc@absidx{\fastinc@absidx\fastinc@idx{c@\fastinc@tmp},}\fi}%
+  \immediate\write#1{\string\fastinc@abs{\fastinc@seg}{\fastinc@absidx}}%
+  \gdef\fastinc@absnames{}}
+% (\protected: never expanded in \edef/\write contexts)
+\AtBeginDocument{\let\fastinc@orig@setcounter\setcounter
+  \protected\def\setcounter#1{\fastinc@abs@add{#1}\fastinc@orig@setcounter{#1}}%
+  \let\fastinc@orig@stpelt\@stpelt
+  \protected\def\@stpelt#1{\fastinc@abs@add{#1}\fastinc@orig@stpelt{#1}}%
+  \let\fastinc@orig@pagenumbering\pagenumbering
+  \protected\def\pagenumbering{\fastinc@abs@add{page}\fastinc@orig@pagenumbering}}
+
+% segment transitions
+\def\fastinc@glue@end{\fastinc@gexit@rec\fastinc@abs@rec\@mainaux}
+\def\fastinc@unit@begin#1{% #1: include argument as known (may be empty)
+  \fastinc@inc\fastinc@k
+  \fastinc@glue@end
+  \xdef\fastinc@seg{U\fastinc@k}%
+  \fastinc@main{\string\fastinc@unit{\fastinc@seg}{#1}}%
+  \fastinc@entry@rec\fastinc@mark}
+\def\fastinc@glue@begin{%
+  \xdef\fastinc@seg{G\fastinc@k}\fastinc@entry@rec\fastinc@mark\gdef\fastinc@absnames{}}
+
+% included unit (S3: after the first \clearpage, unit aux open)
+\AddToHook{include/before}{%
+  \fastinc@unit@begin{\CurrentFilePath/\CurrentFile}\gdef\fastinc@absnames{}}
+% unit end after the final \clearpage, unit aux still open (S3). The checkpoint is the
+% complete vector: the restore of an excluded unit must also undo changes made by the
+% exclusion itself (e.g. calc's \setcounter scratch register during the kernel restore).
+\AddToHook{include/after}{%
+  \let\fastinc@pfx\fastinc@all
+  \immediate\write\@partaux{\string\fastinc@ckpt{\fastinc@seg}{\fastinc@vec}}%
+  \fastinc@abs@rec\@partaux
+  \fastinc@glue@begin}
+
+% excluded unit: the kernel restores \cp@<unit> before include/excluded (S3), so the entry is
+% recorded by wrapping \@setckpt (read from the unit aux); fastinc's restore follows the
+% kernel's. The \fastinc@ckpt record read just before \@setckpt belongs to the same unit.
+\def\fastinc@lastckpt{}
+\def\fastinc@ckpt#1#2{\gdef\fastinc@lastckpt{#2}}
+\let\fastinc@orig@setckpt\@setckpt
+\def\@setckpt#1#2{%
+  \expandafter\global\expandafter\let\csname fastinc@ck@#1\endcsname\fastinc@lastckpt
+  \global\let\fastinc@lastckpt\@empty
+  \fastinc@orig@setckpt{#1}{\fastinc@excluded@begin{#1}#2\fastinc@restore{#1}}}
+\def\fastinc@excluded@begin#1{\fastinc@unit@begin{#1}\xdef\fastinc@wrapped{\fastinc@k}}
+\def\fastinc@restore#1{% assign the stored post-kernel registers (S4)
+  \edef\fastinc@tmp{\csname fastinc@ck@#1\endcsname}%
+  \@for\fastinc@tmp:=\fastinc@tmp\do{\ifx\fastinc@tmp\@empty\else
+    \expandafter\fastinc@assign\fastinc@tmp\@nil\fi}}
+\def\fastinc@assign#1=#2\@nil{%
+  \ifnum#1>\fastinc@kernelcount\relax
+    \ifcsname fastinc@deny@#1\endcsname\else\global\count#1=#2\relax\fi\fi}
+\AddToHook{include/excluded}{%
+  \ifnum\fastinc@wrapped=\fastinc@k\else % never compiled: no checkpoint, no entry
+    \fastinc@inc\fastinc@k\fastinc@glue@end
+    \xdef\fastinc@seg{U\fastinc@k}\fastinc@main{\string\fastinc@unit{\fastinc@seg}{}}\fi
+  \fastinc@glue@begin}
+
+% page map and file attribution (\jobname.frec)
+\AddToHook{shipout/before}{\protected@edef\fastinc@tmp{\thepage}%
+  \immediate\write\fastinc@rec{P \the\ReadonlyShipoutCounter\space\fastinc@seg\space
+    \the\c@page\space\fastinc@tmp}}
+\AddToHook{file/before}{\immediate\write\fastinc@rec{F \fastinc@seg\space
+  \CurrentFilePathUsed/\CurrentFileUsed}}
+\AtBeginDocument{\ifdefined\Gin@setfile
+  \let\fastinc@orig@Gin@setfile\Gin@setfile
+  \def\Gin@setfile#1#2#3{\immediate\write\fastinc@rec{F \fastinc@seg\space#3}%
+    \fastinc@orig@Gin@setfile{#1}{#2}{#3}}\fi}
+
+% aux handlers (aux files are read at \begin and \end{document})
+\def\fastinc@base#1{}
+\def\fastinc@entry#1#2{}
+\def\fastinc@gexit#1#2{}
+\def\fastinc@abs#1#2{}
+\def\fastinc@unit#1#2{}
+\def\fastinc@bkmlevels#1{}
+
+% baseline at the end of the \begin{document} hooks
+\AddToHook{begindocument/end}{%
+  \fastinc@main{\string\providecommand\string\fastinc@base[1]{}%
+    \string\providecommand\string\fastinc@entry[2]{}\string\providecommand\string\fastinc@gexit[2]{}%
+    \string\providecommand\string\fastinc@abs[2]{}\string\providecommand\string\fastinc@unit[2]{}%
+    \string\providecommand\string\fastinc@ckpt[2]{}\string\providecommand\string\fastinc@bkmlevels[1]{}}%
+  \fastinc@setup@vector
+  \fastinc@store{fastinc@b}%
+  \def\fastinc@pfx{fastinc@zero}%
+  \fastinc@main{\string\fastinc@base{\fastinc@vec}}%
+  \fastinc@entry@rec\fastinc@mark
+  \gdef\fastinc@absnames{}}
+
+% end of the last glue segment; bookmark levels (S6: \BKM@<id> = {parent}{level}{children})
+\def\fastinc@lvl#1#2#3{#2}
+\AddToHook{enddocument}{%
+  \fastinc@glue@end
+  \ifdefined\BKM@id
+    \def\fastinc@tmp{}\gdef\fastinc@i{1}%
+    \loop\ifnum\fastinc@i>\BKM@id\else
+      \edef\fastinc@tmp{\fastinc@tmp\fastinc@i=%
+        \expandafter\expandafter\expandafter\fastinc@lvl\csname BKM@\fastinc@i\endcsname,}%
+      \fastinc@inc\fastinc@i\repeat
+    \fastinc@main{\string\fastinc@bkmlevels{\fastinc@tmp}}%
+  \fi}
+
+% externalize neutralisation again (idempotent; §6.4.3) and the deferral table (§6.3.3)
+\ifdefined\tikzexternalize\ifdefined\fastinc@neutralise@externalize
+  \fastinc@neutralise@externalize\fi\fi
+\fastinc@deferred
+
+\endinput
