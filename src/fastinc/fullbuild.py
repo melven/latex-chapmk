@@ -75,37 +75,81 @@ def read_inputs(fls: Path, cwd: Path, within: Path) -> set[Path]:
 
 
 @dataclass
-class _ToolState:
-    """Content hashes of the inputs when biber/makeindex last ran."""
+class ToolState:
+    """Content hashes of the inputs when biber/makeindex last ran, and the tool runs."""
 
     bcf: str | None = None
     nlo: str | None = None
     runs: list[str] = field(default_factory=list)
 
 
-def _run_tools(
-    analysis: Analysis,
-    layout: Layout,
+def run_tools(
+    job: str,
+    outdir: Path,
+    cwd: Path,
     dist: TexDistribution,
     env: Mapping[str, str],
-    state: _ToolState,
+    state: ToolState,
 ) -> None:
-    out, job = layout.full_dir, analysis.jobname
-    bcf = out / f"{job}.bcf"
+    """Run biber and makeindex (nomencl) in ``outdir`` when their inputs changed."""
+    bcf = outdir / f"{job}.bcf"
     if bcf.is_file() and _digest(bcf) != state.bcf:
-        r = run(dist.biber(job, out), cwd=layout.shadow_dir, env=env, log_path=out / "biber.out")
+        r = run(dist.biber(job, outdir), cwd=cwd, env=env, log_path=outdir / "biber.out")
         if not r.ok:
-            raise ToolError(f"biber failed, see {out / f'{job}.blg'}")
+            raise ToolError(f"biber failed, see {outdir / f'{job}.blg'}")
         state.bcf = _digest(bcf)
         state.runs.append("biber")
-    nlo = out / f"{job}.nlo"
+    nlo = outdir / f"{job}.nlo"
     if nlo.is_file() and _digest(nlo) != state.nlo:
         argv = dist.makeindex(nlo.name, f"{job}.nls", NOMENCL_STYLE)
-        r = run(argv, cwd=out, env=env, log_path=out / "makeindex.out")
+        r = run(argv, cwd=outdir, env=env, log_path=outdir / "makeindex.out")
         if not r.ok:
             raise ToolError(f"makeindex failed: {r.output.strip()[-500:]}")
         state.nlo = _digest(nlo)
         state.runs.append("makeindex")
+
+
+@dataclass(frozen=True)
+class PassResult:
+    """Outcome of one pdflatex pass for :func:`converge`."""
+
+    ok: bool
+    first_error: str | None
+
+
+def converge(
+    job: str,
+    outdir: Path,
+    cwd: Path,
+    dist: TexDistribution,
+    env: Mapping[str, str],
+    run_pass: Callable[[], PassResult],
+    *,
+    report: Callable[[str], None] = lambda _msg: None,
+    max_passes: int = MAX_PASSES,
+) -> tuple[int, ToolState]:
+    """Repeat ``run_pass`` (plus biber/makeindex) until no build file read by a pass changed
+    during it (latexmk's criterion). Returns the number of passes and the tool runs.
+
+    Raises :class:`TexError` (``log`` = the run's log) on a failing pass or without fixpoint.
+    """
+    tools = ToolState()
+    log = outdir / f"{job}.log"
+    for n in range(1, max_passes + 1):
+        before = _snapshot(outdir)
+        result = run_pass()
+        if not result.ok:
+            raise TexError(f"pdflatex failed in pass {n}", log=log, first_error=result.first_error)
+        run_tools(job, outdir, cwd, dist, env, tools)
+        changed = sorted(
+            p.name
+            for p in read_inputs(outdir / f"{job}.fls", cwd, outdir)
+            if before.get(p) != _digest(p)
+        )
+        report(f"pass {n}: " + (f"changed {_names(changed)}" if changed else "stable"))
+        if not changed:
+            return n, tools
+    raise TexError(f"no fixpoint after {max_passes} passes (files keep changing)", log=log)
 
 
 def _publish_log(analysis: Analysis, layout: Layout) -> Path:
@@ -127,8 +171,8 @@ def full_build(
     report: Callable[[str], None] = lambda _msg: None,
     max_passes: int = MAX_PASSES,
 ) -> FullBuildResult:
-    """Run pdflatex (plus biber and makeindex for nomencl) until no file read by a pass
-    changed during that pass, then publish the results.
+    """Full mode: pdflatex on the unmodified sources (with fastinc-ini) to a fixpoint, then
+    publish the results.
 
     On a TeX error the previous published PDF is kept, the failing log is published and a
     :class:`TexError` is raised. The shadow tree must be up to date.
@@ -138,31 +182,22 @@ def full_build(
     for inc in analysis.includes:  # \include writes <arg>.aux into the output directory (S2)
         (out / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
     argv = dist.pdflatex(full_mode_input(analysis), job, out)
-    tools = _ToolState()
-    for n in range(1, max_passes + 1):
-        before = _snapshot(out)
+
+    def run_pass() -> PassResult:
         result = run(argv, cwd=layout.shadow_dir, env=env)
+        if result.ok and (out / f"{job}.pdf").is_file():
+            return PassResult(True, None)
         log = out / f"{job}.log"
-        if not result.ok or not (out / f"{job}.pdf").is_file():
-            _publish_log(analysis, layout)
-            text = log.read_text(errors="replace") if log.is_file() else result.output
-            err = first_error(map_paths(text, layout.path_map()))
-            raise TexError(
-                f"pdflatex failed in pass {n}", log=layout.output(".log"), first_error=err
-            )
-        _run_tools(analysis, layout, dist, env, tools)
-        changed = sorted(
-            p.name
-            for p in read_inputs(out / f"{job}.fls", layout.shadow_dir, out)
-            if before.get(p) != _digest(p)
+        text = log.read_text(errors="replace") if log.is_file() else result.output
+        return PassResult(False, first_error(map_paths(text, layout.path_map())))
+
+    try:
+        passes, tools = converge(
+            job, out, layout.shadow_dir, dist, env, run_pass, report=report, max_passes=max_passes
         )
-        report(f"pass {n}: " + (f"changed {_names(changed)}" if changed else "stable"))
-        if not changed:
-            break
-    else:
-        raise TexError(
-            f"no fixpoint after {max_passes} passes (files keep changing)", log=out / f"{job}.log"
-        )
+    except TexError as err:
+        err.log = _publish_log(analysis, layout)
+        raise
 
     pdf = publish(copy_bytes(out / f"{job}.pdf"), layout.output(".pdf"))
     syn_src = out / f"{job}.synctex.gz"
@@ -171,4 +206,4 @@ def full_build(
         syn = publish(
             lambda tmp: rewrite_paths(syn_src, tmp, layout.path_map()), layout.output(".synctex.gz")
         )
-    return FullBuildResult(pdf, syn, _publish_log(analysis, layout), n, tuple(tools.runs))
+    return FullBuildResult(pdf, syn, _publish_log(analysis, layout), passes, tuple(tools.runs))
