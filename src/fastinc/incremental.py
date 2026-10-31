@@ -42,7 +42,7 @@ from fastinc.fullbuild import full_build, read_inputs
 from fastinc.layout import Layout
 from fastinc.lint import LintHit, lint_files
 from fastinc.outputs import MergeFailedError, failed_run, publish_state
-from fastinc.records import RecordError, RunRecords, read_run_records
+from fastinc.records import RecordError, RunRecords, read_run_records, register_names
 from fastinc.runner import DERIVED_SUFFIXES, RunSpec, prepare_run_dir, run_one
 from fastinc.state import State, UnitInputs, load_state, save_state
 from fastinc.texdist import TexDistribution
@@ -210,6 +210,7 @@ class Fixpoint:
         self._scans: dict[str, TokenScan] = {}
         self._lint: dict[str, list[LintHit]] = {}
         self.warnings: list[str] = []
+        self.register_names: dict[int, str] = {}  # for messages, from the logs
 
     # sources -------------------------------------------------------------------------------
 
@@ -313,13 +314,16 @@ class Fixpoint:
                 add(seg, "self data unstable (rerun)")
             if seg not in compiled and seg in recs.entries:
                 entry = recs.entry_state(seg)
-                if entry != info.entry:
-                    regs = sorted(
-                        r
-                        for r in entry.keys() | info.entry.keys()
-                        if entry.get(r) != info.entry.get(r)
-                    )
-                    add(seg, f"entry state changed (registers {_short([str(r) for r in regs])})")
+                counter = self.a.includes[int(seg[1:]) - 1].resets
+                reset = recs.reset_registers(counter) if counter else set()
+                regs = sorted(
+                    r
+                    for r in entry.keys() | info.entry.keys()
+                    if r not in reset and entry.get(r) != info.entry.get(r)
+                )
+                if regs:
+                    shown = [self.register_names.get(r, f"\\count{r}") for r in regs]
+                    add(seg, f"entry state changed ({_short(shown)})")
             keys = changed_imports(info.imports, self.scan(seg), post.values)
             if keys:
                 add(seg, f"imports changed ({_short(keys)})")
@@ -421,6 +425,10 @@ class Fixpoint:
             )
         recs = _records(ctx, run_dir)
         _check_runtime_support(ctx, run_dir, self.fmt)
+        if not self.register_names:
+            self.register_names = register_names(
+                [self.fmt.directory / f"{self.fmt.name}.log", run_dir / f"{ctx.job}.log"]
+            )
         try:
             tools = commit_run(a, ctx.layout, ctx.dist, env, state, name, recs, compiled)
         except ToolInputError as err:

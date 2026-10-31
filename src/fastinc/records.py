@@ -11,7 +11,7 @@ from fastinc.errors import FastincError
 
 Vector = dict[int, int]
 
-_REC = re.compile(r"^\\fastinc@(base|entry|gexit|abs|unit|ckpt|bkmlevels)\{(.*)\}\s*$")
+_REC = re.compile(r"^\\fastinc@(base|entry|gexit|abs|unit|ckpt|bkmlevels|counters)\{(.*)\}\s*$")
 NLO_MARKER = "%fastinc-seg "
 
 
@@ -27,6 +27,33 @@ def parse_vector(text: str) -> Vector:
             n, _, v = item.partition("=")
             vec[int(n)] = int(v)
     return vec
+
+
+_ALLOC = re.compile(r"^\\([^\s=]+)=\\count(\d+)\s*$", re.MULTILINE)
+
+
+def register_names(logs: list[Path]) -> dict[int, str]:
+    """``\\count`` register numbers → control sequence names, from the allocation lines
+    (``\\c@figure=\\count284``) of the format and run logs (for messages)."""
+    names: dict[int, str] = {}
+    for log in logs:
+        if log.is_file():
+            for m in _ALLOC.finditer(log.read_text(errors="replace")):
+                names.setdefault(int(m.group(2)), "\\" + m.group(1))
+    return names
+
+
+def parse_counters(text: str) -> dict[str, tuple[int, tuple[str, ...]]]:
+    """``"chapter=279:section/figure/;page=0:;"`` → ``{"chapter": (279, ("section", "figure")),
+    "page": (0, ())}``."""
+    out: dict[str, tuple[int, tuple[str, ...]]] = {}
+    for item in text.split(";"):
+        name, sep, rest = item.partition("=")
+        if not sep:
+            continue
+        reg, _, children = rest.partition(":")
+        out[name.strip()] = (int(reg), tuple(c for c in children.split("/") if c))
+    return out
 
 
 def parse_indices(text: str) -> tuple[int, ...]:
@@ -64,6 +91,24 @@ class RunRecords:
     pages: list[PageRecord] = field(default_factory=list)
     files: list[tuple[str, str]] = field(default_factory=list)
     nomenclature: dict[str, list[str]] = field(default_factory=dict)
+    #: counter name -> (register index, names of the counters it resets)
+    counters: dict[str, tuple[int, tuple[str, ...]]] = field(default_factory=dict)
+
+    def reset_registers(self, counter: str) -> set[int]:
+        """Registers of the counters reset, directly or transitively, when ``counter`` is
+        stepped (``\\cl@<counter>`` closure; ``counter`` itself excluded)."""
+        out: set[int] = set()
+        todo, seen = list(self.counters.get(counter, (-1, ()))[1]), {counter}
+        while todo:
+            name = todo.pop()
+            if name in seen or name not in self.counters:
+                continue
+            seen.add(name)
+            reg, children = self.counters[name]
+            if reg >= 0:
+                out.add(reg)
+            todo += children
+        return out
 
     def segments_in_order(self) -> list[str]:
         """Segment ids in the order their entries were recorded."""
@@ -84,6 +129,8 @@ def _read_aux_records(path: Path, recs: RunRecords) -> None:
             recs.base = parse_vector(rest)
         elif kind == "bkmlevels":
             recs.bookmark_levels = parse_vector(rest)
+        elif kind == "counters":
+            recs.counters = parse_counters(rest)
         else:
             seg, arg = _args(rest)
             if kind == "entry":

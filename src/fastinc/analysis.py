@@ -72,12 +72,20 @@ def encode_source(text: str) -> bytes:
 
 @dataclass(frozen=True)
 class Include:
-    """An ``\\include`` in the main body: argument, source file, line in main file, headedness."""
+    """An ``\\include`` in the main body: argument, source file, line in main file, headedness
+    and the leading heading command (``chapter``, ``addchap*``, ...) of a headed include."""
 
     arg: str
     path: Path
     line: int
     headed: bool
+    heading: str | None = None
+
+    @property
+    def resets(self) -> str | None:
+        """The counter a numbered leading heading steps (its reset list then applies before
+        any content of the include), else None."""
+        return self.heading if self.heading in ("part", "chapter", "section") else None
 
     @property
     def aux_name(self) -> str:
@@ -364,7 +372,7 @@ def analyse(config: Config) -> Analysis:
     if not any(cmd in headings for cmd in first_commands):  # article-like class (no \chapter)
         headings |= set(SECTION_HEADINGS)
     includes = [
-        Include(inc.arg, inc.path, inc.line, cmd in headings)
+        Include(inc.arg, inc.path, inc.line, cmd in headings, cmd if cmd in headings else None)
         for inc, cmd in zip(includes, first_commands, strict=True)
     ]
     units = _group_units(includes, warnings)

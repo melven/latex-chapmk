@@ -159,7 +159,20 @@
   \def\Gin@setfile#1#2#3{\immediate\write\fastinc@rec{F \fastinc@seg\space#3}%
     \fastinc@orig@Gin@setfile{#1}{#2}{#3}}\fi}
 
+% counters: register and reset list (\cl@<name>) of each checkpointed counter, as
+% "name=<register>:child/child/;" (M4: entry differences in counters that a unit's leading
+% numbered heading resets are irrelevant)
+\def\fastinc@counters@rec{\begingroup
+  \def\@elt##1{##1,}\edef\fastinc@names{\cl@@ckpt}%
+  \def\@elt##1{##1/}\def\fastinc@tmp{}%
+  \@for\fastinc@name:=\fastinc@names\do{\ifx\fastinc@name\@empty\else
+    \edef\fastinc@tmp{\fastinc@tmp\fastinc@name=\fastinc@idx{c@\fastinc@name}:%
+      \ifcsname cl@\fastinc@name\endcsname\csname cl@\fastinc@name\endcsname\fi;}\fi}%
+  \fastinc@main{\string\fastinc@counters{\fastinc@tmp}}%
+  \endgroup}
+
 % aux handlers (aux files are read at \begin and \end{document})
+\def\fastinc@counters#1{}
 \def\fastinc@base#1{}
 \def\fastinc@entry#1#2{}
 \def\fastinc@gexit#1#2{}
@@ -172,8 +185,10 @@
   \fastinc@main{\string\providecommand\string\fastinc@base[1]{}%
     \string\providecommand\string\fastinc@entry[2]{}\string\providecommand\string\fastinc@gexit[2]{}%
     \string\providecommand\string\fastinc@abs[2]{}\string\providecommand\string\fastinc@unit[2]{}%
-    \string\providecommand\string\fastinc@ckpt[2]{}\string\providecommand\string\fastinc@bkmlevels[1]{}}%
+    \string\providecommand\string\fastinc@ckpt[2]{}\string\providecommand\string\fastinc@bkmlevels[1]{}%
+    \string\providecommand\string\fastinc@counters[1]{}}%
   \fastinc@setup@vector
+  \fastinc@counters@rec
   \fastinc@store{fastinc@b}%
   \def\fastinc@pfx{fastinc@zero}%
   \fastinc@main{\string\fastinc@base{\fastinc@vec}}%
