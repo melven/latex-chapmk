@@ -99,6 +99,7 @@ def test_records_and_restore(copy_corpus) -> None:  # type: ignore[no-untyped-de
     chapter_resets = full.reset_registers("chapter")
     assert {full.counters[c][0] for c in ("section", "subsection", "figure")} <= chapter_resets
     assert full.counters["page"][0] == 0
+    assert full.layout == {"twoside": 1, "openright": 1}  # scrbook defaults
     assert any(line.startswith("\\nomenclatureentry") for line in full.nomenclature["U1"])
     # checkpoint changes include the page counter (index 0)
     assert 0 in full.checkpoints["U3"]
