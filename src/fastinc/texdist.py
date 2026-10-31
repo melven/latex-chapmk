@@ -119,6 +119,7 @@ class TeXLive:
             "-interaction=nonstopmode",
             "-halt-on-error",
             "-file-line-error",
+            "-recorder",
             f"-jobname={jobname}",
             f"-output-directory={tex_path(outdir)}",
             "&pdflatex",

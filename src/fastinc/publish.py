@@ -47,3 +47,12 @@ def copy_bytes(src: Path) -> Callable[[Path], None]:
         dst.write_bytes(src.read_bytes())
 
     return write
+
+
+def text_writer(text: str) -> Callable[[Path], None]:
+    """Writer for :func:`publish` that writes ``text`` (UTF-8)."""
+
+    def write(dst: Path) -> None:
+        dst.write_text(text, encoding="utf-8")
+
+    return write

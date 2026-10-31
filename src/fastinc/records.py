@@ -108,16 +108,19 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
             recs.files.append((seg, name))
 
 
-def _read_nlo(path: Path, recs: RunRecords) -> None:
+def read_nomenclature(path: Path) -> dict[str, list[str]]:
+    """``.nlo`` entries per segment, split at the ``%fastinc-seg`` markers (§6.4.2 item 5)."""
+    entries: dict[str, list[str]] = {}
     seg: str | None = None
     for line in path.read_text(errors="replace").splitlines():
         if line.startswith(NLO_MARKER):
             seg = line[len(NLO_MARKER) :].strip()
-            recs.nomenclature.setdefault(seg, [])
+            entries.setdefault(seg, [])
         elif seg is not None:
-            recs.nomenclature[seg].append(line)
+            entries[seg].append(line)
         elif line.strip():
             raise RecordError(f"{path}: nomenclature entry before the first segment marker")
+    return entries
 
 
 def read_run_records(run_dir: Path, analysis: Analysis) -> RunRecords:
@@ -142,7 +145,7 @@ def read_run_records(run_dir: Path, analysis: Analysis) -> RunRecords:
     _read_frec(frec, recs)
     nlo = run_dir / f"{job}.nlo"
     if nlo.is_file():
-        _read_nlo(nlo, recs)
+        recs.nomenclature = read_nomenclature(nlo)
     if "G0" not in recs.entries:
         raise RecordError(f"{main_aux}: no baseline/entry records (fastinc.sty not loaded?)")
     for k, inc in enumerate(analysis.includes, start=1):
