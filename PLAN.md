@@ -226,14 +226,19 @@ Requirements:
      Kernel registers are scratch, absolute (shipout counters) or float-box insert counts; they are neither compared nor restored. Package scratch registers need no deny list: after the restore (3) they equal the full run (S4). The number↔name map comes from the allocation lines `\<name>=\count<n>` in the format and run logs. The deny list is re-evaluated against real documents (`fastinc check` on the benchmark document); a run-local register missing from it breaks the run (fallback) or shows up in acceptance tests.
    - At `\begin{document}` (end of the `AtBeginDocument` hooks), write a baseline `\fastinc@base{...}` to the main aux (`\immediate\write\@mainaux`), as a sparse vector `n=v,...`.
    - At each segment start, write `\fastinc@entry{<seg>}{<sparse vector vs base>}` to the main aux. This happens in every run, for selected and excluded units alike. For excluded units it is written **before** their checkpoints are restored. `include/excluded` runs after the kernel restore (S3), so the entry is recorded by wrapping `\@setckpt` (an aux handler): `\cp@<unit>` becomes `<record entry><original checkpoint>`. A unit without a checkpoint (never compiled) records no entry; it is dirty anyway (§6.9.1 f).
-   - At each unit end, **after** the final `\clearpage` of `\include` (`include/after`, while the unit aux is still open [S3]), write `\fastinc@ckpt{<unit>}{<registers changed since unit entry: n=v,...>}` to the unit aux. Not at `include/end`: that hook runs before the final `\clearpage`, so the page counter and other changes made by the last shipouts would be missing.
+   - At each unit end, **after** the final `\clearpage` of `\include` (`include/after`, while the unit aux is still open [S3]), write `\fastinc@ckpt{U<k>}{<complete state vector: n=v,...>}` to the unit aux. Not at `include/end`: that hook runs before the final `\clearpage`, so the page counter and other changes made by the last shipouts would be missing.
+     - **Complete vector, not only the registers changed within the unit (M2):** the exclusion itself can change registers. For example, calc's `\setcounter` uses the scratch register `\calc@Acount` during the kernel checkpoint restore. With the complete vector the restore undoes this; the per-unit delta for prediction is exit minus entry.
    - At each glue end, write `\fastinc@gexit{<seg>}{...}` to the main aux: at `include/before` or in the `\@setckpt` wrapper of the following unit, and at `\end{document}` for the last glue.
    - Absolute assignments: for each segment, record the set of registers assigned absolutely (hooks on `\setcounter`, counter resets via `\@stpelt`, `\pagenumbering`) as `\fastinc@abs{<seg>}{n,n,...}`, written to the unit aux for units and to the main aux for glue. Used for prediction only (§6.9.3), so missing cases only cost speed.
-3. **Restore.** Reading `\fastinc@ckpt` from the aux stores the vector (`\fastinc@ckpt@<unit>`). At `include/excluded`, after LaTeX's own checkpoint restore, the stored post-kernel registers (minus the deny list) are assigned globally. Loop indices must be macros, not registers. Without this restore, real state is lost (e.g. `Hy@linkcounter`, biblatex citation order, `LT@tables`, pgf picture serials) and pages differ; with it, all partial-run pages equal the full run (S4).
-4. **Page map.** At `shipout/before`, `\immediate\write` to `\jobname.fpg`: `<\ReadonlyShipoutCounter> <seg> <\the\c@page> <\thepage expanded via \protected@edef>`.
+3. **Restore.** Reading `\fastinc@ckpt` from the unit aux stores the vector. The `\@setckpt{<unit>}` line read next in the same unit aux takes it over for `<unit>`. In the `\@setckpt` wrapper, after LaTeX's own checkpoint restore, the stored post-kernel registers (minus the deny list) are assigned globally. Loop indices must be macros, not registers. Without this restore, real state is lost (e.g. `Hy@linkcounter`, biblatex citation order, `LT@tables`, pgf picture serials) and pages differ; with it, all partial-run pages equal the full run (S4).
+4. **Page map.** At `shipout/before`, `\immediate\write` to the records file `\jobname.frec`: `P <\ReadonlyShipoutCounter> <seg> <\the\c@page> <\thepage expanded via \protected@edef>`. One records file for page map and file attribution saves a write stream (TeX has 16).
 5. **Segment markers in shared streams.** The only shared stream is `.nlo` (`\@nomenclaturefile`); outline entries go to the aux files (`bookmark`, §4). At every segment change, write the line `%fastinc-seg <seg>` into the stream, using a delayed `\write`, like nomencl's own `\protected@write` (S2b). This lets the driver attribute entries to segments.
-6. **File attribution.** On `file/before`, `\immediate\write` to `\jobname.ffl`: `<seg> <filename>`. Graphics: wrap `\Gin@setfile{type}{ext}{file}` (#3 is the resolved file name; S3) and write the same record.
-7. **Aux handlers.** Define `\fastinc@base`, `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs` as no-ops, and `\fastinc@ckpt` as store (aux is read at begin and end document).
+6. **File attribution.** On `file/before`, `\immediate\write` to `\jobname.frec`: `F <seg> <\CurrentFilePathUsed/\CurrentFileUsed>`. Graphics: wrap `\Gin@setfile{type}{ext}{file}` (#3 is the resolved file name; S3) and write `F <seg> <file>`.
+7. **Aux handlers.** Define `\fastinc@base`, `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs`, `\fastinc@unit`, `\fastinc@bkmlevels` as no-ops, and `\fastinc@ckpt` as store (aux is read at begin and end document). `\providecommand` lines for all of them are written to the main aux.
+   - **Implementation rules (M2):**
+     - fastinc.sty allocates no registers, because they would enter the state vector; bookkeeping uses global macros.
+     - The include counter is advanced on every `\include` (`include/before` or the `\@setckpt` wrapper or `include/excluded`).
+     - Driver parameters (`\fastinc@denynames`) are defined before `\usepackage{fastinc}` in the run main.
 8. **Externalize neutralisation** (§6.4.3), repeated idempotently.
 9. **Bookmark levels.** At `enddocument`, write `\fastinc@bkmlevels{<id>=<level>,...}` to the main aux, read from bookmark's `\BKM@<id>` macros (S6).
 10. **Deferred commands:** run the entries of the deferral table (§6.3.3; empty in v1).
@@ -253,9 +258,11 @@ The user's `\todo` wrapper keeps working.
 
 ```
 pdflatex -fmt=<fmt> -interaction=nonstopmode -halt-on-error -file-line-error \
-         -synctex=1 -recorder -output-directory=.fastinc/runs/<r> -jobname=main \
-         .fastinc/runs/<r>/main.tex
+         -synctex=1 -recorder -output-directory=.fastinc/runs/<r> -jobname=<job> \
+         fastinc-run.tex
 ```
+
+The run main has the fixed name `fastinc-run.tex` and is found via `TEXINPUTS` (run directory first). TeX reads the command line with the catcodes of the format, where e.g. the `underscore` package makes `_` active; a path on the command line containing `_` would abort the run (M2).
 
 - The working directory is the **shadow tree** `.fastinc/src/`, so relative `\include`, `\input` and `\graphicspath` resolve as usual, and stale build files in the user's source directory (left over from manual builds) can never be read.
   - **Contents:** a mirror of the source tree made of symlinks to regular files. Excluded: the build directory, `.git/`, and the LaTeX outputs of the main job and the units (`<main>.*` except the main `.tex`, and `<unit>.aux`).
@@ -268,7 +275,7 @@ pdflatex -fmt=<fmt> -interaction=nonstopmode -halt-on-error -file-line-error \
 **Run directory preparation:**
 
 1. Copy the canonical `main.aux` and all unit aux files, preserving subdirectories.
-2. Copy the derived files `.toc .lof .lot .loalg .tdo .bbl .nls`.
+2. Copy the derived files `.toc .lof .lot .loalg .lol .tdo .bbl .nls`.
 3. Create the subdirectories for `\include` paths.
 
 **Verified by S2** (`docs/spikes/S2.md`):
@@ -276,7 +283,7 @@ pdflatex -fmt=<fmt> -interaction=nonstopmode -halt-on-error -file-line-error \
 - The shadow tree works: `\include` subdirectories, `\graphicspath`, graphics and `.bib` through symlinks, SyncTeX.
 - `\include` subdirectories must exist in the run directory.
 
-**Outputs per run:** `main.pdf`, `main.synctex.gz`, `main.log`, `main.fls`, `main.aux`, unit aux files, `main.fpg`, `main.ffl`, `main.nlo`, `main.bcf`.
+**Outputs per run:** `<job>.pdf`, `.synctex.gz`, `.log`, `.fls`, `.aux`, unit aux files, `.frec`, `.nlo`, `.bcf`.
 
 A run with selection *S* compiles the glue plus the units in *S*. A **full run** has *S* = all units. A **glue-only run** has *S* = ∅.
 
@@ -755,7 +762,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | Milestone | Content | Done when |
 |---|---|---|
 | **M1** | *Done.* CLI, config, analysis, generated sources, format build, `--full` reference mode, deterministic environment | `--full` matches plain latexmk (§3.3) on the corpus |
-| **M2** | `fastinc-ini.sty` and `fastinc.sty` (all §6.4 records), run directory preparation, runner (process pool) | records present and parseable; unit tests green |
+| **M2** | *Done.* `fastinc-ini.sty` and `fastinc.sty` (all §6.4 records), run directory preparation, runner (process pool) | records present and parseable; unit tests green |
 | **M3** | Single-unit incremental path: commit, aux linker, PDF and SyncTeX merge, logs, `fastinc check` / `build --check` (§3.3 comparison) | T1, T14, T15, T17 green; `check` passes on the corpus |
 | **M4** | Dependency model, compilation units, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks, `fastinc graph` and dirty reasons in the report | T2–T13, T16, T18, T19, T20 green (T2 via tail run) |
 | **M5** | Prediction (§6.9.3) and parallel successor recompilation | T2 and T10 green with parallel runs; benchmark shows a speedup over M4 for T2 |
@@ -818,9 +825,11 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | entry | main aux | `\fastinc@entry{<seg>}{n=v,...}` (sparse vs baseline) |
 | glue exit | main aux | `\fastinc@gexit{<seg>}{n=v,...}` (sparse vs baseline) |
 | absolute set | unit aux / main aux | `\fastinc@abs{<seg>}{n,n,...}` |
-| unit checkpoint | unit aux | `\fastinc@ckpt{<unit>}{n=v,...}` (registers changed within the unit, absolute values) |
-| page map | `main.fpg` | `<shipout#> <seg> <\c@page> <\thepage text>` per line |
-| file attribution | `main.ffl` | `<seg> <path>` per line |
+| unit checkpoint | unit aux | `\fastinc@ckpt{U<k>}{n=v,...}` (complete state vector at unit exit, absolute values) |
+| unit name | main aux | `\fastinc@unit{U<k>}{<path>}` (empty for an excluded unit without checkpoint) |
+| bookmark levels | main aux | `\fastinc@bkmlevels{<id>=<level>,...}` |
+| page map | `<job>.frec` | `P <shipout#> <seg> <\c@page> <\thepage text>` per line |
+| file attribution | `<job>.frec` | `F <seg> <path>` per line |
 | stream marker | `.nlo` | `%fastinc-seg <seg>` per line |
 
-Segment ids: `G0..Gn` for glue, `U1..Un` for units. The unit-id ↔ `\include` argument map is written once per run as `\fastinc@unit{U<k>}{<include arg>}` in the main aux.
+Segment ids: `G0..Gn` for glue, `U1..Un` for units (k-th `\include` of the body). The driver checks the `\fastinc@unit` records against the include order of the analysis.
