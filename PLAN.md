@@ -688,10 +688,10 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | T16 | cold build | §3.3; report wall time vs `--full` |
 | T17 | SyncTeX round trip for every segment | §3.3 item 4 |
 | T18 | `\setlength` in ch2 body | lint warning; ch2 is global; successors recompiled after ch2 changes |
-| T20 | ch3 split into `ch3.tex` (starts with `\chapter`) and `ch3b.tex` (continues with `\section`), edit in `ch3b` | one compilation unit {ch3, ch3b} recompiled; running heads identical to `--full` (§3.3) |
 | T18b | `\setlength` inside a `table` environment and inside `{...}` in ch2 | no lint hit; ch2 not global; §3.3 holds |
 | T19 | stale `main.aux` and unit aux files in the source directory | ignored (shadow tree); §3.3 holds |
 | T19b | alternate latexmk → fastinc → edit → latexmk → fastinc in one directory, no cleaning | both builds correct (fastinc: §3.3; latexmk: same as a latexmk build in a clean copy); SyncTeX matches the current pdf |
+| T20 | ch3 split into `ch3.tex` (starts with `\chapter`) and `ch3b.tex` (continues with `\section`), edit in `ch3b` | one compilation unit {ch3, ch3b} recompiled; running heads identical to `--full` (§3.3) |
 
 ### 8.3 Unit tests
 
