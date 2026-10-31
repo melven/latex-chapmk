@@ -43,7 +43,7 @@ The user's documents follow these rules. The driver relies on them and checks th
 | # | Assumption | Check / consequence if violated |
 |---|---|---|
 | A1 | All macro definitions and settings are in the preamble. Unit bodies change only counters, labels, citations, list entries (ToC/LoF/…), nomenclature entries and bookmarks. | Lint (§6.8.4). A unit with a lint hit is marked *global*: its change dirties all successors. |
-| A2 | Units are the files given to `\include` in the top-level body of the main file. | Analysis (§6.1). `\include` elsewhere → error. |
+| A2 | Units are the files given to `\include` in the top-level body of the main file. | Analysis (§6.1). If `\begin{document}` is not in the main file, or an `\include` sits inside a group, only full builds are possible (fallback, §6.14). Nested `\include` is an error, as in LaTeX. |
 | A3 | Body text of the main file between `\include`s ("glue": title page, ToC, lists, `\appendix`, nomenclature, bibliography, …) may change macros (e.g. `\appendix`, `\mainmatter`). | Glue is compiled in **every** run (standard `\includeonly` semantics). Any change to the main-file body dirties everything. |
 | A4 | Footnotes are not split across a unit boundary. | Holds for the reference document (`\interfootnotelinepenalty=10000`). Acceptance tests guard it. |
 | A5 | Every **compilation unit** starts with a chapter-level heading (`\chapter`, `\chapter*`, `\addchap`, `\part`, …). An `\include` file that does not (e.g. a sub-chapter include) joins the preceding include's compilation unit (§6.1). | S7: running heads of an include that continues a chapter are wrong in a partial run without its predecessor. Grouping makes A5 hold by construction; acceptance tests guard it. |
@@ -154,7 +154,9 @@ Input: the main file (CLI argument or `fastinc.toml`).
 2. **Split point `s`** (first line not dumped into the format): the first preamble line matching the deny list (§6.3.2), or a config override `format.split_before = "<regex>"`. If the match lies inside a top-level command or group spanning several lines (e.g. `\ifdraft{` … `}`), set `s` to the line where that command starts (brace-depth tracking, S1). If `s` falls inside an `\input`ed preamble file, set `s` to the line of that `\input`.
 3. **Segments** of the main body: tokenise top-level `\include{...}` occurrences. An `\include` in the preamble is not a unit: LaTeX processes it like `\input`, so it counts as a preamble input. Units `U1..Un` are in document order; glue segments `G0..Gn` (possibly empty) lie between them. Unit ids are the `\include` arguments (e.g. `chapters/intro`). An argument that is absolute or contains `..` is an error: its aux would be written outside the run directory, which TeX Live refuses (`openout_any = p`).
 4. **Fingerprints** (sha256): `pre` (lines `1..s-1` plus inlined files), `post` (lines `s..b-1`), `body` (main-file text from `b` to end, excluding nothing).
-5. **Compilation units** (A5, S7): group consecutive includes. An include whose first command (comments and blank lines skipped) is a chapter-level heading starts a new group; any other include joins the preceding group, together with the glue between them. Heading list: `\chapter`, `\chapter*`, `\addchap`, `\addchap*`, `\part`, `\part*`, `\addpart`, `\addpart*`, plus config `[units] heading`. If the first include of the document is not headed, it forms its own group and a warning is printed. The scheduler (§6.9) selects whole compilation units; segment ids (`U<k>`, `G<k>`) and all records stay per include.
+5. **Compilation units** (A5, S7): group consecutive includes. An include whose first command (comments and blank lines skipped) is a chapter-level heading starts a new group; any other include joins the preceding group, together with the glue between them.
+   - Heading list: `\chapter`, `\chapter*`, `\addchap`, `\addchap*`, `\part`, `\part*`, `\addpart`, `\addpart*`, plus config `[units] heading`.
+   - If no include starts with one of these (classes without `\chapter`, e.g. `ltxdoc` for the pgf manual), `\section`, `\section*`, `\addsec` and `\addsec*` also count. If the first include of the document is not headed, it forms its own group and a warning is printed. The scheduler (§6.9) selects whole compilation units; segment ids (`U<k>`, `G<k>`) and all records stay per include.
 6. **Unsupported-package detection** in the preamble → full-build mode (§6.14).
 
 ### 6.2 Generated sources, line-number preservation
@@ -265,7 +267,10 @@ pdflatex -fmt=<fmt> -interaction=nonstopmode -halt-on-error -file-line-error \
 The run main has the fixed name `fastinc-run.tex` and is found via `TEXINPUTS` (run directory first). TeX reads the command line with the catcodes of the format, where e.g. the `underscore` package makes `_` active; a path on the command line containing `_` would abort the run (M2).
 
 - The working directory is the **shadow tree** `.fastinc/src/`, so relative `\include`, `\input` and `\graphicspath` resolve as usual, and stale build files in the user's source directory (left over from manual builds) can never be read.
-  - **Contents:** a mirror of the source tree made of symlinks to regular files. Excluded: the build directory, `.git/`, and the LaTeX outputs of the main job and the units (`<main>.*` except the main `.tex`, and `<unit>.aux`).
+  - **Contents:** a mirror of the source tree made of symlinks to regular files. Excluded:
+    - the build directory and `.git/`;
+    - the LaTeX outputs of the main job: `<job><suffix>` for known output suffixes (`.aux`, `.toc`, `.log`, `.bbl`, `.synctex.gz`, `.pdf`, …; `shadow.BUILD_OUTPUT_SUFFIXES`), but not other `<job>.*` files, which may be sources (`pgfmanual.cfg`);
+    - `<unit>.aux` of the units.
   - **Refresh:** once per build, before the runs. Parallel runs share it read-only.
   - **Path mapping:** shadow paths map to source paths by prefix substitution, for logs (§6.13) and SyncTeX (§6.12). SyncTeX records absolute, unresolved paths of the form `<cwd>/./<relative>`. Replace only the `<cwd>` prefix and keep the `/./`: `synctex view` matches relative file names by it (S10).
   - **Platforms:** where symlinks are unavailable (Windows without the privilege), use hardlinks, else copies [M7].
@@ -659,6 +664,7 @@ tests/
   unit/  slow/  acceptance/  scenarios/  bench/
   corpus/thesis/               # §8.1 (generated by generate.py)
   corpus/hgb/                  # second real-world preamble (anonymised)
+  corpus/pgfmanual/            # pgf/TikZ manual, third-party stress test (upstream/ unmodified)
   corpus/minimal/              # spike reproducers S1-S10
 docs/spikes/S1.md ... S10.md
 ```
@@ -686,6 +692,11 @@ docs/spikes/S1.md ... S10.md
 **`tests/corpus/hgb/`**: a second real-world preamble (class `hgbthesis` from TeX Live), anonymised.
 - What it tests: a class that loads biblatex itself, `underscore`, `tcolorbox`, `arydshln`, listings via the class's own environments, `\input` macro files in the preamble, a local theme file in the source directory.
 - Body: four includes, one of them a sub-chapter include (compilation unit grouping, A5).
+
+**`tests/corpus/pgfmanual/`**: the pgf/TikZ manual (third-party, see its README), about 1300 pages and 123 `\include` sections.
+- `upstream/` is unmodified (pgf tag 3.1.12, which matches TeX Live 2026; FDL 1.2 / LPPL 1.3c).
+- `adapt.py` writes `fastinc-main.tex` in a test copy: includes inlined into the main file (A2), index removed (non-goal), `bookmark` added.
+- Stress test and benchmark only (marker `bench`).
 
 **`tests/corpus/minimal/`**: tiny documents isolating each mechanism, used in spikes and unit tests.
 
