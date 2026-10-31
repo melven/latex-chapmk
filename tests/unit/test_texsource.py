@@ -5,6 +5,7 @@ from fastinc.texsource import (
     find_macros,
     read_group,
     read_optional,
+    split_lines,
     split_list,
     strip_comment,
     strip_comments,
@@ -59,3 +60,9 @@ def test_line_index_and_depths() -> None:
 
 def test_split_list() -> None:
     assert split_list(" a, b ,,c") == ["a", "b", "c"]
+
+
+def test_split_lines_only_at_newline() -> None:
+    assert split_lines("a\r\nb\x0cc\n\nd") == ["a\r\n", "b\x0cc\n", "\n", "d"]
+    assert split_lines("") == []
+    assert split_lines("x\n") == ["x\n"]

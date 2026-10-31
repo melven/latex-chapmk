@@ -33,9 +33,22 @@ def strip_comment(line: str) -> str:
         i += 1
 
 
+def split_lines(text: str) -> list[str]:
+    """Split ``text`` at ``\\n`` only, keeping line endings (``\\r\\n`` stays intact).
+
+    Unlike :meth:`str.splitlines` this does not split at form feeds or Unicode line
+    separators, so line numbers agree with TeX's.
+    """
+    parts = text.split("\n")
+    lines = [part + "\n" for part in parts[:-1]]
+    if parts[-1]:
+        lines.append(parts[-1])
+    return lines
+
+
 def strip_comments(text: str) -> str:
-    """Strip comments from every line of ``text``; line structure and offsets of lines stay."""
-    return "".join(strip_comment(line) for line in text.splitlines(keepends=True))
+    """Strip comments from every line of ``text``; the line structure stays."""
+    return "".join(strip_comment(line) for line in split_lines(text))
 
 
 @dataclass(frozen=True)
