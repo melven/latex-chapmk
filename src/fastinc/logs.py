@@ -22,14 +22,3 @@ def first_error(log: str) -> str | None:
         if line.startswith("! ") or _FILE_LINE_ERROR.match(line):
             return line.rstrip()
     return None
-
-
-def rerun_requested(log: str) -> bool:
-    """Whether the log asks for another run (LaTeX, hyperref, biblatex, longtable, ...)."""
-    return bool(
-        re.search(
-            r"(Rerun to get|Please rerun LaTeX|Label\(s\) may have changed|rerun LaTeX)",
-            log,
-            re.IGNORECASE,
-        )
-    )

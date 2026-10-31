@@ -1,4 +1,4 @@
-from fastinc.logs import first_error, map_paths, rerun_requested
+from fastinc.logs import first_error, map_paths
 
 
 def test_map_paths() -> None:
@@ -14,12 +14,3 @@ def test_first_error() -> None:
         "! LaTeX Error: File `x.sty' not found."
     )
     assert first_error("all fine\n(see the transcript file)\n") is None
-
-
-def test_rerun_requested() -> None:
-    assert rerun_requested("LaTeX Warning: Label(s) may have changed. Rerun to get cross-refe")
-    assert rerun_requested(
-        "Package rerunfilecheck Warning: File `a.out' has changed.\n"
-        "(rerunfilecheck)                Rerun to get outlines right"
-    )
-    assert not rerun_requested("Output written on a.pdf")
