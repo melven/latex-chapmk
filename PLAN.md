@@ -63,7 +63,7 @@ The user's documents follow these rules. The driver relies on them and checks th
 - **F7** Errors are reported with paths and line numbers mapped back to the user's sources. On error the previous `main.pdf` is kept.
 - **F8** `fastinc watch`, equivalent to `latexmk -pvc`.
 - **F9** `fastinc build --full` runs a plain reference build (latexmk-equivalent, same environment) for release and checks.
-- **F10** `fastinc check` builds incrementally and with `--full`, then compares the results using §3.3.
+- **F10** `fastinc check` (or `fastinc build --check`) builds incrementally and with `--full`, then compares the results using §3.3. One call, exit code 1 and a per-item report on a difference. Available from M3 on, as a user-facing self-test.
 - **F11** Coexistence with plain LaTeX builds in the same directory, without manual cleaning in between:
   - fastinc never reads build outputs from the source directory (shadow tree, §6.5).
   - In the output directory (default: next to `main.tex`), fastinc writes only `main.pdf`, `main.synctex.gz` and `main.log`. Each is replaced atomically, and the pdf and synctex file always come from the same build.
@@ -553,7 +553,7 @@ Each trigger prints a one-line reason.
 ### 6.15 CLI and configuration
 
 ```
-fastinc build [MAIN] [-j N] [--full] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [-v]
+fastinc build [MAIN] [-j N] [--full] [--check] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [-v]
 fastinc watch [MAIN] [same options]        # rebuild on change of any recorded input
 fastinc check [MAIN] [--samples N]         # incremental vs --full, criterion §3.3
 fastinc clean [MAIN]
@@ -732,7 +732,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | S6 | *Done.* hyperref: `/Dests` name tree, dummy-destination log format, duplicate-destination warning and which definition wins, anchor naming (`section*.N` via `\Hy@linkcounter`), `\HyPL@Entry` semantics. `bookmark`: complete `\BKM@entry` grammar (level, open state, colour and style keys, `srcline`), how the outline is built from it, level-gap handling, and which keys depend on segment state (`id` from `\c@bookmark@seq@number`). |
 | S7 | *Done.* Running heads on the first page of a unit (scrbook marks) in a partial run vs a full run; whether A5 suffices; fix if feasible (restoring mark state). Result: heads differ for includes violating A5, and restoring the mark state does not help. Decision: compilation units (§6.1). |
 | S8 | *Done.* Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
-| S9 | pikepdf merge prototype: two runs → merged PDF with working cross-run links, outline, page labels; verified by §3.3 items 1–3. |
+| S9 | *Done.* pikepdf merge prototype: two runs → merged PDF with working cross-run links, outline, page labels; verified by §3.3 items 1–3. |
 | S10 | SyncTeX merge prototype; verified with `synctex view/edit`. |
 | S11 | *Deferred to M7 (needs a Windows CI runner).* MiKTeX: format flags, output/aux-directory read order (repeat S2), on-the-fly install settings, `SOURCE_DATE_EPOCH` support, availability of mylatexformat, biber, makeindex and synctex. |
 
@@ -744,10 +744,10 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 |---|---|---|
 | **M1** | CLI, config, analysis, generated sources, format build, `--full` reference mode, deterministic environment | `--full` matches plain latexmk (§3.3) on the corpus |
 | **M2** | `fastinc-ini.sty` and `fastinc.sty` (all §6.4 records), run directory preparation, runner (process pool) | records present and parseable; unit tests green |
-| **M3** | Single-unit incremental path: commit, aux linker, PDF and SyncTeX merge, logs | T1, T14, T15, T17 green |
+| **M3** | Single-unit incremental path: commit, aux linker, PDF and SyncTeX merge, logs, `fastinc check` / `build --check` (§3.3 comparison) | T1, T14, T15, T17 green; `check` passes on the corpus |
 | **M4** | Dependency model, compilation units, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks, `fastinc graph` and dirty reasons in the report | T2–T13, T16, T18, T19, T20 green (T2 via tail run) |
 | **M5** | Prediction (§6.9.3) and parallel successor recompilation | T2 and T10 green with parallel runs; benchmark shows a speedup over M4 for T2 |
-| **M6** | `watch`, `check`, benchmarks, README (usage, assumptions A1–A5, limitations) | §8.4 numbers recorded |
+| **M6** | `watch`, benchmarks, README (usage, assumptions A1–A5, limitations) | §8.4 numbers recorded |
 | **M7** | Spike S11 (MiKTeX), MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
 
 ---
