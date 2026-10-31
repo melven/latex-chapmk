@@ -298,7 +298,9 @@ Per segment, `state.json` stores:
 
 **Commit after a run with selection *S*:**
 
-1. Each unit in *S*: take its aux, its pages (page map), and its per-segment `.nlo` entries (by markers). Its bookmark records are part of its aux.
+1. Each unit in *S*: take its aux, its pages (page map), its **main-aux slice**, and its per-segment `.nlo` entries (by markers). Its bookmark records are part of its aux.
+   - The main-aux slice is the set of lines written to the main aux while the unit was the current segment, e.g. `\abx@aux@cite` (S5). Slices are delimited by the immediate `\fastinc@entry` records.
+   - The canonical `main.aux` is assembled from the glue slices and the committed unit slices, in document order.
 2. Glue: commit the glue artifacts from the run that §6.9 designates.
 3. Store the observed entry vectors of **all** segments from this run, tagged with the run's input snapshot id.
 4. Unreferenced run directories are garbage-collected after a successful merge (`--keep-runs` disables this).
@@ -323,7 +325,7 @@ Must equal the full run's files byte for byte; this is a unit test against refer
 | `\@writefile{ext}{...}` | list contribution |
 | `\@setckpt{u}{...}`, `\fastinc@ckpt{u}{...}` | exit state |
 | `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs`, `\fastinc@base` | state records |
-| `\abx@aux@cite{n}{key}` | citation (set and order) |
+| `\abx@aux@cite{n}{key}` | citation (set and order); written to the **main aux**, immediately, in citation order, one line per key per citation command (S5) |
 | `\abx@aux@refcontext`, `\abx@aux@segm`, `\abx@aux@page`, `\abx@aux@number`, other `\abx@aux@*` | biblatex data, key-scoped where a key is present; others global |
 | `\gdef\LT@<roman>{...}` (longtable) | *self*: read only by the same unit |
 | eqparbox records (exact form [S8]) | *self* (tags are chapter-scoped in the reference document) |
@@ -469,7 +471,11 @@ Phase 2: a speculative parallel first pass with composition (needs a model for "
 **biber:**
 - Run with cwd = shadow tree (§6.5): `biber --output-directory <build>/canon main`. Biber then reads `main.bcf` from `canon/` (the output directory is searched first) and resolves `.bib` paths relative to the working directory. Do not pass `--input-directory`: biber would then look for `main.bcf` only there.
 - Trigger: the citation set or order changed, the `.bib` hash changed, or the `.bcf` structure changed.
-- [S5]: does a partial run's `.bcf` contain only the selected units' citations? If yes, the driver patches the citekey list of the canonical `.bcf` (XML: `bcf:citekey` elements in `bcf:section number="0"`) with the union of all units' `\abx@aux@cite` entries, in document order (main aux and unit aux in reading order). Biber never runs on an unpatched partial `.bcf`.
+- **`.bcf` patch** (S5: a partial run's `.bcf` lists only glue and included units; everything else in it is identical):
+  - Per run, the `bcf:citekey` elements of each `bcf:section` correspond 1:1, in order, to the `\abx@aux@cite{<section>}{<key>}` lines of the main aux. The segment slices (§6.6) therefore attribute each element to a segment.
+  - The canonical citekey list per section is the concatenation, in document order, of each segment's elements from the run that committed that segment. `order` is renumbered globally (one number per citation command); `intorder` and `nocite` are kept.
+  - Verification: the element count per run must equal the `\abx@aux@cite` count, otherwise biber runs on the `.bcf` of a full run (fallback). Tests require the patched `.bcf` to be byte-identical to a full run's.
+  - Biber never runs on an unpatched partial `.bcf`.
 - After biber, diff the `.bbl` per `\entry{key}…\endentry` block (content and position) → changed cite values.
 
 **makeindex (nomencl):**
@@ -697,7 +703,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | S2 | `-output-directory` read order (aux and derived files); shadow tree (§6.5): `\include` subdirectories, `\graphicspath`, symlinked graphics and `.bib`, SyncTeX paths; stale files in a plain source directory (documentation only); `TEXMF_OUTPUT_DIRECTORY`. S2b: write mode of nomencl's `.nlo` writes. |
 | S3 | Hook order: `include/before` relative to the initial `\clearpage`; pages from the final `\clearpage` before `include/after`; whether the unit aux is still open (`\@auxout` = `\@partaux`) at `include/after`, else where to write `\fastinc@ckpt`; existence and timing of `include/excluded` relative to the checkpoint restore; file hook for TikZ libraries; graphicx inclusion hook point. |
 | S4 | Enumerating allocated `\count` registers (kernel allocation pointers, extended registers); confirm `LT@tables` and `\Hy@linkcounter` are covered; cost of writing vectors; initial scratch-register deny list (registers whose segment-entry values differ between a partial and a full run on the corpus). |
-| S5 | biblatex `.bcf` contents after an `\includeonly` run; `.bcf` patch feasibility. |
+| S5 | biblatex `.bcf` contents after an `\includeonly` run; `.bcf` patch feasibility. *Done: patch needed and feasible (decision: patch).* |
 | S6 | hyperref: `/Dests` name tree, dummy-destination log format, duplicate-destination warning and which definition wins, anchor naming (`section*.N` via `\Hy@linkcounter`), `\HyPL@Entry` semantics. `bookmark`: complete `\BKM@entry` grammar (level, open state, colour and style keys, `srcline`), how the outline is built from it, level-gap handling, and which keys depend on segment state (`id` from `\c@bookmark@seq@number`). |
 | S7 | Running heads on the first page of a unit (scrbook marks) in a partial run vs a full run; whether A5 suffices; fix if feasible (restoring mark state). |
 | S8 | Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
