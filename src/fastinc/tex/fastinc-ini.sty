@@ -1,0 +1,23 @@
+%% fastinc-ini.sty -- loaded before \documentclass in format builds and in full-mode and
+%% reference builds (PLAN §6.4.1). Records and hooks only, no logic.
+%% The version must equal the driver version (fastinc.__version__).
+\NeedsTeXFormat{LaTeX2e}[2023/06/01]
+\ProvidesPackage{fastinc-ini}[2026/10/31 v0.1.0 fastinc: format and reference-build hooks]
+
+% Kernel register boundary (S4): \count registers with a higher index are allocated by the
+% class, packages or the document; only those belong to the state vector.
+\xdef\fastinc@kernelcount{\the\count10}
+
+% Externalize neutralisation (§6.4.3): after the TikZ library is loaded, \tikzexternalize
+% swallows its optional argument and does nothing; enable/disable do nothing.
+\def\fastinc@neutralise@externalize{%
+  \def\tikzexternalize{\@ifnextchar[\@gobble@optarg\relax}%
+  \let\tikzexternalenable\relax
+  \let\tikzexternaldisable\relax}
+\def\@gobble@optarg[#1]{}
+\AddToHook{file/after/tikzlibraryexternal.code.tex}{\fastinc@neutralise@externalize}
+
+% Deferral table (§6.3.3): empty in v1, because mylatexformat replays \openout calls (S1).
+\def\fastinc@deferred{}
+
+\endinput
