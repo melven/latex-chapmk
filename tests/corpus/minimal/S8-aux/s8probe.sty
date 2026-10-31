@@ -1,0 +1,12 @@
+% Spike S8 probe: immediate segment markers in the main aux, so that main-aux lines can
+% be attributed to segments. Aux handler \seight@seg is a no-op when the aux is read.
+\ProvidesPackage{s8probe}
+\def\seight@seg#1{}
+\def\seight@mark#1{\immediate\write\@mainaux{\string\seight@seg{#1}}}
+\AtBeginDocument{\immediate\write\@mainaux{\string\providecommand\string\seight@seg[1]{}}\seight@mark{G0}}
+\AddToHook{include/before}{\seight@mark{U:\CurrentFile}}
+\AddToHook{include/after}{\seight@mark{G-after-\CurrentFile}}
+% excluded unit: marker in the \@setckpt wrapper (S3)
+\let\seight@setckpt\@setckpt
+\def\@setckpt#1#2{\seight@setckpt{#1}{\seight@mark{X:#1}#2\seight@mark{G-after-#1}}}
+\AddToHook{enddocument}{\seight@mark{END}}
