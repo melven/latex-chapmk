@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fastinc"
+version = "0.1.0"
+description = "Incremental, parallel pdfLaTeX builds for documents split with \\include"
+readme = "README.md"
+license = { text = "BSD-3-Clause" }
+authors = [{ name = "Melven Roehrig-Zoellner" }]
+requires-python = ">=3.10"
+dependencies = [
+    "pikepdf>=9",
+    "tomli>=2; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-xdist>=3", "ruff>=0.6", "mypy>=1.11"]
+
+[project.scripts]
+fastinc = "fastinc.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+fastinc = ["tex/*.sty", "py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["tests/corpus"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "PTH", "N"]
+
+[tool.mypy]
+strict = true
+python_version = "3.10"
+
+[[tool.mypy.overrides]]
+module = ["tomli"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests/unit", "tests/acceptance"]
+markers = [
+    "slow: runs TeX",
+    "acceptance: compares against a reference build (PLAN §3.3)",
+    "bench: manual benchmarks only",
+]
+addopts = "-m 'not bench'"
