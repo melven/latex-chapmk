@@ -10,7 +10,10 @@ ARG GID=1000
 # poppler-utils: pdftoppm / pdftotext for acceptance tests (PLAN.md §3.3)
 # gnuplot-data: gnuplot-lua-tikz.sty is not part of TeX Live; Debian installs it
 # to /usr/share/texmf, which this TeX Live does not search -> link into TEXMFLOCAL.
-RUN apt-get update \
+# apt over https: works behind HTTPS-only (CONNECT) proxies
+RUN sed -i 's|http://deb.debian.org|https://deb.debian.org|g' \
+      /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null; \
+    apt-get update \
  && apt-get install -y --no-install-recommends \
       python3 python3-venv python3-pip poppler-utils git ca-certificates gnuplot-data \
  && rm -rf /var/lib/apt/lists/* \
