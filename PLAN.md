@@ -218,7 +218,7 @@ Requirements:
    - The *state vector* is all allocated `\count` registers, determined from the kernel allocation pointers [S4]. It includes the LaTeX counters and, for example, `LT@tables` and `\Hy@linkcounter`.
    - At `\begin{document}` (end of the `AtBeginDocument` hooks), write a baseline `\fastinc@base{...}` to the main aux (`\immediate\write\@mainaux`), as a sparse vector `n=v,...`.
    - At each segment start, write `\fastinc@entry{<seg>}{<sparse vector vs base>}` to the main aux. This happens in every run, for selected and excluded units alike. For excluded units it is written **before** their checkpoints are restored.
-   - At each unit end (`include/end`), write `\fastinc@ckpt{<unit>}{<registers changed since unit entry: n=v,...>}` to the unit aux.
+   - At each unit end, **after** the final `\clearpage` of `\include` (`include/after`, while the unit aux is still open [S3]), write `\fastinc@ckpt{<unit>}{<registers changed since unit entry: n=v,...>}` to the unit aux. Not at `include/end`: that hook runs before the final `\clearpage`, so the page counter and other changes made by the last shipouts would be missing.
    - At each glue end, write `\fastinc@gexit{<seg>}{...}` to the main aux.
    - Absolute assignments: for each segment, record the set of registers assigned absolutely (hooks on `\setcounter`, counter resets via `\@stpelt`, `\pagenumbering`) as `\fastinc@abs{<seg>}{n,n,...}`, written to the unit aux for units and to the main aux for glue. Used for prediction only (§6.9.3), so missing cases only cost speed.
 3. **Restore.** Reading `\fastinc@ckpt` from the aux stores the vector (`\fastinc@ckpt@<unit>`). At `include/excluded`, after LaTeX's own checkpoint restore, the stored registers are assigned globally.
@@ -662,7 +662,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 |---|---|
 | S1 | mylatexformat with the thesis preamble split before `hyperref`: dump OK? Runtime skip semantics with the marker plus blank lines? SyncTeX OK? Can `hyperref` and `biblatex` go into the format? `\makenomenclature` deferral works? |
 | S2 | `-output-directory` read order (aux and derived files) with cwd = source; stale files in the source directory; `\include` subdirectories; `\graphicspath`; `TEXMF_OUTPUT_DIRECTORY`. S2b: write mode of nomencl's `.nlo` writes. |
-| S3 | Hook order: `include/before` relative to the initial `\clearpage`; pages from the final `\clearpage` before `include/after`; existence and timing of `include/excluded` relative to the checkpoint restore; file hook for TikZ libraries; graphicx inclusion hook point. |
+| S3 | Hook order: `include/before` relative to the initial `\clearpage`; pages from the final `\clearpage` before `include/after`; whether the unit aux is still open (`\@auxout` = `\@partaux`) at `include/after`, else where to write `\fastinc@ckpt`; existence and timing of `include/excluded` relative to the checkpoint restore; file hook for TikZ libraries; graphicx inclusion hook point. |
 | S4 | Enumerating allocated `\count` registers (kernel allocation pointers, extended registers); confirm `LT@tables` and `\Hy@linkcounter` are covered; cost of writing vectors. |
 | S5 | biblatex `.bcf` contents after an `\includeonly` run; `.bcf` patch feasibility. |
 | S6 | hyperref: `/Dests` name tree, dummy-destination log format, anchor naming (`section*.N` via `\Hy@linkcounter`), `.out` grammar and write mode, `\HyPL@Entry` semantics. |
