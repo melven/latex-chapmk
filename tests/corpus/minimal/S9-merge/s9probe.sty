@@ -1,0 +1,46 @@
+% Spike S9 probe: minimal prototype of the fastinc.sty records needed by the PDF merge.
+%  - segment tracking (G0, U:<file>, G:<file>) and immediate segment markers in the main aux
+%  - page map \jobname.fpg: "<shipout> <seg> <\c@page> <\thepage>"
+%  - register restore for excluded units (S4: post-kernel registers minus run-local ones)
+%  - bookmark levels at the end of the document (S6)
+% The caller defines \sninekernel{\the\count10} before \documentclass.
+\ProvidesPackage{s9probe}
+\def\snine@seg{G0}
+\newwrite\snine@fpg
+\immediate\openout\snine@fpg=\jobname.fpg
+\def\snine@mark{\immediate\write\@mainaux{\string\snineseg{\snine@seg}}}
+\AtBeginDocument{\immediate\write\@mainaux{\string\providecommand\string\snineseg[1]{}%
+  \string\providecommand\string\sninebkm[1]{}\string\providecommand\string\snine@ckpt[2]{}}\snine@mark}
+\AddToHook{shipout/before}{\protected@edef\snine@tp{\thepage}%
+  \immediate\write\snine@fpg{\the\ReadonlyShipoutCounter\space\snine@seg\space\the\c@page\space\snine@tp}}
+% register values \count#1..\count#2 (expandable)
+\def\snine@vals#1#2{\the\count#1%
+  \ifnum#1<#2 ,\expandafter\snine@vals\expandafter{\the\numexpr#1+1\expandafter\relax\expandafter}%
+  \expandafter{\the\numexpr#2\expandafter\relax\expandafter}\fi}
+\edef\snine@tmp{\def\noexpand\snine@idx@##1\detokenize{count}##2\noexpand\@nil{##2}}\snine@tmp
+\def\snine@idx#1{\expandafter\expandafter\expandafter\snine@idx@\expandafter\meaning\csname#1\endcsname\@nil}
+\AddToHook{include/before}{\edef\snine@seg{U:\CurrentFile}\snine@mark}
+\AddToHook{include/after}{%
+  \immediate\write\@partaux{\string\snine@ckpt{\CurrentFile}{\snine@vals{0}{\count10}}}%
+  \edef\snine@seg{G:\CurrentFile}\snine@mark}
+\def\snine@ckpt#1#2{\global\@namedef{snine@ck@#1}{#2}}
+\def\snine@restore#1{%
+  \edef\snine@skip{,\snine@idx{Hy@abspage},\@ifundefined{BKM@id}{}{\snine@idx{BKM@id}},}%
+  \@ifundefined{snine@ck@#1}{}{\def\snine@i{0}\edef\snine@list{\csname snine@ck@#1\endcsname}%
+    \@for\snine@v:=\snine@list\do{%
+      \ifnum\snine@i>\sninekernel\relax
+        \edef\snine@tmp{\noexpand\in@{,\snine@i,}{\snine@skip}}\snine@tmp
+        \ifin@\else\global\count\snine@i=\snine@v\relax\fi
+      \fi
+      \edef\snine@i{\the\numexpr\snine@i+1}}}}
+\let\snine@setckpt\@setckpt
+\def\@setckpt#1#2{\snine@setckpt{#1}{\edef\snine@seg{U:#1.tex}\snine@mark#2%
+  \snine@restore{#1.tex}\edef\snine@seg{G:#1.tex}\snine@mark}}
+% bookmark levels: \BKM@<id> = {parent}{level}{children}
+\def\snine@lvl#1#2#3{#2}
+\AddToHook{enddocument}{\@ifundefined{BKM@id}{}{%
+  \def\snine@i{1}\def\snine@out{}%
+  \loop\ifnum\snine@i>\BKM@id\else
+    \edef\snine@out{\snine@out\snine@i=\expandafter\expandafter\expandafter\snine@lvl\csname BKM@\snine@i\endcsname,}%
+    \edef\snine@i{\the\numexpr\snine@i+1}\repeat
+  \immediate\write\@mainaux{\string\sninebkm{\snine@out}}}}
