@@ -1,4 +1,4 @@
-"""Command-line interface (PLAN §6.15). M1: ``build`` (full mode) and ``clean``."""
+"""Command-line interface (PLAN §6.15): ``build``, ``check``, ``clean``."""
 
 from __future__ import annotations
 
@@ -8,16 +8,19 @@ import shutil
 import sys
 import time
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 import fastinc
 from fastinc.analysis import Analysis, analyse
+from fastinc.check import compare_pdfs, compare_synctex
 from fastinc.config import Config, load_config
 from fastinc.errors import ConfigError, FastincError, TexError
 from fastinc.fullbuild import full_build
+from fastinc.incremental import Context, build, load_epoch
 from fastinc.layout import Layout, make_layout
 from fastinc.shadow import sync_project_shadow
-from fastinc.texdist import detect
+from fastinc.texdist import TexDistribution, detect
 
 #: Marker file proving that a directory is a fastinc build directory (``clean`` safety).
 BUILD_DIR_MARKER = ".fastinc-build-dir"
@@ -34,7 +37,18 @@ def _parser() -> argparse.ArgumentParser:
     b.add_argument("--build-dir", type=Path, help="build directory (default: .fastinc)")
     b.add_argument("--out-dir", type=Path, help="output directory (default: next to MAIN)")
     b.add_argument("--keep-runs", action="store_true", help="keep run directories")
+    b.add_argument(
+        "--check",
+        action="store_true",
+        help="also build with --full and compare (PLAN §3.3); exit 1 on a difference",
+    )
+    b.add_argument("--report", type=Path, help="write a JSON report of the build to this file")
     b.add_argument("-v", "--verbose", action="store_true")
+    k = sub.add_parser("check", help="build, build with --full, compare the results (§3.3)")
+    k.add_argument("main", nargs="?", type=Path)
+    k.add_argument("--build-dir", type=Path)
+    k.add_argument("--out-dir", type=Path)
+    k.add_argument("-v", "--verbose", action="store_true")
     c = sub.add_parser("clean", help="remove the build directory")
     c.add_argument("main", nargs="?", type=Path)
     c.add_argument("--build-dir", type=Path)
@@ -59,27 +73,47 @@ def cmd_build(args: argparse.Namespace, cwd: Path) -> int:
     config = load_config(
         args.main,
         cwd,
-        jobs=args.jobs,
+        jobs=getattr(args, "jobs", None),
         build_dir=args.build_dir,
         out_dir=args.out_dir,
-        keep_runs=args.keep_runs,
+        keep_runs=getattr(args, "keep_runs", False),
         verbose=args.verbose,
     )
-    start = time.monotonic()
     analysis, layout = _prepare(config)
     dist = detect()
     dist.check_tools()
     epoch = int(os.environ.get("SOURCE_DATE_EPOCH", int(time.time())))
-    env = dist.environment(epoch, os.environ)
     sync_project_shadow(analysis, layout.shadow_dir, layout.build_dir)
-    if not args.full:
-        reasons = list(analysis.fallback_reasons) or ["incremental builds are not implemented yet"]
-        for reason in reasons:
-            _say(f"full build: {reason}")
     report = _say if config.verbose else (lambda _msg: None)
-    result = full_build(analysis, layout, dist, env, report=report)
-    _say(f"wrote {result.pdf} ({result.passes} passes, {time.monotonic() - start:.1f} s)")
+    ctx = Context(analysis, layout, dist, config, os.environ, report)
+    result = build(ctx, epoch, full=getattr(args, "full", False))
+    if result.mode == "full" and result.reason and result.reason != "--full":
+        _say(f"full build: {result.reason}")
+    elif result.mode == "cold" and result.reason:
+        _say(f"cold build: {result.reason}")
+    compiled = f", compiled: {', '.join(result.compiled)}" if result.mode == "incremental" else ""
+    _say(f"wrote {result.pdf} ({result.mode}{compiled}, {result.seconds:.1f} s)")
+    if getattr(args, "report", None):
+        (cwd / args.report).write_text(result.to_json(), encoding="utf-8")
+    if args.command == "check" or getattr(args, "check", False):
+        return _check(ctx, analysis, layout, dist, epoch)
     return 0
+
+
+def _check(
+    ctx: Context, analysis: Analysis, layout: Layout, dist: TexDistribution, epoch: int
+) -> int:
+    """Compare the published build with a --full build into <build>/check (same epoch)."""
+    ref_layout = replace(layout, out_dir=layout.build_dir / "check")
+    ref_epoch = load_epoch(layout.canon_dir, epoch)
+    _say("check: building the --full reference")
+    full_build(analysis, ref_layout, dist, dist.environment(ref_epoch, os.environ), report=ctx.say)
+    ref, got = ref_layout.output(".pdf"), layout.output(".pdf")
+    rep = compare_pdfs(ref, got)
+    sources = [analysis.main.name] + [f"{inc.arg}.tex" for inc in analysis.includes]
+    compare_synctex(ref, got, sources, analysis.source_dir, report=rep)
+    print(rep.summary())
+    return 0 if rep.ok else 1
 
 
 def cmd_clean(args: argparse.Namespace, cwd: Path) -> int:
@@ -99,7 +133,7 @@ def main(argv: Sequence[str] | None = None, cwd: Path | None = None) -> int:
     args = _parser().parse_args(argv)
     workdir = cwd or Path.cwd()
     try:
-        if args.command == "build":
+        if args.command in ("build", "check"):
             return cmd_build(args, workdir)
         return cmd_clean(args, workdir)
     except FastincError as err:
