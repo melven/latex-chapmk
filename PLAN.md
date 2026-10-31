@@ -96,7 +96,7 @@ Short reference for the implementer. Details go into spike notes.
 
 - **`\include{u}` / `\includeonly{...}`.** `\include` performs `\clearpage`, writes into its own `u.aux`, and at the end writes a counter checkpoint `\@setckpt{u}{...}` (all LaTeX counters registered via `\newcounter`) and does another `\clearpage`. With `\includeonly`, excluded units are not typeset; their `u.aux` (read at `\begin{document}` through `\@input` lines in `main.aux`) still provides labels, list entries and the checkpoint, which is restored when the excluded `\include` is reached. Main-file body text is always typeset.
 - **Aux files** carry cross-references (`\newlabel`), list entries (`\@writefile{toc}{...}`), biblatex citation data (`\abx@aux@...`), package data (longtable `\LT@...`, eqparbox), and `\gdef\@abspage@last{N}`. At `\end{document}`, LaTeX re-reads all aux files and writes `.toc`, `.lof`, `.lot`, … from the `\@writefile` lines.
-- **Format files.** `mylatexformat` dumps the TeX state after a partial preamble into a `.fmt` file. Loading it replaces processing that preamble part. Open write streams cannot be dumped. [S1]
+- **Format files.** `mylatexformat` dumps the TeX state after a partial preamble into a `.fmt` file. Loading it replaces processing that preamble part. Open write streams cannot be dumped; mylatexformat collects `\openout` calls made during the dump and replays them at runtime, with `\jobname` expanded then (S1).
 - **LaTeX hooks** (kernel ≥ 2020-10):
   - `include/before`, `include/end`, `include/after`, `include/excluded` [S3],
   - `file/before`, `file/after` (TeX input files),
@@ -148,7 +148,7 @@ Short reference for the implementer. Details go into spike notes.
 Input: the main file (CLI argument or `fastinc.toml`).
 
 1. **Locate the preamble:** lines `1 .. b-1`, where line `b` contains `\begin{document}`. Comments must be respected (`%` not preceded by `\`). Lines read via `\input` in the preamble are inlined for split detection only.
-2. **Split point `s`** (first line not dumped into the format): the first preamble line matching the deny list (§6.3.2), or a config override `format.split_before = "<regex>"`. If `s` falls inside an `\input`ed preamble file, set `s` to the line of that `\input`.
+2. **Split point `s`** (first line not dumped into the format): the first preamble line matching the deny list (§6.3.2), or a config override `format.split_before = "<regex>"`. If the match lies inside a top-level command or group spanning several lines (e.g. `\ifdraft{` … `}`), set `s` to the line where that command starts (brace-depth tracking, S1). If `s` falls inside an `\input`ed preamble file, set `s` to the line of that `\input`.
 3. **Segments** of the main body: tokenise top-level `\include{...}` occurrences. Units `U1..Un` are in document order; glue segments `G0..Gn` (possibly empty) lie between them. Unit ids are the `\include` arguments (e.g. `chapters/intro`). An argument that is absolute or contains `..` is an error: its aux would be written outside the run directory, which TeX Live refuses (`openout_any = p`).
 4. **Fingerprints** (sha256): `pre` (lines `1..s-1` plus inlined files), `post` (lines `s..b-1`), `body` (main-file text from `b` to end, excluding nothing).
 5. **Unsupported-package detection** in the preamble → full-build mode (§6.14).
@@ -179,35 +179,31 @@ pdflatex -ini -jobname=pre -output-directory=.fastinc/fmt "&pdflatex" mylatexfor
 
 - Rebuild when `pre`, the TeX Live version string, or the `fastinc-ini.sty` version changes.
 - The class options are part of `pre` (the `draft` option freezes `\ifdraft`).
-- Run usage: `-fmt=.fastinc/fmt/pre`.
+- Run usage: `TEXFORMATS=.fastinc/fmt:` and `-fmt=pre`. An absolute `-fmt=` path breaks `-recorder` (S1).
 
-**[S1] verifies:**
-- mylatexformat runtime semantics: does it skip the main file up to `\endofdump`? Blank lines plus the marker are designed to work either way.
-- That the reference preamble dumps cleanly when split before `hyperref`.
-- That SyncTeX works with the format.
+**Verified by S1** (`docs/spikes/S1.md`):
+- At runtime, mylatexformat skips the main file line by line up to the first line containing `\endofdump`, `\csname endofdump\endcsname` or `\begin{document}`, then executes that whole line.
+- The reference preamble dumps cleanly up to the externalize block, including `hyperref` and `biblatex`.
+- Output is raster-, text- and SyncTeX-identical to a plain build.
 
 #### 6.3.2 Deny list (split before the first match)
 
 | Pattern | Reason |
 |---|---|
-| `\usepackage{hyperref}` (any options) | Safe default. [S1] may move it into the format. |
 | `\tikzexternalize` | Neutralised anyway; keeps the format independent of externalize. |
 | `\makeindex`, `\makeglossaries`, `\usepackage{minted}` | Unsupported in v1 → full-build mode. |
 | Config additions | User override. |
 
 #### 6.3.3 Deferral (`fastinc-ini.sty`, format mode only)
 
-Commands in the dumped part that open write streams are deferred to runtime:
-
-- `\makenomenclature`: in the format, redefined to set the flag `\fastinc@want@nomencl`. `fastinc.sty` calls the original at runtime.
-- The list is extensible (one table in the package).
+`\openout` calls during the dump (e.g. `\makenomenclature`) need no handling: mylatexformat replays them at runtime (S1). The deferral table in `fastinc-ini.sty` is kept, empty, as a contingency for state that is opened or frozen by other means.
 
 ### 6.4 LaTeX packages
 
 #### 6.4.1 `fastinc-ini.sty` (loaded before `\documentclass` in format builds and in the `--full` reference build)
 
 1. Externalize neutralisation (§6.4.3).
-2. Format mode only: the deferral table (§6.3.3), plus storing the original definitions.
+2. Format mode only: the deferral table (§6.3.3; empty in v1).
 
 #### 6.4.2 `fastinc.sty` (runtime, loaded at the split point)
 
@@ -231,7 +227,7 @@ Requirements:
 6. **File attribution.** On `file/before`, `\immediate\write` to `\jobname.ffl`: `<seg> <filename>`. Graphics: hook the graphicx file inclusion (`\Gin@setfile` or the pdftex driver's include macro [S3]) and write the same record.
 7. **Aux handlers.** Define `\fastinc@base`, `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs` as no-ops, and `\fastinc@ckpt` as store (aux is read at begin and end document).
 8. **Externalize neutralisation** (§6.4.3), repeated idempotently.
-9. **Deferred commands:** if `\fastinc@want@nomencl` is set, call the original `\makenomenclature`.
+9. **Deferred commands:** run the entries of the deferral table (§6.3.3; empty in v1).
 
 #### 6.4.3 Externalize neutralisation
 
@@ -740,12 +736,12 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 
 | Lines | Content | Handling |
 |---|---|---|
-| 1–40 | class (`draft`, `twoside`), setspace, AMS, tensor, inputenc/fontenc/lmodern, babel, csquotes, biblatex+`\addbibresource`, microtype, tables, graphicx, enumitem, siunitx, nomencl, xcolor, pgf, subcaption, gnuplot-lua-tikz, ifdraft, `\usetikzlibrary{external}`, algorithmic, listings, eqparbox | format (split before line 41) |
-| 28 | `\makenomenclature` | deferred (§6.3.3) |
-| 41 | `hyperref` | split point (deny list); [S1] may move it into the format |
-| 42–43 | orcidlink, todonotes | after split |
-| 45–189 | siunitx units, nomenclature groups, theorems (per chapter), autoref names, `\subsecref`, math macros, colours, algorithm float via `\DeclareNewTOC` (`loalg`), `\lstset` | after split; cheap |
-| 193–201 | `\ifdraft{\tikzexternalize ...; \todo wrapper}` | externalize neutralised (§6.4.3); wrapper works |
+| 1–40 | class (`draft`, `twoside`), setspace, AMS, tensor, inputenc/fontenc/lmodern, babel, csquotes, biblatex+`\addbibresource`, microtype, tables, graphicx, enumitem, siunitx, nomencl, xcolor, pgf, subcaption, gnuplot-lua-tikz, ifdraft, `\usetikzlibrary{external}`, algorithmic, listings, eqparbox | format |
+| 28 | `\makenomenclature` | format; `\openout` replayed at runtime by mylatexformat (S1) |
+| 41 | `hyperref` | format (S1) |
+| 42–43 | orcidlink, todonotes | format |
+| 45–189 | siunitx units, nomenclature groups, theorems (per chapter), autoref names, `\subsecref`, math macros, colours, algorithm float via `\DeclareNewTOC` (`loalg`), `\lstset` | format |
+| 193–201 | `\ifdraft{\tikzexternalize ...; \todo wrapper}` | split point: line 193, the start of the group containing the deny-list match on line 194 (S1); externalize neutralised (§6.4.3); wrapper works |
 
 **Unit-interface relevant items:**
 - `nomencl` (`.nlo` stream with markers);
