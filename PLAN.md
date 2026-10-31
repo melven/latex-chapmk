@@ -97,7 +97,7 @@ Short reference for the implementer. Details go into spike notes.
 
 - **`\include{u}` / `\includeonly{...}`.** `\include` performs `\clearpage`, writes into its own `u.aux`, and at the end writes a counter checkpoint `\@setckpt{u}{...}` (all LaTeX counters registered via `\newcounter`) and does another `\clearpage`. With `\includeonly`, excluded units are not typeset; their `u.aux` (read at `\begin{document}` through `\@input` lines in `main.aux`) still provides labels, list entries and the checkpoint, which is restored when the excluded `\include` is reached. Main-file body text is always typeset.
 - **Aux files** carry cross-references (`\newlabel`), list entries (`\@writefile{toc}{...}`), biblatex citation data (`\abx@aux@...`), package data (longtable `\LT@...`, eqparbox), and `\gdef\@abspage@last{N}`. At `\end{document}`, LaTeX re-reads all aux files and writes `.toc`, `.lof`, `.lot`, … from the `\@writefile` lines.
-- **`bookmark` package.** Writes each outline entry as `\BKM@entry{id=N,dest={<hex>},srcline={L},…}{<hex title>}` into the current aux file, so a unit's entries go to the unit aux. The outline is built from the aux of the previous run. It affects only the PDF outline, not typesetting. [S6]
+- **`bookmark` package.** Writes each outline entry as `\BKM@entry{id=N[,open][,dest={<hex>}][,color=…][,flags=…][,srcline={L}]}{<hex title>}` with `\immediate\write\@mainaux`, i.e. into the **main aux**. Level and parent are not written; they live in run-internal macros `\BKM@<id>` = `{parent}{level}{children}`. It affects only the PDF outline, not typesetting (S6).
 - **Format files.** `mylatexformat` dumps the TeX state after a partial preamble into a `.fmt` file. Loading it replaces processing that preamble part. Open write streams cannot be dumped; mylatexformat collects `\openout` calls made during the dump and replays them at runtime, with `\jobname` expanded then (S1).
 - **LaTeX hooks** (kernel ≥ 2020-10):
   - `include/before`, `include/end`, `include/after`, `include/excluded` [S3],
@@ -233,7 +233,8 @@ Requirements:
 6. **File attribution.** On `file/before`, `\immediate\write` to `\jobname.ffl`: `<seg> <filename>`. Graphics: wrap `\Gin@setfile{type}{ext}{file}` (#3 is the resolved file name; S3) and write the same record.
 7. **Aux handlers.** Define `\fastinc@base`, `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs` as no-ops, and `\fastinc@ckpt` as store (aux is read at begin and end document).
 8. **Externalize neutralisation** (§6.4.3), repeated idempotently.
-9. **Deferred commands:** run the entries of the deferral table (§6.3.3; empty in v1).
+9. **Bookmark levels.** At `enddocument`, write `\fastinc@bkmlevels{<id>=<level>,...}` to the main aux, read from bookmark's `\BKM@<id>` macros (S6).
+10. **Deferred commands:** run the entries of the deferral table (§6.3.3; empty in v1).
 
 #### 6.4.3 Externalize neutralisation
 
@@ -285,7 +286,7 @@ A run with selection *S* compiles the glue plus the units in *S*. A **full run**
 - the canonical `main.aux` and derived files;
 - `main.bcf` and `main.bbl`;
 - `main.nlo` and `main.nls`;
-- bookmark records (`\BKM@entry` lines, part of the committed aux);
+- bookmark records (`\BKM@entry` lines and `\fastinc@bkmlevels`, in the main-aux slices);
 - `state.json`.
 
 Per segment, `state.json` stores:
@@ -329,10 +330,11 @@ Must equal the full run's files byte for byte; this is a unit test against refer
 | `\abx@aux@refcontext`, `\abx@aux@segm`, `\abx@aux@page`, `\abx@aux@number`, other `\abx@aux@*` | biblatex data, key-scoped where a key is present; others global |
 | `\gdef\LT@<roman>{...}` (longtable) | *self*: read only by the same unit |
 | eqparbox records (exact form [S8]) | *self* (tags are chapter-scoped in the reference document) |
-| `\BKM@entry{...}{...}` (bookmark) | outline record: used only by the merge (§6.11); a change dirties nothing |
+| `\BKM@entry{...}{...}` (bookmark, main aux) | outline record: used only by the merge (§6.11); a change dirties nothing |
+| `\fastinc@bkmlevels{id=level,...}` (main aux) | outline levels of this run's entries (§6.4.2); merge only |
 | `\babel@aux{...}` | ignored (language state; A1 lint covers `\selectlanguage`) |
 | `\gdef\@abspage@last{N}` | ignored; rewritten to the merged page count in canonical `main.aux` |
-| hyperref/nameref internals (`\HyPL@Entry`, `\providecommand...`, `\hyper@...`) [S6] | ignored or main-only |
+| hyperref/nameref internals (`\providecommand...`, `\hyper@...`) | ignored or main-only (S8) |
 | `\relax`, `\@input`, header lines | structural |
 | anything else | **global**: a change dirties all units and glue; print a warning naming the macro, so the table can be extended |
 
@@ -490,7 +492,7 @@ Input: for each segment in document order, its committed artifact `(run PDF, pag
 1. **Pages:** create a new PDF and append the pages in order (foreign object copy). Build the map `(run, page index) → merged page`, and also `(segment, offset in segment) → merged page`.
 2. **Named destinations:**
    - From each source run, collect `/Root/Names/Dests` entries.
-   - Keep a name only if its target page belongs to the pages taken from that run, and the name is not a dummy (dummies come from the run log warnings, [S6]).
+   - Keep a name only if its target page belongs to the pages taken from that run, and the name is not a dummy. Dummies are listed in the run log as `pdfTeX warning (dest): name{X} has been referenced but does not exist, replaced by a fixed one`; their target is `[<page 0> /Fit]` (S6). Values have the form `<< /D [<page> /XYZ x y null] >>`.
    - Remap the target page through the map.
    - Duplicate names: mirror pdfTeX, which keeps the first definition and ignores later ones (`pdfTeX warning (ext4): destination with the same identifier (name{X}) has been already used, duplicate ignored`). The merge keeps the definition from the first merged page in document order and drops later ones. Typical case: `page.N` names from title pages or restarted numbering. Since a partial run may lack the earlier definition, attribution is by merged page order, never by run. [S6] verifies that the full run produces the same winner.
    - Every name referenced by a link or the outline must resolve; a missing name → error → fallback.
@@ -499,7 +501,7 @@ Input: for each segment in document order, its committed artifact `(run PDF, pag
    - Links using named destinations (`/A <</S/GoTo/D (name)>>` or `/Dest (name)`) stay as they are.
    - Direct page-object destinations are remapped via the `(segment, offset)` map.
    - `/P` entries are set to the merged page.
-4. **Outline:** built from the `\BKM@entry` records in aux reading order (main aux with `\@input` expanded, the same order `bookmark` uses). Decode the hex fields: `dest` → name; the title → PDF string bytes (TeX octal escapes, typically UTF-16BE with BOM). Level, open state and the other keys follow the grammar verified in [S6].
+4. **Outline:** built from the `\BKM@entry` records of the canonical main aux (segment slices in document order). Decode the hex fields: `dest` → name; the title → PDF string bytes (TeX octal escapes, typically UTF-16BE with BOM). The level of each entry comes from the same run's `\fastinc@bkmlevels`. The tree is rebuilt with bookmark's rule: the parent is the nearest previous entry with a lower level. `open`, `color` and `flags` come from the entry (S6).
    - Each outline item gets `/Dest (dest)` (named) with `/Parent`, `/First`, `/Last`, `/Next`, `/Prev` and `/Count` (open state and level-gap handling as `bookmark` does it).
    - The catalog `/PageMode` comes from the reference run.
 5. **Page labels:** from the page map's `(value, \thepage text)` per page, infer the style: arabic → `/D`, roman → `/r`, Roman → `/R`, alph → `/a`, Alph → `/A`, otherwise a prefix-only label `/P`. Compress into a `/PageLabels` number tree. Compare against the reference in tests.
@@ -704,7 +706,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | S3 | Hook order: `include/before` relative to the initial `\clearpage`; pages from the final `\clearpage` before `include/after`; whether the unit aux is still open (`\@auxout` = `\@partaux`) at `include/after`, else where to write `\fastinc@ckpt`; existence and timing of `include/excluded` relative to the checkpoint restore; file hook for TikZ libraries; graphicx inclusion hook point. |
 | S4 | Enumerating allocated `\count` registers (kernel allocation pointers, extended registers); confirm `LT@tables` and `\Hy@linkcounter` are covered; cost of writing vectors; initial scratch-register deny list (registers whose segment-entry values differ between a partial and a full run on the corpus). |
 | S5 | biblatex `.bcf` contents after an `\includeonly` run; `.bcf` patch feasibility. *Done: patch needed and feasible (decision: patch).* |
-| S6 | hyperref: `/Dests` name tree, dummy-destination log format, duplicate-destination warning and which definition wins, anchor naming (`section*.N` via `\Hy@linkcounter`), `\HyPL@Entry` semantics. `bookmark`: complete `\BKM@entry` grammar (level, open state, colour and style keys, `srcline`), how the outline is built from it, level-gap handling, and which keys depend on segment state (`id` from `\c@bookmark@seq@number`). |
+| S6 | *Done.* hyperref: `/Dests` name tree, dummy-destination log format, duplicate-destination warning and which definition wins, anchor naming (`section*.N` via `\Hy@linkcounter`), `\HyPL@Entry` semantics. `bookmark`: complete `\BKM@entry` grammar (level, open state, colour and style keys, `srcline`), how the outline is built from it, level-gap handling, and which keys depend on segment state (`id` from `\c@bookmark@seq@number`). |
 | S7 | Running heads on the first page of a unit (scrbook marks) in a partial run vs a full run; whether A5 suffices; fix if feasible (restoring mark state). |
 | S8 | Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
 | S9 | pikepdf merge prototype: two runs → merged PDF with working cross-run links, outline, page labels; verified by §3.3 items 1–3. |
