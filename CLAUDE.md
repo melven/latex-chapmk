@@ -11,7 +11,7 @@
    - a note in `docs/spikes/S#.md` (question, setup, result, consequence for the plan).
 3. If a spike contradicts `PLAN.md`, update `PLAN.md` in a separate commit (`plan: ...`). Never silently deviate from the plan.
 4. **Decision points: stop and ask the user** with a short summary and options when:
-   - S2 shows that stale aux files in the source directory are read,
+   - S2 shows that the shadow tree (`PLAN.md` §6.5) breaks file resolution or SyncTeX paths,
    - S5 shows that `.bcf` patching is needed or not feasible,
    - S7 shows that running heads differ between partial and full runs,
    - any change would weaken the acceptance criterion (`PLAN.md` §3.3),
