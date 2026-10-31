@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from fastinc.errors import FastincError
+from fastinc.predict import SegmentVectors
 
-STATE_VERSION = 2
+STATE_VERSION = 3
 STATE_FILE = "state.json"
 
 
@@ -47,7 +48,8 @@ class State:
     statements per segment (from the run that committed the segment). ``glue_inputs`` is the
     hash of the glue inputs the committed glue was compiled with. ``pending`` holds the dirty
     units with reasons and ``glue_pending`` why the glue is invalid, if the last build did not
-    reach the fixpoint (e.g. a TeX error).
+    reach the fixpoint (e.g. a TeX error). ``vectors`` holds entry, exit and absolute set of
+    each segment from its committing run (prediction, §6.9.3).
     """
 
     epoch: int
@@ -64,6 +66,7 @@ class State:
     glue_inputs: str = ""
     pending: dict[str, list[str]] = field(default_factory=dict)
     glue_pending: str | None = None
+    vectors: dict[str, SegmentVectors] = field(default_factory=dict)
     version: int = STATE_VERSION
 
     def run_names(self) -> set[str]:
@@ -85,6 +88,14 @@ def save_state(state: State, canon_dir: Path) -> None:
     }
     for info in data["units"].values():
         info["entry"] = {str(r): v for r, v in info["entry"].items()}
+    data["vectors"] = {
+        seg: {
+            "entry": {str(r): x for r, x in v.entry.items()},
+            "exit": {str(r): x for r, x in v.exit.items()},
+            "absolute": sorted(v.absolute),
+        }
+        for seg, v in state.vectors.items()
+    }
     tmp = canon_dir / f".{STATE_FILE}.tmp"
     tmp.write_text(json.dumps(data, indent=1, sort_keys=True), encoding="utf-8")
     tmp.replace(canon_dir / STATE_FILE)
@@ -125,6 +136,14 @@ def load_state(canon_dir: Path) -> State | None:
             glue_inputs=str(data["glue_inputs"]),
             pending={k: list(v) for k, v in data["pending"].items()},
             glue_pending=data["glue_pending"],
+            vectors={
+                seg: SegmentVectors(
+                    {int(r): int(x) for r, x in v["entry"].items()},
+                    {int(r): int(x) for r, x in v["exit"].items()},
+                    frozenset(int(r) for r in v["absolute"]),
+                )
+                for seg, v in data["vectors"].items()
+            },
         )
     except (ValueError, KeyError, TypeError) as err:
         raise FastincError(f"{path}: corrupt state ({err}); run 'fastinc clean'") from err

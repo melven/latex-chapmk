@@ -33,7 +33,7 @@ from typing import Any
 
 from fastinc.analysis import Analysis
 from fastinc.aux import AGGREGATE, GLOBAL, command_name, read_lines, run_input_main_aux, statements
-from fastinc.canon import CanonView, commit_run, read_canon, segments
+from fastinc.canon import CanonView, commit_lists, commit_run, read_canon, run_tools, segments
 from fastinc.config import Config
 from fastinc.deps import TokenScan, changed_imports, imports, read_text, short_hash
 from fastinc.errors import FastincError, TexError
@@ -42,8 +42,15 @@ from fastinc.fullbuild import full_build, read_inputs
 from fastinc.layout import Layout
 from fastinc.lint import LintHit, lint_files
 from fastinc.outputs import MergeFailedError, failed_run, publish_state
-from fastinc.records import RecordError, RunRecords, read_run_records, register_names
-from fastinc.runner import DERIVED_SUFFIXES, RunSpec, prepare_run_dir, run_one
+from fastinc.predict import Vector, normalized, partition, predict, rewrite_checkpoint
+from fastinc.records import (
+    RecordError,
+    RunRecords,
+    read_main_records,
+    read_run_records,
+    register_names,
+)
+from fastinc.runner import DERIVED_SUFFIXES, RunSpec, prepare_run_dir, run_batch
 from fastinc.state import State, UnitInputs, load_state, save_state
 from fastinc.texdist import TexDistribution
 from fastinc.tools import ToolInputError
@@ -186,6 +193,10 @@ def _records(ctx: Context, run_dir: Path) -> RunRecords:
         raise FallbackError(f"records: {err}") from err
 
 
+def _write(path: Path, stmts: list[str]) -> None:
+    path.write_text("\n".join(stmts) + "\n", encoding="utf-8", errors="surrogateescape")
+
+
 def _short(items: list[str], limit: int = 3) -> str:
     shown = ", ".join(items[:limit])
     return shown if len(items) <= limit else f"{shown}, ... (+{len(items) - limit})"
@@ -211,6 +222,8 @@ class Fixpoint:
         self._lint: dict[str, list[LintHit]] = {}
         self.warnings: list[str] = []
         self.register_names: dict[int, str] = {}  # for messages, from the logs
+        self.last_entries: dict[str, Vector] = {}  # observed in the latest run
+        self.mispredicted: dict[str, int] = {}  # consecutive mispredictions per unit
 
     # sources -------------------------------------------------------------------------------
 
@@ -386,55 +399,230 @@ class Fixpoint:
                 ks.update(self.group[k])
         return (None if len(ks) == n else sorted(ks)), reasons
 
-    def run(
-        self, selection: list[int] | None, dirty: Mapping[str, list[str]], glue: str | None
-    ) -> dict[str, Any]:
-        """Compile ``selection`` plus glue in one run and commit it."""
-        ctx, a, state = self.ctx, self.a, self.state
-        name = state.new_run_name()
+    def groups(self, selection: list[int] | None) -> list[list[int] | None]:
+        """Runs of one iteration: contiguous groups of the selected compilation units,
+        balanced by page count, at most ``jobs`` (§6.9.2, M5). One run (the M4 tail run) if
+        ``jobs`` is 1, a global unit exists (it would be compiled in every run), a unit has
+        no vectors yet, or a unit of the zone was mispredicted twice in a row (§6.9.3 item 6).
+        """
         ks = list(range(1, len(self.units) + 1)) if selection is None else selection
-        args = None if selection is None else tuple(a.includes[k - 1].arg for k in ks)
-        compiled = {f"U{k}" for k in ks}
-        for seg in sorted(compiled, key=lambda s: int(s[1:])):
-            for hit in self.lint(seg):
-                self._warn(hit.message())
-        what = "all units" if args is None else ", ".join(args) if args else "glue only"
-        ctx.say(f"run {name}: {what}")
-        canon = ctx.layout.canon_dir
-        spec = RunSpec(name, args)
-        run_dir = prepare_run_dir(
-            a,
-            ctx.layout,
-            spec,
-            canon_dir=canon if canon.is_dir() else None,
-            deny_names=ctx.config.state_ignore,
+        jobs = self.ctx.config.effective_jobs
+        atoms: list[list[int]] = []
+        for k in ks:
+            if atoms and self.group[k] is self.group[atoms[-1][0]]:
+                atoms[-1].append(k)
+            else:
+                atoms.append([k])
+        single = (
+            jobs <= 1
+            or len(atoms) <= 1
+            or any(self.is_global(u) for u in self.units)
+            or any(s not in self.state.vectors for s in segments(self.a)[2 * ks[0] - 1 :])
+            or any(self.mispredicted.get(f"U{k}", 0) >= 2 for k in ks)
         )
-        main_aux = run_dir / f"{ctx.job}.aux"
-        if main_aux.is_file():
-            excluded = {seg for seg in self.units if seg not in compiled}
-            stmts = run_input_main_aux(statements(read_lines(main_aux)), excluded)
-            main_aux.write_text("\n".join(stmts) + "\n", encoding="utf-8", errors="surrogateescape")
+        if single:
+            return [selection]
+        weights = [
+            float(sum(max(1, len(self.state.segments[f"U{k}"].pages)) for k in atom))
+            for atom in atoms
+        ]
+        return [[k for i in part for k in atoms[i]] for part in partition(weights, jobs)]
+
+    def _predictions(
+        self, groups: list[list[int]]
+    ) -> tuple[dict[str, tuple[Vector, Vector]], dict[int, dict[str, Vector]]]:
+        """Predicted (entry, exit) per segment from the first unit of the batch on, and per
+        run index the predicted exits to write into its excluded units' checkpoints."""
+        first = f"U{groups[0][0]}"
+        observed = self.last_entries.get(first)
+        entry = observed if observed is not None else self.state.vectors[first].entry
+        layout = self._canon_records(self.ctx.layout.canon_dir).layout
+        odd: frozenset[str] = frozenset()
+        if layout.get("twoside") and layout.get("openright"):
+            chapter_level = {
+                "part",
+                "part*",
+                "chapter",
+                "chapter*",
+                "addchap",
+                "addchap*",
+                "addpart",
+                "addpart*",
+            }
+            odd = frozenset(
+                f"U{k}"
+                for k, inc in enumerate(self.a.includes, start=1)
+                if inc.heading in chapter_level
+            )
+        pred = predict(segments(self.a), self.state.vectors, first, entry, odd)
+        rewrites: dict[int, dict[str, Vector]] = {}
+        for j, group in enumerate(groups):
+            out: dict[str, Vector] = {}
+            for k in range(groups[0][0], group[0]):
+                seg = f"U{k}"
+                if pred[seg][1] != normalized(self.state.vectors[seg].exit):
+                    out[seg] = pred[seg][1]
+            rewrites[j] = out
+        return pred, rewrites
+
+    def batch(
+        self,
+        groups: list[list[int] | None],
+        dirty: Mapping[str, list[str]],
+        glue: str | None,
+        number: int,
+    ) -> list[dict[str, Any]]:
+        """Compile the groups (each plus glue) in parallel runs, verify the predictions,
+        commit in document order and recompute the dirty set."""
+        ctx, a, state = self.ctx, self.a, self.state
+        canon = ctx.layout.canon_dir
+        parallel = len(groups) > 1
+        pred: dict[str, tuple[Vector, Vector]] = {}
+        rewrites: dict[int, dict[str, Vector]] = {}
+        if parallel:
+            pred, rewrites = self._predictions([g for g in groups if g is not None])
+        registers = {n: reg for n, (reg, _) in self._canon_records(canon).counters.items()}
         pre = read_canon(a, canon)
         pre_glue = self.glue_inputs(pre)
-        pre_self = {seg: pre.unit_self(seg) for seg in compiled}
-        env = ctx.env(state.epoch)
-        result = run_one(a, ctx.layout, ctx.dist, env, spec, self.fmt.name)
-        if not result.ok:
-            raise failed_run(
-                a, ctx.layout, run_dir, TexError("pdflatex failed", first_error=result.first_error)
+        specs: list[RunSpec] = []
+        compiled_by_run: list[set[str]] = []
+        for j, group in enumerate(groups):
+            name = state.new_run_name()
+            ks = list(range(1, len(self.units) + 1)) if group is None else group
+            args = None if group is None else tuple(a.includes[k - 1].arg for k in ks)
+            compiled = {f"U{k}" for k in ks}
+            for seg in sorted(compiled, key=lambda x: int(x[1:])):
+                for hit in self.lint(seg):
+                    self._warn(hit.message())
+            what = "all units" if args is None else ", ".join(args) if args else "glue only"
+            ctx.say(f"run {name}: {what}")
+            spec = RunSpec(name, args)
+            run_dir = prepare_run_dir(
+                a,
+                ctx.layout,
+                spec,
+                canon_dir=canon if canon.is_dir() else None,
+                deny_names=ctx.config.state_ignore,
             )
-        recs = _records(ctx, run_dir)
-        _check_runtime_support(ctx, run_dir, self.fmt)
+            main_aux = run_dir / f"{ctx.job}.aux"
+            if main_aux.is_file():
+                excluded = {seg for seg in self.units if seg not in compiled}
+                stmts = run_input_main_aux(statements(read_lines(main_aux)), excluded)
+                _write(main_aux, stmts)
+            for seg, exit_ in rewrites.get(j, {}).items():
+                path = run_dir / a.includes[int(seg[1:]) - 1].aux_name
+                _write(path, rewrite_checkpoint(statements(read_lines(path)), exit_, registers))
+            specs.append(spec)
+            compiled_by_run.append(compiled)
+        all_compiled = set().union(*compiled_by_run)
+        pre_self = {seg: pre.unit_self(seg) for seg in all_compiled}
+        env = ctx.env(state.epoch)
+        results = run_batch(a, ctx.layout, ctx.dist, env, specs, self.fmt.name, len(specs))
+        for r in results:
+            if not r.ok:
+                err = TexError("pdflatex failed", first_error=r.first_error)
+                raise failed_run(a, ctx.layout, r.directory, err)
+        all_recs = [_records(ctx, r.directory) for r in results]
+        for r in results:
+            _check_runtime_support(ctx, r.directory, self.fmt)
         if not self.register_names:
             self.register_names = register_names(
-                [self.fmt.directory / f"{self.fmt.name}.log", run_dir / f"{ctx.job}.log"]
+                [self.fmt.directory / f"{self.fmt.name}.log", results[0].log]
             )
+        for spec, recs, compiled in zip(specs, all_recs, compiled_by_run, strict=True):
+            try:
+                commit_run(a, ctx.layout, state, spec.name, recs, compiled)
+            except ToolInputError as err:
+                raise FallbackError(str(err)) from err
+            self._attribute(recs, compiled, ctx.layout.runs_dir / spec.name)
+        lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name)
         try:
-            tools = commit_run(a, ctx.layout, ctx.dist, env, state, name, recs, compiled)
+            tools = run_tools(a, ctx.layout, ctx.dist, env, state, specs[-1].name)
         except ToolInputError as err:
             raise FallbackError(str(err)) from err
+        post = read_canon(a, canon)
+        derived = tuple(f"{ctx.job}{x}" for x in DERIVED_SUFFIXES)
+        for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
+            for seg in compiled:
+                scan = self.scan(seg)
+                reads = scan.reads_lists() or any(
+                    s == seg and f.endswith(derived) for s, f in recs.files
+                )
+                state.units[seg] = UnitInputs(
+                    entry=recs.entry_state(seg),
+                    imports=imports(scan, pre.values),
+                    lists=pre.lists if reads else None,
+                    self_stable=pre_self[seg] == post.unit_self(seg),
+                )
+        state.glue_inputs = pre_glue
+        last = all_recs[-1]
+        self.last_entries = {seg: normalized(last.entry_state(seg)) for seg in last.entries}
+        dirty_after, glue_after = self.after_run(last, all_compiled, pre, post)
+        if parallel:
+            dirty_after, glue_after = self._verify(groups, all_recs, pred, dirty_after, glue_after)
+        if not lists_complete:
+            glue_after = glue_after or "list files without unit markers (rewritten by the glue)"
+        state.pending, state.glue_pending = dirty_after, glue_after
+        save_state(state, canon)
+        reports = []
+        for j, (spec, result) in enumerate(zip(specs, results, strict=True)):
+            reports.append(
+                {
+                    "name": spec.name,
+                    "batch": number,
+                    "selection": None if spec.selection is None else list(spec.selection),
+                    "reasons": {
+                        a.includes[int(s[1:]) - 1].arg: r
+                        for s, r in sorted(dirty.items())
+                        if s in compiled_by_run[j]
+                    },
+                    "glue": glue,
+                    "tools": tools if j == len(specs) - 1 else [],
+                    "seconds": round(result.seconds, 2),
+                }
+            )
+        return reports
+
+    def _verify(
+        self,
+        groups: list[list[int] | None],
+        all_recs: list[RunRecords],
+        pred: dict[str, tuple[Vector, Vector]],
+        dirty: dict[str, list[str]],
+        glue: str | None,
+    ) -> tuple[dict[str, list[str]], str | None]:
+        """§6.9.3 item 5: the exits of units whose predicted checkpoint later runs used must
+        equal the prediction; at the first mismatch every unit after its run's group is dirty
+        again (and the glue, whose pages come from the last run)."""
+        dirty = {seg: list(r) for seg, r in dirty.items()}
+        real = [g for g in groups if g is not None]
+        for j, (group, recs) in enumerate(zip(real[:-1], all_recs[:-1], strict=True)):
+            for k in group:
+                seg = f"U{k}"
+                actual = normalized(recs.checkpoints.get(seg, {}))
+                if actual == pred[seg][1]:
+                    self.mispredicted.pop(seg, None)
+                    continue
+                self.mispredicted[seg] = self.mispredicted.get(seg, 0) + 1
+                regs = sorted(
+                    r
+                    for r in actual.keys() | pred[seg][1].keys()
+                    if actual.get(r, 0) != pred[seg][1].get(r, 0)
+                )
+                names = [self.register_names.get(r, f"\\count{r}") for r in regs]
+                arg = self.a.includes[k - 1].arg
+                reason = f"misprediction: exit of {arg} ({_short(names)})"
+                self.ctx.say(reason)
+                for later in range(real[j][-1] + 1, len(self.units) + 1):
+                    dirty.setdefault(f"U{later}", []).append(reason)
+                return dirty, reason
+        return dirty, glue
+
+    def _attribute(self, recs: RunRecords, compiled: set[str], run_dir: Path) -> None:
+        """Source files of the compiled units and the glue (F records), global inputs."""
+        ctx, state = self.ctx, self.state
         new_files = _segment_files(ctx, recs)
-        for seg in [*compiled, *(g for g in segments(a) if g.startswith("G"))]:
+        for seg in [*compiled, *(g for g in segments(self.a) if g.startswith("G"))]:
             state.segment_files[seg] = new_files.get(seg, {})
             self._scans.pop(seg, None)
             self._lint.pop(seg, None)
@@ -445,35 +633,15 @@ class Fixpoint:
             for n, h in {**state.global_files, **_global_files(ctx, run_dir, attributed)}.items()
             if n not in attributed
         }
-        post = read_canon(a, canon)
-        derived = tuple(f"{ctx.job}{s}" for s in DERIVED_SUFFIXES)
-        for seg in compiled:
-            scan = self.scan(seg)
-            reads = scan.reads_lists() or any(
-                s == seg and f.endswith(derived) for s, f in recs.files
-            )
-            state.units[seg] = UnitInputs(
-                entry=recs.entry_state(seg),
-                imports=imports(scan, pre.values),
-                lists=pre.lists if reads else None,
-                self_stable=pre_self[seg] == post.unit_self(seg),
-            )
-        state.glue_inputs = pre_glue
-        state.pending, state.glue_pending = self.after_run(recs, compiled, pre, post)
-        save_state(state, canon)
-        return {
-            "name": name,
-            "selection": None if args is None else list(args),
-            "reasons": {a.includes[int(s[1:]) - 1].arg: r for s, r in sorted(dirty.items())},
-            "glue": glue,
-            "tools": tools,
-            "seconds": round(result.seconds, 2),
-        }
+
+    def _canon_records(self, canon: Path) -> RunRecords:
+        """Header records of the canonical main aux (counters, layout)."""
+        return read_main_records(canon / f"{self.ctx.job}.aux")
 
     def converge(self, dirty: dict[str, list[str]], glue: str | None) -> list[dict[str, Any]]:
-        """Run until nothing is dirty and the glue is valid (§6.9.2)."""
+        """Iterate batches until nothing is dirty and the glue is valid (§6.9.2)."""
         runs: list[dict[str, Any]] = []
-        for _ in range(MAX_ITERATIONS):
+        for iteration in range(MAX_ITERATIONS):
             if not dirty and glue is None:
                 return runs
             selection, reasons = self.plan(dirty)
@@ -482,11 +650,11 @@ class Fixpoint:
                 self.ctx.say(f"dirty {arg}: {'; '.join(why)}")
             if glue is not None:
                 self.ctx.say(f"glue: {glue}")
-            runs.append(self.run(selection, reasons, glue))
+            runs += self.batch(self.groups(selection), reasons, glue, iteration)
             dirty, glue = self.state.pending, self.state.glue_pending
         if not dirty and glue is None:
             return runs
-        raise FallbackError(f"no fixpoint after {MAX_ITERATIONS} runs")
+        raise FallbackError(f"no fixpoint after {MAX_ITERATIONS} iterations")
 
 
 # --- entry point -----------------------------------------------------------------------------
