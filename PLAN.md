@@ -260,7 +260,7 @@ pdflatex -fmt=<fmt> -interaction=nonstopmode -halt-on-error -file-line-error \
 - The working directory is the **shadow tree** `.fastinc/src/`, so relative `\include`, `\input` and `\graphicspath` resolve as usual, and stale build files in the user's source directory (left over from manual builds) can never be read.
   - **Contents:** a mirror of the source tree made of symlinks to regular files. Excluded: the build directory, `.git/`, and the LaTeX outputs of the main job and the units (`<main>.*` except the main `.tex`, and `<unit>.aux`).
   - **Refresh:** once per build, before the runs. Parallel runs share it read-only.
-  - **Path mapping:** shadow paths map to source paths by prefix substitution, for logs (§6.13) and SyncTeX (§6.12). SyncTeX records absolute, unresolved paths of the form `<cwd>/./<relative>`; normalise `/./` first (S2).
+  - **Path mapping:** shadow paths map to source paths by prefix substitution, for logs (§6.13) and SyncTeX (§6.12). SyncTeX records absolute, unresolved paths of the form `<cwd>/./<relative>`. Replace only the `<cwd>` prefix and keep the `/./`: `synctex view` matches relative file names by it (S10).
   - **Platforms:** where symlinks are unavailable (Windows without the privilege), use hardlinks, else copies [M7].
   - **Limitation (accepted in v1):** relative paths that leave the source tree (`\input{../x}`) do not resolve. Absolute paths work.
 - Environment: N4 and `max_print_line=10000` (`TEXMF_OUTPUT_DIRECTORY` is not needed, S2).
@@ -520,11 +520,23 @@ Expected side effect: a larger file, because font subsets are duplicated per run
 
 ### 6.12 SyncTeX merge
 
-1. Parse each source `main.synctex.gz` according to the grammar [S10].
-2. Build a global input table keyed by real path. Map `runs/<r>/main.tex` to the user's `main.tex` and shadow-tree paths to source paths (§6.2); line numbers are unchanged (§6.2). Remap the input tags in all records.
+Verified by S10 (`docs/spikes/S10.md`).
+
+1. Parse each source `main.synctex.gz`:
+   - header (`Input:` lines, which may also occur mid-content; `Output`, `Magnification`, `Unit`, `X Offset`, `Y Offset`);
+   - sheets `{n` … `}n`;
+   - tagged records `<type><tag>,<line>:…` with types `[ ( h g k x $ v r`.
+2. Build a global input table keyed by path.
+   - Map `runs/<r>/main.tex` to the user's `main.tex`, and the shadow-tree cwd prefix to the source directory. Keep the `<cwd>/./<relative>` form.
+   - Line numbers are unchanged (§6.2).
+   - Rewrite the tags of all records.
 3. Take only the sheets of the selected pages (page map) and renumber them to merged page numbers.
-4. Recompute every size and offset field, write the header (`Output:pdf`, `Magnification`, `Unit`, `X Offset`, `Y Offset` copied from the runs; they must be equal, otherwise error) and the postamble, then gzip.
-5. Verify with the `synctex` CLI in tests.
+4. Write the file:
+   - the header, copied from the runs; the values must be equal, otherwise error;
+   - `!<n>` before every `{n`, every `}n` and the postamble, where `n` = bytes since the previous `!` line;
+   - the postamble `Postamble:`, `Count:<records>`, `!<n>`, `Post scriptum:`;
+   - then gzip.
+5. Verify with the `synctex` CLI in tests: `view` for every source line with records, and `edit` at the resulting positions.
 
 ### 6.13 Logs and errors
 
@@ -733,7 +745,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | S7 | *Done.* Running heads on the first page of a unit (scrbook marks) in a partial run vs a full run; whether A5 suffices; fix if feasible (restoring mark state). Result: heads differ for includes violating A5, and restoring the mark state does not help. Decision: compilation units (§6.1). |
 | S8 | *Done.* Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
 | S9 | *Done.* pikepdf merge prototype: two runs → merged PDF with working cross-run links, outline, page labels; verified by §3.3 items 1–3. |
-| S10 | SyncTeX merge prototype; verified with `synctex view/edit`. |
+| S10 | *Done.* SyncTeX merge prototype; verified with `synctex view/edit`. |
 | S11 | *Deferred to M7 (needs a Windows CI runner).* MiKTeX: format flags, output/aux-directory read order (repeat S2), on-the-fly install settings, `SOURCE_DATE_EPOCH` support, availability of mylatexformat, biber, makeindex and synctex. |
 
 **Done when:** all notes except S11 (deferred to M7) are written and the plan is updated.
