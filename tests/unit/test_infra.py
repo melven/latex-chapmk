@@ -119,6 +119,10 @@ def test_build_output_filter(tmp_path: Path) -> None:
     assert excluded(PurePosixPath("thesis.aux")) and excluded(PurePosixPath("ch/a.aux"))
     assert not excluded(PurePosixPath("thesis.tex"))
     assert not excluded(PurePosixPath("thesis-notes.tex"))
+    assert not excluded(PurePosixPath("thesis.cfg"))  # a source named like the job
+    assert excluded(PurePosixPath("thesis.synctex.gz")) and excluded(
+        PurePosixPath("thesis.run.xml")
+    )
     assert not excluded(PurePosixPath("sub/thesis.aux"))
 
 

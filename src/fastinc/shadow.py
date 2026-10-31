@@ -17,6 +17,49 @@ from fastinc.analysis import Analysis
 
 ALWAYS_SKIPPED_DIRS = frozenset({".git", ".hg", ".svn"})
 
+#: Suffixes of files that LaTeX tools write for a job ``<jobname><suffix>``. Only these are
+#: left out: other ``<jobname>.*`` files may be sources (e.g. ``pgfmanual.cfg``).
+BUILD_OUTPUT_SUFFIXES = frozenset(
+    {
+        ".aux",
+        ".toc",
+        ".lof",
+        ".lot",
+        ".loalg",
+        ".lol",
+        ".tdo",
+        ".out",
+        ".log",
+        ".fls",
+        ".fdb_latexmk",
+        ".synctex.gz",
+        ".synctex(busy)",
+        ".synctex",
+        ".pdf",
+        ".dvi",
+        ".xdv",
+        ".bbl",
+        ".bcf",
+        ".blg",
+        ".run.xml",
+        ".nlo",
+        ".nls",
+        ".ilg",
+        ".idx",
+        ".ind",
+        ".glo",
+        ".gls",
+        ".glg",
+        ".ist.bak",
+        ".nav",
+        ".snm",
+        ".vrb",
+        ".frec",
+        ".auxlock",
+        ".lock",
+    }
+)
+
 
 @dataclass(frozen=True)
 class ShadowStats:
@@ -28,14 +71,13 @@ class ShadowStats:
 
 
 def build_output_filter(analysis: Analysis) -> Callable[[PurePosixPath], bool]:
-    """Predicate for files to leave out: ``<jobname>.*`` in the top directory except the main
-    file, and the aux files of all includes."""
-    main_name = analysis.main.name
-    prefix = f"{analysis.jobname}."
+    """Predicate for files to leave out: build outputs ``<jobname><suffix>`` in the top
+    directory (:data:`BUILD_OUTPUT_SUFFIXES`) and the aux files of all includes."""
+    outputs = {f"{analysis.jobname}{suffix}" for suffix in BUILD_OUTPUT_SUFFIXES}
     unit_aux = {inc.aux_name for inc in analysis.includes}
 
     def excluded(rel: PurePosixPath) -> bool:
-        if len(rel.parts) == 1 and rel.name.startswith(prefix) and rel.name != main_name:
+        if len(rel.parts) == 1 and rel.name in outputs:
             return True
         return rel.as_posix() in unit_aux
 
