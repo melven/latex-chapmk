@@ -339,7 +339,8 @@ Per segment, `state.json` stores:
 Derived list files (`.toc`, `.lof`, …) are **written by TeX**, not by a Python linker (M3).
 - A Python linker was tried and is not byte-identical: when writing, TeX expands content (`\protected@file@percent` → `%`), and aux macros such as `\babel@aux` add entries.
 - Every run reads all aux files at `\end{document}` (its new ones and the canonical ones of excluded units) and writes complete list files.
-- In M3 the list files stay canonical (verification). When contributions change (M4), the glue run of the fixpoint writes them.
+- In M3 the list files stay canonical (verification). Since M4 every run's list files become canonical; the glue compiled in a later run reads them.
+- **Deferred glue writes (M4 finding):** a non-immediate write of the glue (e.g. `\appendix` writes `\def\@chapapp{…}` to `.toc`/`.lof`/…) is flushed at the next shipout. In a full run that is the first page of the next unit, so the line follows that unit's entries; when that unit is excluded, it follows a later unit's entries. The list files then differ in the position of such lines. Consequence: right after a run that compiled such a unit, a run without it changes the list files and costs one glue-only run (T1 checks the steady state). Candidate fix (later): flush pending writes at an excluded `\include` with a dummy shipout that the merge drops.
 
 #### 6.7.2 Line classification
 
@@ -352,7 +353,9 @@ Aux files are parsed as brace-balanced statements, not lines: `\@setckpt` and `\
 | `\@setckpt{u}{...}`, `\fastinc@ckpt{u}{...}` | unit | exit state |
 | `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs`, `\fastinc@base` | main | state records; `\fastinc@entry` also delimits the main-aux slices |
 | `\abx@aux@cite{n}{key}`, `\abx@aux@segm{n}{n}{key}` | main, unit slice | citation (set and order), one line per key per citation command (S5) |
-| `\abx@aux@refcontext`, `\abx@aux@defaultrefcontext{n}{key}{…}`, other keyed `\abx@aux@*` | main | biblatex data, merged per key |
+| `\abx@aux@backref{i}{key}{…}` | main, unit slice | unit content (citing page; read by the bibliography in the glue) |
+| `\abx@aux@category{c}{key}` and other `\abx@aux@*` in a unit slice | main, unit slice | unit content (written at citation time, M4) |
+| `\abx@aux@refcontext`, `\abx@aux@defaultrefcontext{n}{key}{…}`, `\abx@aux@number{i}{key}{…}{n}` (`defernumbers`), other keyed `\abx@aux@*` outside unit slices | main | biblatex data, merged per key (without the run-local `instcount` argument `i`); part of the key's citation value |
 | `\abx@aux@read@bbl@mdfivesum`, `\abx@aux@read@bblrerun` | main, end | ignored (bookkeeping) |
 | `\gdef\LT@<roman>{\LT@entry…}` (longtable) | unit | *self* |
 | `\pgfsyspdfmark{pgfidN}{x}{y}` (pgf `remember picture`, todonotes) | main, unit slice | *self*, keyed by `pgfidN` |
@@ -366,7 +369,7 @@ Aux files are parsed as brace-balanced statements, not lines: `\@setckpt` and `\
 | anything else | | **global**: a change dirties all units and glue; print a warning naming the macro, so the table can be extended |
 
 **Canonical main aux** (S8). Start from the main aux of the run that committed the glue, then:
-1. For each unit, replace the unit-content kinds (`\BKM@entry`, `\abx@aux@cite/segm`, `\pgfsyspdfmark`, fastinc records) in its slice with those from the unit's committed slice.
+1. For each unit, replace the unit-content kinds (`\BKM@entry`, `\abx@aux@cite/segm`, `\abx@aux@backref`, other biblatex data, `\pgfsyspdfmark`; `aux.UNIT_CONTENT`) in its slice with those from the unit's committed slice.
 2. Merge the end-of-document aggregates as in the table.
 
 ### 6.8 Dependency model
@@ -424,7 +427,8 @@ Scan unit sources (comments stripped) for occurrences of the commands below. The
 - **Explicit group:** an environment (`\begin{...}` … `\end{...}`), `\begingroup` … `\endgroup`, or a brace group whose `{` is not a macro argument. A `{` directly after a control word, `}` or `]` counts as an argument, because arguments need not form a group (e.g. `\ifdraft{...}{...}`), so it does not exempt.
 - **Warning text:** for a local command, suggest wrapping it in a group or environment; for a global command, suggest moving it to the preamble.
 
-- A hit gives a warning with `file:line`, and the unit is marked *global*: whenever it is recompiled, all successors are dirty.
+- A hit gives a warning with `file:line`, and the unit is marked *global*.
+  - **M4:** state changed by a global unit (e.g. `\parskip`) is not in the checkpoints, so later units and later glue see it only in a run that compiles the global unit. Therefore a global unit is compiled **in every run**, and when it is dirty itself, all later units are compiled in the same run. (The earlier rule "when recompiled, all successors are dirty" would compile them in a later run without the global unit, i.e. without its state.)
 - Config `lint.allow = [...]` lists exceptions.
 - The exemption is a heuristic. The acceptance tests guard it (T18 and a grouped variant).
 
@@ -468,6 +472,20 @@ if not converged: full run (S = all) once; if still not converged: error with di
 ```
 
 Cheap common case: a typo edit means one run, the unit's exit, exports and contributions are unchanged, the glue stays valid → merge.
+
+**Implemented in M4** (`incremental.Fixpoint`, `canon.py`, `deps.py`):
+- One run per iteration: the dirty compilation units (all: no `\includeonly`; none: glue only) plus the glue; at most 8 runs, then full mode (§6.14). A cold build is the same loop with all units dirty and an empty `canon/`. The loop ends when no unit is dirty and the glue is valid.
+- Dirty rules after a run:
+  - sources changed;
+  - imports: keys found by the text scan whose value differs from the one at compile start (label: whole `\newlabel` argument; citation: `.bbl` block and position plus keyed biblatex aux data such as `\abx@aux@number`);
+  - self data (unit-aux and slice statements of class *self*) differs before/after the compile;
+  - entry state: a unit not compiled in the run whose observed entry vector differs from the one it was compiled with. Tail rule: it and **all later units** are compiled in the next run (no prediction until M5);
+  - eqparbox widths changed: the units of the run; aggregate (KOMA autodot) or unclassified aux data changed: all units;
+  - a list file changed for a unit that typesets lists (text scan for `\tableofcontents`, `\listof…`, `\printbibliography`, …, or a derived file in its `F` records).
+- Glue validity: hash of the derived files, the values of keys imported by the main file and glue files, and the glue aux data (list typesetting data, eqparbox, aggregates, backrefs, unclassified, glue self data; keyed data order-insensitive) at the start of the run that produced the committed glue, compared with the current canonical state; glue sources changed → invalid (a glue-only run, no cold build).
+- The run's input main aux omits the citations of excluded units: biblatex compares the previous citations with the current ones and would treat them as removed, which suppresses e.g. the `defernumbers` data (found on hgb).
+- State that persists between builds: `pending` (dirty reasons) and `glue_pending` if a build stopped before the fixpoint (TeX error).
+- Measured on the thesis corpus: cold build 3 runs; T2 (ch2 longer) 3 runs (ch2; tail ch2..appB; all importers of moved labels).
 
 #### 6.9.3 Prediction for parallel recompilation of successors (milestone M5)
 
