@@ -17,6 +17,7 @@ WORDS = (
     "roofline throughput latency simulation domain grid boundary condition time step"
 ).split()
 N_BIB = 44
+N_CITED = 40  # ref01..ref40 are cited by the chapters
 CHAPTERS = [
     ("ch1", "Introduction"),
     ("ch2", "Mathematical background"),
@@ -44,7 +45,9 @@ def bib() -> str:
     for i in range(1, N_BIB + 1):
         kind = ("article", "book", "inproceedings")[i % 3]
         title = words(rng, 6).rstrip(".")
-        author = f"Author{i:02d}, A. and Coauthor{(i * 7) % N_BIB:02d}, B."
+        # uncited entries (ref41..) sort first: citing one renumbers the bibliography (T4)
+        surname = "Aaberg" if i > N_CITED else "Author"
+        author = f"{surname}{i:02d}, A. and Coauthor{(i * 7) % N_BIB:02d}, B."
         venue = {"article": "journal = {Journal of Examples}, volume = {%d}," % (i % 30 + 1),
                  "book": "publisher = {Example Press},",
                  "inproceedings": "booktitle = {Proceedings of the Example Conference},"}[kind]

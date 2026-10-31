@@ -1,5 +1,6 @@
 """Shared fixtures. Tests marked ``slow`` need TeX Live on PATH (dev container)."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -51,3 +52,44 @@ def prepare_figures(src: Path) -> None:
         )
         for ext in (".aux", ".log"):
             tex.with_suffix(ext).unlink(missing_ok=True)
+
+
+THESIS_EPOCH = "1700000000"
+
+
+@pytest.fixture(scope="session")
+def thesis_template(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[Path, Path]]:
+    """(live source dir, cache dir): the thesis corpus after a cold build with --check,
+    built once per session. Restored copies live at the same absolute path: the shadow tree
+    (symlinks), run directories and SyncTeX files contain absolute paths."""
+    from fastinc.cli import main
+
+    base = tmp_path_factory.mktemp("thesis")
+    live, cache = base / "live" / "src", base / "cache"
+    shutil.copytree(CORPUS / "thesis", live, ignore=shutil.ignore_patterns("generate.py"))
+    prepare_figures(live)
+    old = os.environ.get("SOURCE_DATE_EPOCH")
+    os.environ["SOURCE_DATE_EPOCH"] = THESIS_EPOCH
+    report = base / "live" / "report.json"
+    try:
+        rc = main(["build", "main.tex", "--check", "--report", str(report)], cwd=live)
+    finally:
+        if old is None:
+            del os.environ["SOURCE_DATE_EPOCH"]
+        else:
+            os.environ["SOURCE_DATE_EPOCH"] = old
+    rep = json.loads(report.read_text())
+    assert rc == 0, rep
+    assert rep["mode"] == "cold" and rep["reason"] == "no previous state"
+    shutil.copytree(live, cache, symlinks=True)
+    yield live, cache
+
+
+@pytest.fixture
+def thesis(thesis_template: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A freshly restored, built thesis corpus (same absolute path in every test)."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", THESIS_EPOCH)
+    live, cache = thesis_template
+    shutil.rmtree(live)
+    shutil.copytree(cache, live, symlinks=True)
+    return live

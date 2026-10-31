@@ -1,46 +1,29 @@
 """M3 scenarios (PLAN §8.2): T1, T14, T15, T17 on the thesis corpus; unit grouping on hgb.
+The M3 test of the cold fallback after a layout change is replaced by T2 (M4).
 
 Each scenario asserts §3.3 equality against --full (``fastinc build --check``) and the set of
 compiled includes from ``--report``.
 """
 
-import json
 from pathlib import Path
 
 import pytest
-
-from fastinc.cli import main
+from _helpers import EPOCH, build, edit, selections
 
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
-EPOCH = "1700000000"
-
-
-def build(src: Path, *args: str) -> tuple[int, dict]:  # type: ignore[type-arg]
-    report = src.parent / "report.json"
-    report.unlink(missing_ok=True)
-    rc = main(["build", "main.tex", "--report", str(report), *args], cwd=src)
-    data = json.loads(report.read_text()) if report.is_file() else {}
-    return rc, data
-
-
-def edit(path: Path, old: str, new: str) -> None:
-    text = path.read_text()
-    assert old in text, old
-    path.write_text(text.replace(old, new, 1))
-
-
-@pytest.fixture
-def thesis(copy_corpus, monkeypatch: pytest.MonkeyPatch) -> Path:  # type: ignore[no-untyped-def]
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
-    src: Path = copy_corpus("thesis")
-    rc, rep = build(src, "--check")
-    assert rc == 0, rep
-    assert rep["mode"] == "cold" and rep["reason"] == "no previous state"
-    return src
 
 
 def test_t1_typo_compiles_one_unit(thesis: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """T1 (+T15, T17 via --check): typo in ch3 -> only ch3, no glue run, output equals --full."""
+    """T1 (+T15, T17 via --check): typo in ch3 -> only ch3, output equals --full.
+
+    Right after a run with all units, one glue-only run can follow: a deferred write of the
+    glue (``\\appendix`` writes ``\\def\\@chapapp`` into the list files at the next
+    shipout) lands after appB's entries instead of before them when appA is not compiled,
+    so the list files change once (PLAN §6.7.1). In the steady state a typo is one run.
+    """
+    # the cold build ended with a run of all units: its .bcf is a full run's
+    bcf = thesis / ".fastinc" / "canon" / "main.bcf"
+    full_bcf = bcf.read_bytes()
     # typo in body text after the \\todo (whose margin-note position is recorded)
     edit(thesis / "chapters" / "ch3.tex", "Further reading:", "Furhter reading:")
     rc, rep = build(thesis, "--check")
@@ -48,8 +31,21 @@ def test_t1_typo_compiles_one_unit(thesis: Path, capsys: pytest.CaptureFixture[s
     assert rc == 0, out.out + out.err
     assert rep["mode"] == "incremental", rep
     assert rep["compiled"] == ["chapters/ch3"]
-    assert [r["selection"] for r in rep["runs"]] == [["chapters/ch3"]]
+    runs = rep["runs"]
+    assert runs[0]["selection"] == ["chapters/ch3"]
+    assert [(r["selection"], r["glue"]) for r in runs[1:]] in (
+        [],
+        [([], "glue inputs changed (lists)")],
+    ), runs
     assert "PASS" in out.out and "synctex view" in out.out
+    # §6.10: the .bcf patched from a partial run is byte-identical to the full run's
+    assert bcf.read_bytes() == full_bcf
+    # steady state: a second typo is exactly one run, no glue-only run
+    edit(thesis / "chapters" / "ch3.tex", "Furhter reading:", "Further readin:")
+    rc, rep = build(thesis, "--check")
+    out = capsys.readouterr()
+    assert rc == 0, out.out + out.err
+    assert selections(rep) == [["chapters/ch3"]]
     # nothing to do afterwards
     rc, rep = build(thesis)
     assert (rc, rep["mode"], rep["compiled"]) == (0, "noop", [])
@@ -74,18 +70,6 @@ def test_t14_syntax_error_keeps_previous_pdf(
     (thesis / "chapters" / "ch4.tex").write_text("\n".join(lines))
     rc, rep = build(thesis, "--check")
     assert rc == 0 and rep["mode"] == "noop" and rep["compiled"] == []
-
-
-def test_layout_change_falls_back_to_cold_build(thesis: Path) -> None:
-    """M3 has no dependency model: a unit whose page count changes forces a cold build."""
-    para = "\n\n".join(["Additional text to make the chapter longer. " * 40] * 6)
-    edit(
-        thesis / "chapters" / "ch2.tex",
-        "\\section*{Remarks on ch2}",
-        para + "\n\\section*{Remarks on ch2}",
-    )
-    rc, rep = build(thesis, "--check")
-    assert rc == 0 and rep["mode"] == "cold" and "chapters/ch2" in rep["reason"]
 
 
 def test_compilation_unit_grouping_hgb(
