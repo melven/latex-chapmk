@@ -457,7 +457,7 @@ Input: for each segment in document order, its committed artifact `(run PDF, pag
    - From each source run, collect `/Root/Names/Dests` entries.
    - Keep a name only if its target page belongs to the pages taken from that run, and the name is not a dummy (dummies come from the run log warnings, [S6]).
    - Remap the target page through the map.
-   - A duplicate name with different targets → error → fallback (§6.14).
+   - Duplicate names: mirror pdfTeX, which keeps the first definition and ignores later ones (`pdfTeX warning (ext4): destination with the same identifier (name{X}) has been already used, duplicate ignored`). The merge keeps the definition from the first merged page in document order and drops later ones. Typical case: `page.N` names from title pages or restarted numbering. Since a partial run may lack the earlier definition, attribution is by merged page order, never by run. [S6] verifies that the full run produces the same winner.
    - Every name referenced by a link or the outline must resolve; a missing name → error → fallback.
    - Write the merged name tree.
 3. **Annotations:**
@@ -498,7 +498,7 @@ Full mode means plain sequential full runs to a fixpoint inside the build direct
 
 - unsupported packages (§1 non-goals);
 - format build failure;
-- a merge error (duplicate or missing destinations, inconsistent SyncTeX header);
+- a merge error (missing destinations, inconsistent SyncTeX header);
 - the fixpoint not reached (§6.9.2);
 - missing records (e.g. a page without a page-map entry);
 - `--full`.
@@ -632,7 +632,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | T12b | preamble edit before the split | format rebuild, all |
 | T13 | add an `\include` | all |
 | T14 | syntax error in ch4 | exit 1, previous PDF kept, error at `ch4.tex:<line>` |
-| T15 | `\section*` in several units | no duplicate destination names |
+| T15 | `\section*` in several units | no duplicate destination names beyond those of the `--full` run; every link resolves to the same target |
 | T16 | cold build | §3.3; report wall time vs `--full` |
 | T17 | SyncTeX round trip for every segment | §3.3 item 4 |
 | T18 | `\setlength` in ch2 body | lint warning; ch2 is global; successors recompiled after ch2 changes |
@@ -667,7 +667,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | S3 | Hook order: `include/before` relative to the initial `\clearpage`; pages from the final `\clearpage` before `include/after`; whether the unit aux is still open (`\@auxout` = `\@partaux`) at `include/after`, else where to write `\fastinc@ckpt`; existence and timing of `include/excluded` relative to the checkpoint restore; file hook for TikZ libraries; graphicx inclusion hook point. |
 | S4 | Enumerating allocated `\count` registers (kernel allocation pointers, extended registers); confirm `LT@tables` and `\Hy@linkcounter` are covered; cost of writing vectors; initial scratch-register deny list (registers whose segment-entry values differ between a partial and a full run on the corpus). |
 | S5 | biblatex `.bcf` contents after an `\includeonly` run; `.bcf` patch feasibility. |
-| S6 | hyperref: `/Dests` name tree, dummy-destination log format, anchor naming (`section*.N` via `\Hy@linkcounter`), `.out` grammar and write mode, `\HyPL@Entry` semantics. |
+| S6 | hyperref: `/Dests` name tree, dummy-destination log format, duplicate-destination warning and which definition wins, anchor naming (`section*.N` via `\Hy@linkcounter`), `.out` grammar and write mode, `\HyPL@Entry` semantics. |
 | S7 | Running heads on the first page of a unit (scrbook marks) in a partial run vs a full run; whether A5 suffices; fix if feasible (restoring mark state). |
 | S8 | Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
 | S9 | pikepdf merge prototype: two runs → merged PDF with working cross-run links, outline, page labels; verified by §3.3 items 1–3. |
