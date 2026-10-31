@@ -438,7 +438,7 @@ Phase 2: a speculative parallel first pass with composition (needs a model for "
 ### 6.10 External tools
 
 **biber:**
-- Run in `canon/`: `biber --input-directory <srcdir> --output-directory canon main`.
+- Run with cwd = source directory: `biber --output-directory <build>/canon main`. Biber then reads `main.bcf` from `canon/` (the output directory is searched first) and resolves `.bib` paths relative to the source directory. Do not pass `--input-directory`: biber would then look for `main.bcf` only there (missing or stale in the source directory).
 - Trigger: the citation set or order changed, the `.bib` hash changed, or the `.bcf` structure changed.
 - [S5]: does a partial run's `.bcf` contain only the selected units' citations? If yes, the driver patches the citekey list of the canonical `.bcf` (XML: `bcf:citekey` elements in `bcf:section number="0"`) with the union of all units' `\abx@aux@cite` entries, in document order (main aux and unit aux in reading order). Biber never runs on an unpatched partial `.bcf`.
 - After biber, diff the `.bbl` per `\entry{key}…\endentry` block (content and position) → changed cite values.
