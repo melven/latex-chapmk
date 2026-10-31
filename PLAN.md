@@ -513,7 +513,7 @@ Known misprediction cases are harmless and only cost an iteration:
 - Runs of a batch are committed in document order; the glue pages come from the last run; biber/makeindex run once per batch.
 - **List files of a batch** (§6.7.1): no run read all new contributions. fastinc.sty writes no-op markers into the list files (`\fastinc@lmark{U<k>}` before and `{/U<k>}` after each unit's contributions, written while the aux files are read at `\end{document}`). The canonical list files are the last run's, with each unit's section spliced in from the run that committed the unit (TeX-written bytes, so exact). Missing markers: the glue is rewritten by a glue-only run.
 - Verification: the actual exit of every unit compiled in a run before the last equals its prediction; at the first mismatch, all units after that run's group are dirty again ("misprediction"), and the glue.
-- Measured on the thesis corpus (4 cores): T2 `-j 1` 8.8 s, `-j 4` 6.8 s (3 iterations each). Each run has a fixed cost of about 1.4 s (format load, glue), so the speedup grows with the size of the units.
+- Measured on the thesis corpus (4 cores): T2 `-j 1` 8.8 s, `-j 4` 6.8 s (3 iterations each, no misprediction); benchmark `tests/bench/test_t2_speedup.py` (whole build incl. merge), 3 repetitions: `-j 1` 11.0/12.0/11.3 s, `-j 4` 10.2/9.6/10.5 s. Each run has a fixed cost of about 1.4 s (format load, glue) and each build about 4–5 s outside TeX (aux analysis, commit, PDF/SyncTeX merge), so the speedup grows with the size of the units; the driver overhead is an M6 benchmark item.
 
 #### 6.9.4 Cold build
 
@@ -818,7 +818,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | **M2** | *Done.* `fastinc-ini.sty` and `fastinc.sty` (all §6.4 records), run directory preparation, runner (process pool) | records present and parseable; unit tests green |
 | **M3** | *Done.* Single-unit incremental path: commit, aux slices (no Python linker, §6.7.1), PDF and SyncTeX merge, logs, `fastinc check` / `build --check` (§3.3 comparison), `--report` | T1, T14, T15, T17 green; `check` passes on the corpus |
 | **M4** | *Done.* Full mode also runs makeindex for a generic `<job>.idx` (the reference and fallback must equal latexmk; found on the pgf manual, whose imakeidx call fails with `-output-directory`), dependency model, compilation units, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks, `fastinc graph` and dirty reasons in the report | T2–T13, T16, T18, T19, T20 green (T2 via tail run) |
-| **M5** | Prediction (§6.9.3) and parallel successor recompilation | T2 and T10 green with parallel runs; benchmark shows a speedup over M4 for T2 |
+| **M5** | *Done.* Prediction (§6.9.3) and parallel successor recompilation | T2 and T10 green with parallel runs; benchmark shows a speedup over M4 for T2 |
 | **M6** | `watch`, benchmarks, README (usage, assumptions A1–A5, limitations) | §8.4 numbers recorded |
 | **M7** | Spike S11 (MiKTeX), MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
 
