@@ -1,0 +1,48 @@
+% Spike S4 probe: writes the values of all allocated \count registers (0..\count10)
+% at segment boundaries to \jobname.s4v: "<event> <seg> v0,v1,...".
+% Option "restore": store each included unit's exit vector in its aux and, for an
+% excluded unit, assign the registers allocated after the kernel (index > \sfourkernel,
+% set by the caller before \documentclass) after the kernel checkpoint restore, except
+% absolute page counters.
+\ProvidesPackage{s4probe}
+\newif\ifsfour@restore
+\DeclareOption{restore}{\sfour@restoretrue}
+\ProcessOptions\relax
+\newwrite\sfour@out
+\immediate\openout\sfour@out=\jobname.s4v
+% expandable, tail-recursive: values of \count#1..\count#2
+\def\sfour@vals#1#2{\the\count#1%
+  \ifnum#1<#2 ,\expandafter\sfour@vals\expandafter{\the\numexpr#1+1\expandafter\relax\expandafter}%
+  \expandafter{\the\numexpr#2\expandafter\relax\expandafter}\fi}
+\def\sfour@rec#1#2{\immediate\write\sfour@out{#1 #2 \sfour@vals{0}{\count10}}}
+% register number of a \countdef token: parse \meaning ("\count<n>")
+\edef\sfour@tmp{\def\noexpand\sfour@idx@##1\detokenize{count}##2\noexpand\@nil{##2}}\sfour@tmp
+\def\sfour@idx#1{\expandafter\expandafter\expandafter\sfour@idx@\expandafter\meaning\csname#1\endcsname\@nil}
+\def\sfour@seg{G0}
+% skip list built lazily at the first restore: bookmark is loaded only at \begin{document}
+\def\sfour@mkskip{%
+  \edef\sfour@skip{,10,11,12,13,14,15,16,17,18,19,\sfour@idx{g_shipout_readonly_int},%
+    \sfour@idx{g_shipout_totalpages_int},\@ifundefined{Hy@abspage}{}{\sfour@idx{Hy@abspage}},%
+    \@ifundefined{BKM@id}{}{\sfour@idx{BKM@id}},\ifdefined\sfourskip\sfourskip\fi}%
+  \typeout{S4SKIP \sfour@skip; kernel boundary \sfourkernel}%
+  \global\let\sfour@skip\sfour@skip\gdef\sfour@mkskip{}}
+\AtBeginDocument{\sfour@rec{base}{G0}}
+\AddToHook{include/before}{\edef\sfour@seg{\CurrentFile}\sfour@rec{entry}{\sfour@seg}}
+\AddToHook{include/after}{\sfour@rec{exit}{\sfour@seg}%
+  \ifsfour@restore\immediate\write\@partaux{\string\sfour@ckpt{\sfour@seg}{\sfour@vals{0}{\count10}}}\fi
+  \edef\sfour@seg{after-\sfour@seg}\sfour@rec{entry}{\sfour@seg}}
+\def\sfour@ckpt#1#2{\global\@namedef{sfour@ck@#1}{#2}}
+\def\sfour@restoreall#1{\sfour@mkskip\@ifundefined{sfour@ck@#1}{}{%
+  % loop index in a macro, not a register (all registers are assigned)
+  \def\sfour@i{0}\edef\sfour@list{\csname sfour@ck@#1\endcsname}%
+  \@for\sfour@v:=\sfour@list\do{%
+    % only registers allocated after the kernel (\sfourkernel = \count10 before \documentclass)
+    \ifnum\sfour@i>\sfourkernel\relax
+      \edef\sfour@tmp{\noexpand\in@{,\sfour@i,}{\sfour@skip}}\sfour@tmp\ifin@\else\global\count\sfour@i=\sfour@v\relax\fi
+    \fi
+    \edef\sfour@i{\the\numexpr\sfour@i+1}}}}
+\let\sfour@setckpt\@setckpt
+\def\@setckpt#1#2{\sfour@setckpt{#1}{\sfour@rec{entry}{#1.tex}#2%
+  \ifsfour@restore\sfour@restoreall{#1.tex}\fi
+  \sfour@rec{exit}{#1.tex}\edef\sfour@seg{after-#1.tex}\sfour@rec{entry}{\sfour@seg}}}
+\AddToHook{enddocument}{\sfour@rec{exit}{\sfour@seg}}
