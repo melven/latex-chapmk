@@ -23,6 +23,7 @@ _ABX_NOT_DATA = {"cite", "segm", "backref", "refcontext"}
 _BBL_ENTRY = re.compile(r"^\s*\\entry\{([^}]*)\}")
 _DELIMS = "{},[] \t\r\n"
 _TOKENS = re.compile(r"[{},\[\]\s]+")
+_LABEL_DEF = re.compile(r"\\label\s*\{[^{}]*\}")
 #: files never scanned for keys
 _BINARY_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".eps", ".ps", ".gz", ".zip"}
 #: commands that typeset a derived list file (their segment depends on all its content)
@@ -101,11 +102,13 @@ def read_text(path: Path) -> str | None:
 
 class TokenScan:
     """The tokens of some source texts, for finding referenced keys (§6.8.1 item 5): a key
-    is referenced if it occurs delimited by ``{ } , [ ]`` or whitespace. Comments count too
-    (a safe over-approximation). Keys containing a delimiter are searched as substrings."""
+    is referenced if it occurs delimited by ``{ } , [ ]`` or whitespace, except as the argument
+    of ``\\label``. Comments count too (a safe over-approximation). Keys containing a delimiter
+    are searched as substrings."""
 
     def __init__(self, texts: Iterable[str]) -> None:
-        self.texts = list(texts)
+        # a \label{key} defines the key; it is not a reference
+        self.texts = [_LABEL_DEF.sub(" ", text) for text in texts]
         self.tokens: set[str] = set()
         for text in self.texts:
             self.tokens.update(_TOKENS.split(text))
