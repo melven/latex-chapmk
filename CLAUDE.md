@@ -30,6 +30,8 @@ docker run --rm -it -v "$PWD":/work -w /work fastinc-dev bash
 
 or open the repository as a devcontainer (`.devcontainer/devcontainer.json`).
 
+Behind a proxy: pass it as build args (`--build-arg HTTPS_PROXY=...`, `--network host` for a local proxy); if it intercepts TLS, add `--secret id=ca,src=<CA bundle incl. public CAs>`.
+
 **Private benchmark document:** the environment variable `FASTINC_BENCH_DOC` points to the user's real main `.tex` file (mounted read-only). Use it only for `fastinc check` and benchmarks. Never commit or copy its content, file names or output into the repository. Report numbers only.
 
 ## Rules
