@@ -45,7 +45,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-testpaths = ["tests/unit", "tests/slow", "tests/acceptance"]
+testpaths = ["tests/unit", "tests/slow", "tests/acceptance", "tests/bench"]
 markers = [
     "slow: runs TeX",
     "acceptance: compares against a reference build (PLAN §3.3)",

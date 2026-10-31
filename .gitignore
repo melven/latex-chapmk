@@ -9,3 +9,4 @@ __pycache__/
 *.synctex.gz
 *.pdf
 !tests/corpus/**/fig/*.pdf
+!tests/corpus/pgfmanual/upstream/**/*.pdf
