@@ -1,0 +1,228 @@
+\documentclass[singlespacing,draft,titlepage=firstiscover,a4paper,11pt,twoside,numbers=noenddot]{scrbook}
+\usepackage[onehalfspacing]{setspace}
+\AfterTOCHead{\singlespacing}
+\KOMAoptions{DIV=last}
+\interfootnotelinepenalty=10000
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{tensor}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[ngerman,english]{babel}
+\usepackage{csquotes}
+\usepackage[backend=biber,style=numeric]{biblatex}
+\addbibresource{thesis.bib}
+\usepackage[final,babel=true]{microtype}
+\usepackage{multicol}
+\usepackage{multirow}
+\usepackage{bigdelim}
+\usepackage[final]{graphicx}
+\usepackage[shortlabels]{enumitem}
+\usepackage{makecell}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{siunitx}
+\usepackage{nomencl}
+\makenomenclature
+\usepackage[svgnames]{xcolor}
+\usepackage{pgf}
+\graphicspath{{fig/}}
+\renewcommand{\pgfimage}[2][]{\includegraphics[#1]{#2}}
+\usepackage{subcaption}
+\captionsetup[subfigure]{justification=centering}
+\usepackage{gnuplot-lua-tikz}
+\usepackage{ifdraft}
+\usetikzlibrary{external}
+\usepackage{algorithmic}
+\usepackage[final]{listings}
+\usepackage{eqparbox}
+\usepackage[final]{hyperref}
+\usepackage{orcidlink}
+\usepackage[obeyFinal]{todonotes}
+
+%% unit definitions
+% -----------------------------------------
+\sisetup{per-mode=symbol, range-phrase=--, range-units=single, tight-spacing=true, text-series-to-math=true, propagate-math-font=true}
+\DeclareSIUnit\Byte{\text{Byte}} % use full name 'Byte' instead of 'B'
+\DeclareSIUnit\flop{\text{Flop}}
+\DeclareSIUnit\cycle{\text{cycle}}
+\DeclareSIUnit\instruction{\text{instruction}}
+% helpful abbreviations
+\DeclareSIUnit\kB{\kilo\byte}
+\DeclareSIUnit\MB{\mega\byte}
+\DeclareSIUnit\GB{\giga\byte}
+\DeclareSIUnit\TB{\tera\byte}
+\DeclareSIUnit\PB{\peta\byte}
+\DeclareSIUnit\GBs{\giga\byte\per\second}
+\DeclareSIUnit\GFs{\giga\flop\per\second}
+\DeclareSIUnit\TBs{\tera\byte\per\second}
+\DeclareSIUnit\TFs{\tera\flop\per\second}
+% For the ERA5 data
+\DeclareSIUnit\hPa{\hecto\pascal}
+% -----------------------------------------
+
+%% This code creates groups for the nomenclature
+% -----------------------------------------
+\usepackage{etoolbox}
+\renewcommand\nomgroup[1]{%
+\item[\bfseries%
+    \ifstrequal{#1}{A}{Number sets}{}%
+    \ifstrequal{#1}{B}{Scalars}{}%
+    \ifstrequal{#1}{C}{Vectors}{}%
+    \ifstrequal{#1}{D}{Matrices}{}%
+    \ifstrequal{#1}{E}{Tensors}{}%
+    \ifstrequal{#1}{F}{Tensor operators}{}%
+    \ifstrequal{#1}{P}{Physical quantities}{}%
+    ]%
+}
+% -----------------------------------------
+
+%% two-column nomenclature
+% -----------------------------------------
+\renewcommand{\nompreamble}{\begin{multicols}{2}}
+\renewcommand{\nompostamble}{\end{multicols}}
+% -----------------------------------------
+
+%% addition theorem environments
+% -----------------------------------------
+\newtheorem{remark}{Remark}[chapter]
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{proposition}{Proposition}[chapter]
+\newtheorem{disclaimer}{Disclaimer}[chapter]
+\newtheorem{supposition}{Supposition}[chapter]
+\newtheorem{corollary}{Corollary}[chapter]
+\newtheorem{lemma}{Lemma}[chapter]
+% -----------------------------------------
+
+%% autoref names (use non-capital first letter)
+% -----------------------------------------
+\addto\extrasenglish{\def\chapterautorefname{Chapter}}
+\addto\extrasenglish{\def\sectionautorefname{Section}}
+\addto\extrasenglish{\def\subsectionautorefname{Section}}
+\addto\extrasenglish{\def\figureautorefname{Fig.}}
+\addto\extrasenglish{\def\tableautorefname{Table}}
+\addto\extrasenglish{\def\algorithmautorefname{Alg.}}
+\addto\extrasenglish{\def\remarkautorefname{Remark}}
+\addto\extrasenglish{\def\corollaryautorefname{Corollary}}
+\addto\extrasenglish{\def\lemmaautorefname{Lemma}}
+\addto\extrasenglish{\def\propositionautorefname{Proposition}}
+\newcommand*{\subsecref}[1]{\hyperref[{#1}]{\textbf{\nameref*{#1}} on page~\pageref*{#1}}}
+% -----------------------------------------
+
+%% Macros to abbreviate common math symbols and operators
+% -----------------------------------------
+\newcommand{\R}{\mathbb{R}}
+\renewcommand{\Rn}{\mathbb{R}^n}
+\newcommand{\Rm}{\mathbb{R}^m}
+\newcommand{\Rnm}{\mathbb{R}^{n\times m}}
+\newcommand{\Rnn}{\mathbb{R}^{n\times n}}
+\newcommand{\C}{\mathbb{C}}
+\newcommand{\Cn}{\mathbb{C}^n}
+\newcommand{\Cnm}{\mathbb{C}^{n\times m}}
+\newcommand{\N}{\mathbb{N}}
+\newcommand{\TT}{\text{TT}}
+\DeclareMathOperator*{\argmin}{argmin}
+\DeclareMathOperator*{\argmax}{argmax}
+\DeclareMathOperator{\rank}{rank}
+\DeclareMathOperator{\ranks}{ranks}
+\DeclareMathOperator{\diag}{diag}
+\DeclareMathOperator{\reshape}{reshape}
+\DeclareMathOperator{\unfold}{unfold}
+\DeclareMathOperator{\trunc}{trunc}
+\newcommand{\contract}{\;\Join\;}
+\newcommand{\contractij}[2]{\;\tensor[_{#1}]{\Join}{_{#2}}\;}
+% -----------------------------------------
+
+%% Colors (picked from modern gnuplot)
+% -----------------------------------------
+\definecolor{gnuplot1}{RGB}{148,0,211}
+\definecolor{gnuplot2}{RGB}{0,158,115}
+\definecolor{gnuplot3}{RGB}{86,180,233}
+\definecolor{gnuplot4}{RGB}{230,159,0}
+% -----------------------------------------
+
+%% Setup for algorithms
+% -----------------------------------------
+\renewcommand{\algorithmicrequire}{\textbf{Input:}}
+\renewcommand{\algorithmicensure}{\textbf{Output:}}
+\renewcommand{\algorithmiccomment}[1]{\hfill| \eqparbox{COMMENT\thealgorithm}{\textsl{\color{darkgray}#1}}\ignorespaces}
+%% instead of \usepackage{algorithm}
+%\usepackage{algorithm}
+\DeclareNewTOC[
+    type=algorithm,
+    float,floattype=4,floatpos=h,counterwithin=chapter,
+    atbegin={%
+        {\noindent\rule[\ht\strutbox]{\linewidth}{\heavyrulewidth}\vspace{-1.3\baselineskip}}%
+        %\KOMAoptions{captions=heading}%
+        \xpretocmd\algorithmic
+            {\noindent\rule[\ht\strutbox]{\linewidth}{\lightrulewidth}\vspace{-2\baselineskip}}
+            {}{\PatchFailed}%
+        \xapptocmd\endalgorithmic
+            {\noindent\rule[\ht\strutbox]{\linewidth}{\heavyrulewidth}\vspace{-\baselineskip}}
+            {}{\PatchFailed}%
+    }
+]{loalg}
+% -----------------------------------------
+
+%% Setup for source listings
+% -----------------------------------------
+% when several languages are needed, this only works by defining own styles!
+\lstset{
+    language=C++,
+    frame=tb,
+    xleftmargin=.1\textwidth, xrightmargin=.1\textwidth,
+    numbers=left,
+    basicstyle=\linespread{1.0}\scriptsize\ttfamily,
+    keywordstyle=\color{DarkBlue}\ttfamily,
+    stringstyle=\color{DarkRed}\ttfamily,
+    commentstyle=\color{DarkGreen}\ttfamily,
+    morekeywords={__shared__},
+    morecomment=[l][\color{DarkMagenta}]{\#}
+}
+%\lstset{language=C++}
+%\lstset{deletedirectives={\#pragma},
+%}
+%    morekeywords={__shared__},
+% -----------------------------------------
+
+
+%% Faster compiling with pre-generated tikz pictures
+% -----------------------------------------
+\ifdraft{%
+\tikzexternalize[shell escape=-enable-write18,prefix=fig_tmp/]
+% except todo notes - they don't work with tikzexternaliz
+\NewCommandCopy\origtodo\todo
+\RenewDocumentCommand\todo{O{}m}{%
+  \tikzexternaldisable\origtodo[#1]{#2}\tikzexternalenable}
+}{%
+% Nothing to do
+}
+% -----------------------------------------
+
+\title{Fast incremental builds of a synthetic thesis}
+\author{A. Author}
+\date{2026}
+
+\begin{document}
+\frontmatter
+\maketitle
+\tableofcontents
+\listoffigures
+\listoftables
+\listofalgorithms
+\listoftodos
+\printnomenclature
+\mainmatter
+\include{chapters/ch1}
+\include{chapters/ch2}
+\include{chapters/ch3}
+\include{chapters/ch4}
+\include{chapters/ch5}
+\include{chapters/ch6}
+\appendix
+\include{chapters/appA}
+\include{chapters/appB}
+\printbibliography
+\end{document}

@@ -1,0 +1,102 @@
+\chapter{Mathematical background}\label{ch:ch2}
+
+Parallel simulation approximation performance operator throughput scaling condition algorithm error roofline scaling network accuracy matrix residual parallel kernel. Accuracy simulation sweep parallel model decomposition iteration step core precision. Matrix precision performance bound scaling memory time network norm core orthogonal algorithm. Matrix core contraction tensor performance scaling simulation solver approximation train sweep sweep tensor residual grid. Rank precision thread norm matrix cache core sweep grid model kernel. Throughput bound thread latency tensor vector matrix rank grid approximation simulation accuracy memory time condition performance. Thread parallel domain accuracy bandwidth vector cache bound network orthogonal matrix. See \cite{ref06} and \cite{ref07,ref08}.\footnote{A footnote in ch2 with \cite{ref09}.}
+
+\section{Theory of ch2}\label{sec:ch2-theory}
+
+\nomenclature[B]{$a_{2}$}{coefficient of ch2}\nomenclature[B]{$\mathbf{v}_{2}$}{vector of ch2}
+
+Domain domain approximation performance operator parallel norm decomposition vector. Cache residual performance scaling precision memory latency decomposition iteration solver norm thread tensor. Step core time performance grid rank network iteration norm. Parallel domain boundary simulation decomposition network train bandwidth error approximation sweep core core step operator algorithm. Matrix scaling cache memory cache network memory sweep train accuracy parallel sweep throughput step domain scaling bandwidth. Simulation domain decomposition bound bound residual iteration precision scaling performance bound rank iteration operator boundary network. Accuracy operator norm domain scaling rank performance time operator tensor contraction accuracy norm time cache roofline.
+
+\begin{equation}\label{eq:ch2}
+  x_{2} = \sum_{i=1}^{n} a_i \contract b_i \in \Rn, \quad \argmin_{y\in\R} \| y \|
+\end{equation}
+
+\begin{theorem}\label{thm:ch2}
+  Step operator rank norm condition step memory vector time accuracy network latency matrix cache.
+\end{theorem}
+
+\begin{lemma}
+  Model contraction solver residual tensor iteration approximation scaling simulation solver.
+\end{lemma}
+
+Parallel kernel thread boundary parallel accuracy bandwidth rank parallel latency throughput algorithm. Boundary latency tensor network throughput bandwidth grid model bandwidth memory. Rank accuracy time grid time condition vector norm core bandwidth. Memory error latency operator solver bound error iteration kernel. Domain orthogonal cache step network rank iteration bound orthogonal iteration model iteration parallel contraction cache. Kernel roofline accuracy roofline parallel norm train parallel network rank algorithm bound latency residual rank orthogonal bandwidth residual. Time sweep performance time residual operator performance bound vector thread train sweep model rank orthogonal rank approximation operator.
+
+\subsection{Details of ch2}\label{sub:ch2}
+
+Tensor orthogonal bandwidth roofline core solver thread contraction accuracy norm sweep scaling. Error core bandwidth kernel latency roofline bound algorithm contraction latency rank operator latency solver tensor roofline error performance. Time error bandwidth sweep model iteration bandwidth accuracy matrix orthogonal solver time model solver. Operator performance norm approximation orthogonal kernel matrix domain algorithm simulation throughput contraction contraction thread operator sweep boundary. Tensor kernel residual kernel latency bandwidth domain error latency grid. Iteration domain grid vector parallel bandwidth operator domain parallel model memory condition cache model roofline bound thread bandwidth. Kernel roofline precision model operator kernel approximation matrix grid residual thread.
+
+\section{Figures of ch2}
+
+Tensor decomposition rank cache norm algorithm step kernel contraction. Step parallel decomposition cache boundary network approximation orthogonal decomposition algorithm grid bound. Error latency precision kernel cache tensor orthogonal solver latency precision thread residual scaling. Roofline grid scaling bandwidth solver vector contraction core tensor bound thread time bandwidth throughput condition core. Time approximation time vector thread scaling domain bound tensor. Operator orthogonal sweep throughput parallel latency model cache algorithm sweep thread. Roofline performance step iteration bound accuracy decomposition matrix contraction.
+
+\begin{figure}[htb]
+  \centering
+  \pgfimage[width=0.55\textwidth]{plot2}
+  \caption{Measured curve of ch2}\label{fig:ch2}
+\end{figure}
+
+\begin{figure}[htb]
+  \centering
+  \begin{subfigure}{0.45\textwidth}\centering
+    \begin{tikzpicture}\draw[gnuplot1, thick] (0,0) rectangle (2,1);\node at (1,0.5) {left};\end{tikzpicture}
+    \caption{Left part}
+  \end{subfigure}
+  \begin{subfigure}{0.45\textwidth}\centering
+    \begin{tikzpicture}\draw[gnuplot2, thick] (0,0) circle (0.6);\node at (0,0) {right};\end{tikzpicture}
+    \caption{Right part}
+  \end{subfigure}
+  \caption{Sketches of ch2}\label{fig:ch2-sub}
+\end{figure}
+
+Approximation rank step approximation roofline rank matrix sweep approximation grid decomposition matrix operator vector performance orthogonal. Algorithm norm scaling thread simulation parallel bandwidth latency throughput error norm boundary solver. Approximation time train thread time contraction decomposition condition error sweep grid. Cache contraction throughput latency algorithm precision operator train bound sweep parallel iteration network kernel. Bound vector bound simulation norm cache approximation train algorithm iteration. Latency tensor error step boundary core vector performance network. Core orthogonal orthogonal network contraction matrix grid solver residual bound.
+
+\section{Tables of ch2}
+
+\begin{table}[htb]
+  \centering
+  \caption{Parameters of ch2}\label{tab:ch2}
+  \begin{tabular}{llr}
+    \toprule
+    \multirow{2}{*}{Case} & \makecell{Memory\\traffic} & Rate \\
+    & & \\
+    \midrule
+    small & \SI{2.5}{\GB} & \SI{6}{\GFs} \\
+    large & \SI{4}{\TB} & \SI{14}{\GBs} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Model matrix contraction parallel cache train algorithm roofline kernel memory vector latency kernel latency boundary error parallel. Performance matrix kernel error network kernel vector parallel time norm rank thread approximation condition operator. Rank kernel contraction latency rank simulation scaling bandwidth parallel model vector orthogonal cache precision thread. Latency time network throughput vector solver throughput train contraction cache simulation performance kernel residual latency. Domain performance memory thread solver accuracy thread parallel algorithm operator latency step condition tensor bandwidth bound scaling network. Model vector memory operator step scaling time step iteration roofline domain accuracy. Sweep matrix iteration decomposition error thread operator condition accuracy thread.
+
+\section{Algorithms of ch2}
+
+\begin{algorithm}
+  \caption{Sweep of ch2}\label{alg:ch2}
+  \begin{algorithmic}[1]
+    \REQUIRE tensor $x$, tolerance $\epsilon$ \COMMENT{input}
+    \FOR{$i = 1, \dots, d$}
+      \STATE $x_i \gets x_i / \| x_i \|$ \COMMENT{normalise core 2}
+    \ENDFOR
+    \ENSURE $x$ \COMMENT{output}
+  \end{algorithmic}
+\end{algorithm}
+
+\begin{lstlisting}
+// kernel of ch2
+__shared__ double buf[64];
+for (int i = 0; i < n; i++) y[i] += a * x[i];
+#pragma omp parallel for
+\end{lstlisting}
+
+Condition matrix tensor rank memory matrix matrix bandwidth step time core error step. Step operator bandwidth domain memory roofline precision norm memory. Network cache network accuracy grid condition iteration decomposition grid cache thread step accuracy precision residual rank. Step algorithm parallel rank thread accuracy model decomposition domain simulation error memory performance norm approximation norm residual. Iteration contraction network scaling condition network train latency thread decomposition algorithm solver contraction condition latency. Throughput roofline thread network residual iteration latency rank train sweep scaling precision latency solver residual thread performance tensor. Bandwidth simulation core grid error simulation matrix domain solver error bandwidth grid domain.
+
+\section*{Remarks on ch2}
+
+As shown in \autoref{ch:ch4}, \nameref{sec:ch4-theory} and \subsecref{sec:ch4-theory}, the result \eqref{eq:ch4} on page~\pageref{eq:ch4} carries over; compare \autoref{thm:ch4}.\todo{check the remark of ch2}
+
+Thread roofline vector iteration train sweep residual residual roofline. Algorithm roofline performance step contraction cache parallel norm simulation boundary. Step domain step time step network thread contraction roofline memory iteration sweep orthogonal throughput performance. Train norm precision model decomposition sweep condition boundary roofline thread. Bandwidth boundary memory bound cache time domain domain domain simulation contraction model residual bound. Memory simulation rank model operator algorithm sweep decomposition time algorithm performance residual norm decomposition accuracy sweep simulation. Operator latency sweep simulation grid orthogonal cache precision error sweep kernel boundary throughput core roofline decomposition.
+
+\foreignlanguage{ngerman}{Dies ist ein kurzer deutscher Absatz über Tensoren, Größen und Maßstäbe.}
+
+Throughput time latency core vector memory tensor matrix solver algorithm model algorithm decomposition parallel operator tensor. Operator iteration step norm roofline residual boundary residual accuracy matrix sweep rank. Grid simulation rank roofline cache step matrix contraction model core bandwidth. Latency rank scaling time kernel memory kernel simulation bound throughput domain parallel error contraction step algorithm thread matrix. Algorithm time roofline condition step cache model performance sweep decomposition bound domain kernel norm approximation. Step roofline latency residual throughput condition parallel simulation model parallel contraction operator contraction. Accuracy vector tensor sweep step accuracy network core algorithm norm. Further reading: \cite{ref10}.
