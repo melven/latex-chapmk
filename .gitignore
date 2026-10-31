@@ -1,0 +1,11 @@
+.fastinc/
+__pycache__/
+*.egg-info/
+.venv/
+*.aux
+*.log
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.pdf
+!tests/corpus/**/fig/*.pdf

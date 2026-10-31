@@ -1,0 +1,11 @@
+# Runtime
+pikepdf>=9
+watchdog>=4
+
+# Development / tests
+pytest>=8
+pytest-xdist>=3
+numpy>=1.26
+pillow>=10
+ruff>=0.6
+mypy>=1.11
