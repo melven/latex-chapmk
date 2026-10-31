@@ -11,11 +11,11 @@
 % Externalize neutralisation (§6.4.3): after the TikZ library is loaded, \tikzexternalize
 % swallows its optional argument and does nothing; enable/disable do nothing.
 \def\fastinc@neutralise@externalize{%
-  \def\tikzexternalize{\@ifnextchar[\@gobble@optarg\relax}%
+  \def\tikzexternalize{\@ifnextchar[\fastinc@gobble@opt\relax}%
   \let\tikzexternalenable\relax
   \let\tikzexternaldisable\relax}
-\def\@gobble@optarg[#1]{}
-\AddToHook{file/after/tikzlibraryexternal.code.tex}{\fastinc@neutralise@externalize}
+\def\fastinc@gobble@opt[#1]{}
+\AddToHook{file/tikzlibraryexternal.code.tex/after}{\fastinc@neutralise@externalize}
 
 % Deferral table (§6.3.3): empty in v1, because mylatexformat replays \openout calls (S1).
 \def\fastinc@deferred{}

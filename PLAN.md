@@ -240,7 +240,7 @@ Requirements:
 
 #### 6.4.3 Externalize neutralisation
 
-Install a file hook for `tikzlibraryexternal.code.tex/after` [S3]. After the library loads, redefine:
+Install a file hook for `file/tikzlibraryexternal.code.tex/after` (the older name `file/after/<file>` is deprecated) [S3]. After the library loads, redefine:
 
 - `\tikzexternalize` → swallow an optional argument, then do nothing;
 - `\tikzexternalenable` and `\tikzexternaldisable` → `\relax`.
