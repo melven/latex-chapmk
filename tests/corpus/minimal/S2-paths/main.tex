@@ -1,0 +1,14 @@
+\documentclass{article}
+\usepackage[backend=biber]{biblatex}
+\addbibresource{refs.bib}
+\usepackage{graphicx}
+\graphicspath{{fig/}}
+\usepackage{hyperref}
+\begin{document}
+\tableofcontents
+\section{Main}\label{sec:main}
+See \ref{sec:unit} and \cite{knuth84}.
+\includegraphics[width=2cm]{a}
+\include{chap/unit}
+\printbibliography
+\end{document}
