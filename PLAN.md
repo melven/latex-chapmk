@@ -31,6 +31,7 @@ One command (`fastinc build main.tex`) replaces `latexmk -pdf -synctex=1`. It pr
 - TikZ externalize. It is disabled by the driver (§6.4.3); re-enabling is a phase-2 option.
 - Byte-identical PDFs.
 - `glossaries`, `imakeidx`/`makeidx`, `minted`, `cleveref`. Detect these and fall back to full builds with a warning (§6.14).
+- biblatex with `backend=bibtex` (or classic BibTeX). Only biber is supported; others fall back to full builds.
 - PDF outline via hyperref's `.out` file, i.e. hyperref without the `bookmark` package. v1 supports the outline only through `bookmark`, which KOMA classes load automatically (S1). Without `bookmark`: fall back to full builds; the `.out` route is phase 2.
 
 ---
@@ -151,7 +152,7 @@ Input: the main file (CLI argument or `fastinc.toml`).
 
 1. **Locate the preamble:** lines `1 .. b-1`, where line `b` contains `\begin{document}`. Comments must be respected (`%` not preceded by `\`). Lines read via `\input` in the preamble are inlined for split detection only.
 2. **Split point `s`** (first line not dumped into the format): the first preamble line matching the deny list (§6.3.2), or a config override `format.split_before = "<regex>"`. If the match lies inside a top-level command or group spanning several lines (e.g. `\ifdraft{` … `}`), set `s` to the line where that command starts (brace-depth tracking, S1). If `s` falls inside an `\input`ed preamble file, set `s` to the line of that `\input`.
-3. **Segments** of the main body: tokenise top-level `\include{...}` occurrences. Units `U1..Un` are in document order; glue segments `G0..Gn` (possibly empty) lie between them. Unit ids are the `\include` arguments (e.g. `chapters/intro`). An argument that is absolute or contains `..` is an error: its aux would be written outside the run directory, which TeX Live refuses (`openout_any = p`).
+3. **Segments** of the main body: tokenise top-level `\include{...}` occurrences. An `\include` in the preamble is not a unit: LaTeX processes it like `\input`, so it counts as a preamble input. Units `U1..Un` are in document order; glue segments `G0..Gn` (possibly empty) lie between them. Unit ids are the `\include` arguments (e.g. `chapters/intro`). An argument that is absolute or contains `..` is an error: its aux would be written outside the run directory, which TeX Live refuses (`openout_any = p`).
 4. **Fingerprints** (sha256): `pre` (lines `1..s-1` plus inlined files), `post` (lines `s..b-1`), `body` (main-file text from `b` to end, excluding nothing).
 5. **Compilation units** (A5, S7): group consecutive includes. An include whose first command (comments and blank lines skipped) is a chapter-level heading starts a new group; any other include joins the preceding group, together with the glue between them. Heading list: `\chapter`, `\chapter*`, `\addchap`, `\addchap*`, `\part`, `\part*`, `\addpart`, `\addpart*`, plus config `[units] heading`. If the first include of the document is not headed, it forms its own group and a warning is printed. The scheduler (§6.9) selects whole compilation units; segment ids (`U<k>`, `G<k>`) and all records stay per include.
 6. **Unsupported-package detection** in the preamble → full-build mode (§6.14).
@@ -762,7 +763,10 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 - a content-addressed unit cache (CI / cold checkout);
 - skippable glue;
 - a speculative parallel cold first pass;
-- finer units at automatic `\clearpage` points.
+- finer units at automatic `\clearpage` points;
+- the hyperref `.out` outline route (hyperref without `bookmark`);
+- sources outside the main file's directory tree (`\graphicspath{{../x/}}`, `\input{../x}`): a configurable shadow-tree root;
+- BibTeX backends.
 
 ---
 
