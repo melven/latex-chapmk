@@ -225,7 +225,7 @@ Requirements:
    - Absolute assignments: for each segment, record the set of registers assigned absolutely (hooks on `\setcounter`, counter resets via `\@stpelt`, `\pagenumbering`) as `\fastinc@abs{<seg>}{n,n,...}`, written to the unit aux for units and to the main aux for glue. Used for prediction only (§6.9.3), so missing cases only cost speed.
 3. **Restore.** Reading `\fastinc@ckpt` from the aux stores the vector (`\fastinc@ckpt@<unit>`). At `include/excluded`, after LaTeX's own checkpoint restore, the stored registers are assigned globally.
 4. **Page map.** At `shipout/before`, `\immediate\write` to `\jobname.fpg`: `<\ReadonlyShipoutCounter> <seg> <\the\c@page> <\thepage expanded via \protected@edef>`.
-5. **Segment markers in shared streams.** The only shared stream is `.nlo` (`\@nomenclaturefile`); outline entries go to the aux files (`bookmark`, §4). At every segment change, write the line `%fastinc-seg <seg>` into the stream, using the same write mode (immediate or delayed) as its writer [S2b]. This lets the driver attribute entries to segments.
+5. **Segment markers in shared streams.** The only shared stream is `.nlo` (`\@nomenclaturefile`); outline entries go to the aux files (`bookmark`, §4). At every segment change, write the line `%fastinc-seg <seg>` into the stream, using a delayed `\write`, like nomencl's own `\protected@write` (S2b). This lets the driver attribute entries to segments.
 6. **File attribution.** On `file/before`, `\immediate\write` to `\jobname.ffl`: `<seg> <filename>`. Graphics: hook the graphicx file inclusion (`\Gin@setfile` or the pdftex driver's include macro [S3]) and write the same record.
 7. **Aux handlers.** Define `\fastinc@base`, `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs` as no-ops, and `\fastinc@ckpt` as store (aux is read at begin and end document).
 8. **Externalize neutralisation** (§6.4.3), repeated idempotently.
@@ -253,10 +253,10 @@ pdflatex -fmt=<fmt> -interaction=nonstopmode -halt-on-error -file-line-error \
 - The working directory is the **shadow tree** `.fastinc/src/`, so relative `\include`, `\input` and `\graphicspath` resolve as usual, and stale build files in the user's source directory (left over from manual builds) can never be read.
   - **Contents:** a mirror of the source tree made of symlinks to regular files. Excluded: the build directory, `.git/`, and the LaTeX outputs of the main job and the units (`<main>.*` except the main `.tex`, and `<unit>.aux`).
   - **Refresh:** once per build, before the runs. Parallel runs share it read-only.
-  - **Path mapping:** shadow paths map to source paths by prefix substitution, for logs (§6.13) and SyncTeX (§6.12).
+  - **Path mapping:** shadow paths map to source paths by prefix substitution, for logs (§6.13) and SyncTeX (§6.12). SyncTeX records absolute, unresolved paths of the form `<cwd>/./<relative>`; normalise `/./` first (S2).
   - **Platforms:** where symlinks are unavailable (Windows without the privilege), use hardlinks, else copies [M7].
   - **Limitation (accepted in v1):** relative paths that leave the source tree (`\input{../x}`) do not resolve. Absolute paths work.
-- Environment: N4, `max_print_line=10000`, and `TEXMF_OUTPUT_DIRECTORY` if needed [S2].
+- Environment: N4 and `max_print_line=10000` (`TEXMF_OUTPUT_DIRECTORY` is not needed, S2).
 
 **Run directory preparation:**
 
@@ -264,7 +264,10 @@ pdflatex -fmt=<fmt> -interaction=nonstopmode -halt-on-error -file-line-error \
 2. Copy the derived files `.toc .lof .lot .loalg .tdo .bbl .nls`.
 3. Create the subdirectories for `\include` paths.
 
-**[S2] verifies** the read search order: that the output directory is read before the working directory; that the shadow tree works (`\include` subdirectories, `\graphicspath`, graphics and `.bib` through symlinks, SyncTeX `Input:` paths as opened); and, for documentation, whether stale aux files in a plain source directory would be read.
+**Verified by S2** (`docs/spikes/S2.md`):
+- The output directory is read first; the working directory is a fallback, so without the shadow tree a file missing from the run directory would be read stale from the source directory.
+- The shadow tree works: `\include` subdirectories, `\graphicspath`, graphics and `.bib` through symlinks, SyncTeX.
+- `\include` subdirectories must exist in the run directory.
 
 **Outputs per run:** `main.pdf`, `main.synctex.gz`, `main.log`, `main.fls`, `main.aux`, unit aux files, `main.fpg`, `main.ffl`, `main.nlo`, `main.bcf`.
 
