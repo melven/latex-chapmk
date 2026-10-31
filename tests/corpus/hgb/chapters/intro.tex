@@ -1,0 +1,8 @@
+\chapter{Introduction}\label{ch:intro}
+\ExampleSim\ reads XML input files, see \autoref{sec:input} and \cite{knuth84}.
+\section{Overview}\label{sec:overview}
+\begin{figure}[htb]\centering
+\begin{tikzpicture}\node[draw, ellipse] (a) {input}; \node[draw, rectangle] (b) at (3,0) {solver}; \draw[->] (a) -- (b);\end{tikzpicture}
+\caption{Data flow}\label{fig:flow}\end{figure}
+Identifiers like file_name and data_size use underscores.
+\begin{tcolorbox}Note: see \autoref{fig:flow}.\end{tcolorbox}
