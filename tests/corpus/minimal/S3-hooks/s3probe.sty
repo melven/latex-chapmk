@@ -1,0 +1,16 @@
+% Spike S3 probe: logs hook events with page/shipout state and the current aux stream.
+\ProvidesPackage{s3probe}
+\newcommand\sthree@log[1]{\immediate\write-1{S3EVENT #1 page=\the\c@page\space
+  shipout=\the\ReadonlyShipoutCounter\space auxout=\ifx\@auxout\@mainaux main\else part\fi}}
+\AddToHook{include/before}{\sthree@log{include/before \CurrentFile}}
+\AddToHook{include/end}{\sthree@log{include/end}}
+\AddToHook{include/after}{\sthree@log{include/after}}
+\AddToHook{include/excluded}{\sthree@log{include/excluded}}
+\AddToHook{shipout/before}{\sthree@log{shipout/before}}
+\AddToHook{file/after/tikzlibraryexternal.code.tex}{\sthree@log{file/after/tikzlibraryexternal.code.tex}}
+% checkpoint restore of excluded units: wrap \@setckpt (aux handler)
+\let\sthree@setckpt\@setckpt
+\def\@setckpt#1#2{\sthree@setckpt{#1}{\sthree@log{cp@#1 restore-begin}#2\sthree@log{cp@#1 restore-end}}}
+% graphics inclusion: wrap \Gin@setfile{type}{ext}{file}
+\AtBeginDocument{\let\sthree@Gin@setfile\Gin@setfile
+  \def\Gin@setfile#1#2#3{\sthree@log{graphic #3}\sthree@Gin@setfile{#1}{#2}{#3}}}
