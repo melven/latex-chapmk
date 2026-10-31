@@ -75,7 +75,9 @@ The user's documents follow these rules. The driver relies on them and checks th
 - **N2** Up to `-j N` parallel pdflatex processes (default: CPU count).
 - **N3** Requirements: Python ≥ 3.10 and `pikepdf` (qpdf; wheels exist for Linux, macOS and Windows). LaTeX kernel ≥ 2023 (LaTeX hooks, `\ReadonlyShipoutCounter`). Optional for tests: poppler-utils (`pdftoppm`, `pdftotext`), `synctex` CLI.
   - Platforms: Linux, macOS and Windows with TeX Live (tier 1); Windows with MiKTeX (tier 2, §6.16).
-- **N4** Deterministic environment for all runs of one build: `SOURCE_DATE_EPOCH` = build start time and `FORCE_SOURCE_DATE=1`, so `\today` and the PDF dates are identical across runs.
+- **N4** Deterministic environment: `SOURCE_DATE_EPOCH` and `FORCE_SOURCE_DATE=1`, so `\today` and the PDF dates are identical across runs.
+  - The epoch is fixed **per canonical state** (M3): it is set at the cold build (`SOURCE_DATE_EPOCH` from the environment, else the build start time) and reused by all incremental runs and by the `--full` reference of `fastinc check`.
+  - Reason: pages reused from earlier runs and new runs must show the same dates.
 
 ### 3.3 Acceptance criterion ("identical output")
 
@@ -320,17 +322,24 @@ Per segment, `state.json` stores:
 3. Store the observed entry vectors of **all** segments from this run, tagged with the run's input snapshot id.
 4. Unreferenced run directories are garbage-collected after a successful merge (`--keep-runs` disables this).
 
+**Implemented in M3** (`incremental.py`, `state.py`):
+- **Cold build:** one run with all units, format and fastinc.sty, to the fixpoint (`fullbuild.converge`). Its aux, derived and `.bcf`/`.nlo` files become `canon/`. `state.json` records:
+  - per segment the run and page indices;
+  - per segment the source files attributed by the `F` records, with sha256;
+  - global inputs: source files in the `.fls` attributed to no segment, plus the `.bcf` data sources.
+- **Incremental step:** the dirty compilation units (attributed files changed) are compiled in one run from `canon/`. They are accepted only if the unit aux, the unit's main-aux slice and its nomenclature entries equal the canonical ones. The comparison ignores structural lines (`\relax`, `\providecommand`), which packages write once per run into whichever aux comes first, and replaces bookmark ids by levels (run-local, S6).
+  - Then glue and all other units are still valid: only the unit's pages and files are committed.
+  - Otherwise: cold build with the reason. M4 replaces this with the dependency model and the fixpoint.
+- **Cold-build triggers:** no state, format stamp, main-file fingerprints, include list, a glue segment's attributed files, or global inputs changed.
+
 ### 6.7 Aux linker and aux classification
 
 #### 6.7.1 Derived list files
 
-Reproduce what LaTeX does at `\end{document}`:
-
-1. Read `main.aux`, expanding `\@input{u.aux}` in place.
-2. Collect `\@writefile{<ext>}{<text>}`.
-3. Write `<text>` lines to `main.<ext>`.
-
-Must equal the full run's files byte for byte; this is a unit test against reference builds.
+Derived list files (`.toc`, `.lof`, …) are **written by TeX**, not by a Python linker (M3).
+- A Python linker was tried and is not byte-identical: when writing, TeX expands content (`\protected@file@percent` → `%`), and aux macros such as `\babel@aux` add entries.
+- Every run reads all aux files at `\end{document}` (its new ones and the canonical ones of excluded units) and writes complete list files.
+- In M3 the list files stay canonical (verification). When contributions change (M4), the glue run of the fixpoint writes them.
 
 #### 6.7.2 Line classification
 
@@ -515,7 +524,9 @@ Input: for each segment in document order, its committed artifact `(run PDF, pag
    - Keep a name only if its target page belongs to the pages taken from that run, and the name is not a dummy. Dummies are listed in the run log as `pdfTeX warning (dest): name{X} has been referenced but does not exist, replaced by a fixed one`; their target is `[<page 0> /Fit]` (S6). Values have the form `<< /D [<page> /XYZ x y null] >>`.
    - Remap the target page through the map.
    - Duplicate names: mirror pdfTeX, which keeps the first definition and ignores later ones (`pdfTeX warning (ext4): destination with the same identifier (name{X}) has been already used, duplicate ignored`). The merge keeps the definition from the first merged page in document order and drops later ones. Typical case: `page.N` names from title pages or restarted numbering. Since a partial run may lack the earlier definition, attribution is by merged page order, never by run. [S6] verifies that the full run produces the same winner.
-   - Every name referenced by a link or the outline must resolve; a missing name → error → fallback.
+   - Every name referenced by a link or the outline must resolve.
+     - A name that no run defines gets pdfTeX's dummy destination (first page, `/Fit`), as in a plain build. Example: hgb, longtable caption in `\endfirsthead`.
+     - A name defined only on pages that were not taken → error → fallback.
    - Write the merged name tree.
 3. **Annotations:**
    - Links using named destinations (`/A <</S/GoTo/D (name)>>` or `/Dest (name)`) stay as they are.
@@ -565,7 +576,10 @@ Verified by S10 (`docs/spikes/S10.md`).
 
 Full mode means plain sequential full runs to a fixpoint inside the build directory (like latexmk), with a SyncTeX file but without merging. Triggers:
 
-- unsupported packages (§1 non-goals); `hyperref` loaded without `bookmark` is detected from the run's `.fls`, because classes may load `bookmark` only at `\begin{document}`;
+- unsupported packages (§1 non-goals): detected statically in the preamble, and at runtime from the `.fls` of the format build **and** the run. Packages dumped into the format are not in the run's `.fls`, and classes may load packages, e.g. `bookmark` only at `\begin{document}`.
+  - `hyperref` loaded without `bookmark` also counts.
+  - Runtime reasons are persistent: the next builds go straight to full mode until the main file changes (`canon/full-only.json`);
+- `\documentclass` not before the split line (e.g. on the `\begin{document}` line);
 - format build failure;
 - a merge error (missing destinations, inconsistent SyncTeX header);
 - the fixpoint not reached (§6.9.2);
@@ -577,9 +591,9 @@ Each trigger prints a one-line reason.
 ### 6.15 CLI and configuration
 
 ```
-fastinc build [MAIN] [-j N] [--full] [--check] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [-v]
+fastinc build [MAIN] [-j N] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [-v]
 fastinc watch [MAIN] [same options]        # rebuild on change of any recorded input
-fastinc check [MAIN] [--samples N]         # incremental vs --full, criterion §3.3
+fastinc check [MAIN]                       # = build --check: incremental vs --full, criterion §3.3
 fastinc clean [MAIN]
 fastinc graph [MAIN] [--format text|dot|json]   # compilation units and dependencies
 ```
@@ -774,7 +788,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 |---|---|---|
 | **M1** | *Done.* CLI, config, analysis, generated sources, format build, `--full` reference mode, deterministic environment | `--full` matches plain latexmk (§3.3) on the corpus |
 | **M2** | *Done.* `fastinc-ini.sty` and `fastinc.sty` (all §6.4 records), run directory preparation, runner (process pool) | records present and parseable; unit tests green |
-| **M3** | Single-unit incremental path: commit, aux linker, PDF and SyncTeX merge, logs, `fastinc check` / `build --check` (§3.3 comparison) | T1, T14, T15, T17 green; `check` passes on the corpus |
+| **M3** | *Done.* Single-unit incremental path: commit, aux slices (no Python linker, §6.7.1), PDF and SyncTeX merge, logs, `fastinc check` / `build --check` (§3.3 comparison), `--report` | T1, T14, T15, T17 green; `check` passes on the corpus |
 | **M4** | Full mode also runs makeindex for a generic `<job>.idx` (the reference and fallback must equal latexmk; found on the pgf manual, whose imakeidx call fails with `-output-directory`), dependency model, compilation units, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks, `fastinc graph` and dirty reasons in the report | T2–T13, T16, T18, T19, T20 green (T2 via tail run) |
 | **M5** | Prediction (§6.9.3) and parallel successor recompilation | T2 and T10 green with parallel runs; benchmark shows a speedup over M4 for T2 |
 | **M6** | `watch`, benchmarks, README (usage, assumptions A1–A5, limitations) | §8.4 numbers recorded |
