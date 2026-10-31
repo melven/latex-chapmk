@@ -163,7 +163,7 @@ All generated files keep the user's line numbers, so errors and SyncTeX map back
   - everything else verbatim.
 
   An empty selection is written as `\includeonly{}`, which means a glue-only run.
-- **Path mapping table:** `runs/<r>/main.tex` → user `main.tex`. Used for logs (§6.13) and SyncTeX (§6.12).
+- **Path mapping table:** `runs/<r>/main.tex` → user `main.tex`, and the shadow-tree prefix `.fastinc/src/` → source directory (§6.5). Used for logs (§6.13) and SyncTeX (§6.12).
 
 ### 6.3 Format
 
@@ -495,7 +495,7 @@ Expected side effect: a larger file, because font subsets are duplicated per run
 ### 6.12 SyncTeX merge
 
 1. Parse each source `main.synctex.gz` according to the grammar [S10].
-2. Build a global input table keyed by real path. Map `runs/<r>/main.tex` to the user's `main.tex`; line numbers are unchanged (§6.2). Remap the input tags in all records.
+2. Build a global input table keyed by real path. Map `runs/<r>/main.tex` to the user's `main.tex` and shadow-tree paths to source paths (§6.2); line numbers are unchanged (§6.2). Remap the input tags in all records.
 3. Take only the sheets of the selected pages (page map) and renumber them to merged page numbers.
 4. Recompute every size and offset field, write the header (`Output:pdf`, `Magnification`, `Unit`, `X Offset`, `Y Offset` copied from the runs; they must be equal, otherwise error) and the postamble, then gzip.
 5. Verify with the `synctex` CLI in tests.
