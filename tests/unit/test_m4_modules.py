@@ -71,6 +71,19 @@ def test_statement_key() -> None:
     )
 
 
+def test_counter_records_and_reset_closure() -> None:
+    from fastinc.records import RunRecords, parse_counters
+
+    c = parse_counters(
+        "chapter=279:section/figure/;section=280:subsection/;subsection=281:;"
+        "figure=284:subfigure/;subfigure=490:;page=0:;"
+    )
+    assert c["chapter"] == (279, ("section", "figure")) and c["page"] == (0, ())
+    recs = RunRecords(counters=c)
+    assert recs.reset_registers("chapter") == {280, 281, 284, 490}
+    assert recs.reset_registers("page") == set() and recs.reset_registers("nope") == set()
+
+
 def test_biblatex_instcount_is_not_data() -> None:
     a = "\\abx@aux@number{2}{k}{0}{ctx}{1}"
     b = "\\abx@aux@number{7}{k}{0}{ctx}{1}"
@@ -186,6 +199,8 @@ def test_text_scan_imports() -> None:
         "L:with space",
     ]
     assert changed_imports(stored, scan, {"L:fig:a": "1"}) == ["C:k1"]
+    assert not TokenScan(["\\section{A}\\label{sec:a} text"]).references("L:sec:a")
+    assert TokenScan(["\\label{sec:a} \\ref{sec:a}"]).references("L:sec:a")
     assert not TokenScan(["text"]).reads_lists()
     assert TokenScan(["\\listoffigures"]).reads_lists()
 
@@ -328,3 +343,14 @@ def test_plan_groups_and_global_units() -> None:
     sel, reasons = fp.plan({"U2": ["sources changed"]})
     assert sel == [2, 3, 4, 5] and "follows the global unit c2" in reasons["U5"][0]
     assert fp.plan({})[0] == [2]
+
+
+def test_register_names(tmp_path: Path) -> None:
+    from fastinc.records import register_names
+
+    log = tmp_path / "x.log"
+    log.write_text("\\c@figure=\\count284\n\\Hy@linkcounter=\\count514\nother line\n")
+    assert register_names([log, tmp_path / "missing.log"]) == {
+        284: "\\c@figure",
+        514: "\\Hy@linkcounter",
+    }

@@ -127,16 +127,28 @@ def test_t8_algorithm_comment_width(thesis: Path, capsys: pytest.CaptureFixture[
 
 
 def test_t9_new_figure(thesis: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """T9: a new figure in ch2 -> ch2 and the glue (LoF); later units stay clean."""
+    """T9: a new figure in ch2 -> ch2, glue (LoF). Entry differences of later units in
+    counters their numbered \\chapter resets (figure, subfigure) are ignored.
+
+    PLAN expected later units to stay clean; with hyperref they cannot: the caption steps
+    \\Hy@linkcounter, which names the anchors of later captions and starred sections
+    (``section*.N``); old pages of ch3 would keep anchor names that ch2 now uses. So ch3..appB
+    follow in a tail run, and only because of that register. (A tikzpicture would also step
+    pgf's picture id counter, which moves later remember-picture ids.)
+    """
     fig = (
-        "\\begin{figure}[htb]\n  \\centering\n  \\begin{tikzpicture}\\draw (0,0) rectangle "
-        "(1,0.3);\\end{tikzpicture}\n  \\caption{A new small figure}\\label{fig:ch2-new}\n"
-        "\\end{figure}\n\n\\section{Tables of ch2}"
+        "\\begin{figure}[htb]\n  \\centering\n  \\rule{1cm}{0.3cm}\n"
+        "  \\caption{A new small figure}\\label{fig:ch2-new}\n\\end{figure}\n\n"
+        "\\section{Tables of ch2}"
     )
     edit(ch(thesis, "ch2"), "\\section{Tables of ch2}", fig)
     rep = checked(thesis, capsys)
-    assert rep["compiled"] == ["chapters/ch2"]
-    assert [] in selections(rep)[1:]  # list of figures
+    sels = selections(rep)
+    assert sels[0] == ["chapters/ch2"]
+    assert run_with(rep, "chapters/ch3")["reasons"]["chapters/ch3"] == [
+        "entry state changed (\\Hy@linkcounter)"
+    ]
+    assert [] in sels[1:]  # list of figures
 
 
 def test_t10_page_parity_change(thesis: Path, capsys: pytest.CaptureFixture[str]) -> None:

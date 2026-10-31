@@ -95,6 +95,10 @@ def test_records_and_restore(copy_corpus) -> None:  # type: ignore[no-untyped-de
     # absolute sets (chapter counter resets the section counter), bookmark levels, nomencl
     assert full.absolute["U1"]
     assert sorted(set(full.bookmark_levels.values())) == [0, 1, 2]
+    # counter registers and reset lists (M4): the chapter resets section, figure, ...
+    chapter_resets = full.reset_registers("chapter")
+    assert {full.counters[c][0] for c in ("section", "subsection", "figure")} <= chapter_resets
+    assert full.counters["page"][0] == 0
     assert any(line.startswith("\\nomenclatureentry") for line in full.nomenclature["U1"])
     # checkpoint changes include the page counter (index 0)
     assert 0 in full.checkpoints["U3"]

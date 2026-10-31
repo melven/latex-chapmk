@@ -59,6 +59,11 @@ def test_split_at_start_of_group_and_units(tmp_path: Path) -> None:
     assert [i.line for i in a.includes] == [10, 11, 13]
     assert [i.headed for i in a.includes] == [True, False, True]
     assert [[i.arg for i in u.includes] for u in a.units] == [["ch/a", "ch/a2"], ["ch/b"]]
+    assert [(i.heading, i.resets) for i in a.includes] == [
+        ("chapter", "chapter"),
+        (None, None),
+        ("addchap*", None),
+    ]
     assert a.jobname == "thesis" and a.newline == "\n"
     assert a.fallback_reasons == () and a.warnings == ()
 
