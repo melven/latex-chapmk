@@ -11,7 +11,9 @@ from fastinc.errors import FastincError
 
 Vector = dict[int, int]
 
-_REC = re.compile(r"^\\fastinc@(base|entry|gexit|abs|unit|ckpt|bkmlevels|counters)\{(.*)\}\s*$")
+_REC = re.compile(
+    r"^\\fastinc@(base|entry|gexit|abs|unit|ckpt|bkmlevels|counters|layout)\{(.*)\}\s*$"
+)
 NLO_MARKER = "%fastinc-seg "
 
 
@@ -56,6 +58,24 @@ def parse_counters(text: str) -> dict[str, tuple[int, tuple[str, ...]]]:
     return out
 
 
+def parse_vector_names(text: str) -> dict[str, int]:
+    """``"twoside=1,openright=0"`` → ``{"twoside": 1, "openright": 0}``."""
+    out: dict[str, int] = {}
+    for item in text.split(","):
+        name, sep, value = item.partition("=")
+        if sep:
+            out[name.strip()] = int(value)
+    return out
+
+
+def read_main_records(main_aux: Path) -> RunRecords:
+    """The records of one main aux file (e.g. the canonical one)."""
+    recs = RunRecords()
+    if main_aux.is_file():
+        _read_aux_records(main_aux, recs)
+    return recs
+
+
 def parse_indices(text: str) -> tuple[int, ...]:
     """``"3,5,"`` → ``(3, 5)``; unknown counters (``-1``) are dropped."""
     return tuple(i for i in (int(x) for x in text.split(",") if x.strip()) if i >= 0)
@@ -93,6 +113,8 @@ class RunRecords:
     nomenclature: dict[str, list[str]] = field(default_factory=dict)
     #: counter name -> (register index, names of the counters it resets)
     counters: dict[str, tuple[int, tuple[str, ...]]] = field(default_factory=dict)
+    #: page layout flags (``twoside``, ``openright``: 0/1)
+    layout: dict[str, int] = field(default_factory=dict)
 
     def reset_registers(self, counter: str) -> set[int]:
         """Registers of the counters reset, directly or transitively, when ``counter`` is
@@ -131,6 +153,8 @@ def _read_aux_records(path: Path, recs: RunRecords) -> None:
             recs.bookmark_levels = parse_vector(rest)
         elif kind == "counters":
             recs.counters = parse_counters(rest)
+        elif kind == "layout":
+            recs.layout = parse_vector_names(rest)
         else:
             seg, arg = _args(rest)
             if kind == "entry":
