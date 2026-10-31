@@ -60,6 +60,10 @@ The user's documents follow these rules. The driver relies on them and checks th
 - **F6** biblatex+biber and nomencl+makeindex are handled.
 - **F7** Errors are reported with paths and line numbers mapped back to the user's sources. On error the previous `main.pdf` is kept.
 - **F8** `fastinc watch`, equivalent to `latexmk -pvc`.
+- **F11** Coexistence with plain LaTeX builds in the same directory, without manual cleaning in between:
+  - fastinc never reads build outputs from the source directory (shadow tree, §6.5).
+  - In the output directory (default: next to `main.tex`), fastinc writes only `main.pdf`, `main.synctex.gz` and `main.log`. Each is replaced atomically, and the pdf and synctex file always come from the same build.
+  - Everything else goes to the build directory.
 - **F9** `fastinc build --full` runs a plain reference build (latexmk-equivalent, same environment) for release and checks.
 - **F10** `fastinc check` builds incrementally and with `--full`, then compares the results using §3.3.
 
@@ -657,6 +661,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | T18 | `\setlength` in ch2 body | lint warning; ch2 is global; successors recompiled after ch2 changes |
 | T18b | `\setlength` inside a `table` environment and inside `{...}` in ch2 | no lint hit; ch2 not global; §3.3 holds |
 | T19 | stale `main.aux` and unit aux files in the source directory | ignored (shadow tree); §3.3 holds |
+| T19b | alternate latexmk → fastinc → edit → latexmk → fastinc in one directory, no cleaning | both builds correct (fastinc: §3.3; latexmk: same as a latexmk build in a clean copy); SyncTeX matches the current pdf |
 
 ### 8.3 Unit tests
 
