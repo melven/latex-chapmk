@@ -213,20 +213,20 @@ Requirements:
 
 1. **Segment tracking.** The variable `\fastinc@seg` holds the current segment id:
    - `G0` at `\begin{document}`;
-   - `U<k>` at `include/before` [S3: after the initial `\clearpage`];
-   - `G<k>` at `include/after`;
-   - for an excluded unit: at `include/excluded` [S3].
+   - `U<k>` at `include/before` (after the initial `\clearpage`, unit aux open; S3);
+   - `G<k>` at `include/after` (after the final `\clearpage`, which ships deferred float pages; S3);
+   - excluded unit: `U<k>` in the `\@setckpt` wrapper (see 2), `G<k>` at `include/excluded`. No pages are produced in between.
 2. **State records.**
    - The *state vector* is all allocated `\count` registers, determined from the kernel allocation pointers [S4], **minus a deny list of scratch registers** (e.g. `\@tempcnta`, `\@tempcntb`, `\count@`, expl3 `\l_tmp*_int`/`\g_tmp*_int`, pgf temporaries, `\@listdepth`). Scratch registers hold arbitrary values at segment boundaries that differ between partial and full runs without affecting output; including them would make condition §6.9.1(d) fire on every build. The vector includes the LaTeX counters and, for example, `LT@tables` and `\Hy@linkcounter`. The deny list is one table in `fastinc.sty`, extensible by config (`[state] ignore`). It is re-evaluated against real documents (S4, `fastinc check` on the benchmark document): a register whose entry values differ between partial and full runs without an output difference is a deny-list candidate; an output difference traced to a denied register removes it from the list.
    - At `\begin{document}` (end of the `AtBeginDocument` hooks), write a baseline `\fastinc@base{...}` to the main aux (`\immediate\write\@mainaux`), as a sparse vector `n=v,...`.
-   - At each segment start, write `\fastinc@entry{<seg>}{<sparse vector vs base>}` to the main aux. This happens in every run, for selected and excluded units alike. For excluded units it is written **before** their checkpoints are restored.
+   - At each segment start, write `\fastinc@entry{<seg>}{<sparse vector vs base>}` to the main aux. This happens in every run, for selected and excluded units alike. For excluded units it is written **before** their checkpoints are restored. `include/excluded` runs after the kernel restore (S3), so the entry is recorded by wrapping `\@setckpt` (an aux handler): `\cp@<unit>` becomes `<record entry><original checkpoint>`. A unit without a checkpoint (never compiled) records no entry; it is dirty anyway (§6.9.1 f).
    - At each unit end, **after** the final `\clearpage` of `\include` (`include/after`, while the unit aux is still open [S3]), write `\fastinc@ckpt{<unit>}{<registers changed since unit entry: n=v,...>}` to the unit aux. Not at `include/end`: that hook runs before the final `\clearpage`, so the page counter and other changes made by the last shipouts would be missing.
-   - At each glue end, write `\fastinc@gexit{<seg>}{...}` to the main aux.
+   - At each glue end, write `\fastinc@gexit{<seg>}{...}` to the main aux: at `include/before` or in the `\@setckpt` wrapper of the following unit, and at `\end{document}` for the last glue.
    - Absolute assignments: for each segment, record the set of registers assigned absolutely (hooks on `\setcounter`, counter resets via `\@stpelt`, `\pagenumbering`) as `\fastinc@abs{<seg>}{n,n,...}`, written to the unit aux for units and to the main aux for glue. Used for prediction only (§6.9.3), so missing cases only cost speed.
 3. **Restore.** Reading `\fastinc@ckpt` from the aux stores the vector (`\fastinc@ckpt@<unit>`). At `include/excluded`, after LaTeX's own checkpoint restore, the stored registers are assigned globally.
 4. **Page map.** At `shipout/before`, `\immediate\write` to `\jobname.fpg`: `<\ReadonlyShipoutCounter> <seg> <\the\c@page> <\thepage expanded via \protected@edef>`.
 5. **Segment markers in shared streams.** The only shared stream is `.nlo` (`\@nomenclaturefile`); outline entries go to the aux files (`bookmark`, §4). At every segment change, write the line `%fastinc-seg <seg>` into the stream, using a delayed `\write`, like nomencl's own `\protected@write` (S2b). This lets the driver attribute entries to segments.
-6. **File attribution.** On `file/before`, `\immediate\write` to `\jobname.ffl`: `<seg> <filename>`. Graphics: hook the graphicx file inclusion (`\Gin@setfile` or the pdftex driver's include macro [S3]) and write the same record.
+6. **File attribution.** On `file/before`, `\immediate\write` to `\jobname.ffl`: `<seg> <filename>`. Graphics: wrap `\Gin@setfile{type}{ext}{file}` (#3 is the resolved file name; S3) and write the same record.
 7. **Aux handlers.** Define `\fastinc@base`, `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs` as no-ops, and `\fastinc@ckpt` as store (aux is read at begin and end document).
 8. **Externalize neutralisation** (§6.4.3), repeated idempotently.
 9. **Deferred commands:** run the entries of the deferral table (§6.3.3; empty in v1).
