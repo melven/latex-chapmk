@@ -60,12 +60,12 @@ The user's documents follow these rules. The driver relies on them and checks th
 - **F6** biblatex+biber and nomencl+makeindex are handled.
 - **F7** Errors are reported with paths and line numbers mapped back to the user's sources. On error the previous `main.pdf` is kept.
 - **F8** `fastinc watch`, equivalent to `latexmk -pvc`.
+- **F9** `fastinc build --full` runs a plain reference build (latexmk-equivalent, same environment) for release and checks.
+- **F10** `fastinc check` builds incrementally and with `--full`, then compares the results using §3.3.
 - **F11** Coexistence with plain LaTeX builds in the same directory, without manual cleaning in between:
   - fastinc never reads build outputs from the source directory (shadow tree, §6.5).
   - In the output directory (default: next to `main.tex`), fastinc writes only `main.pdf`, `main.synctex.gz` and `main.log`. Each is replaced atomically, and the pdf and synctex file always come from the same build.
   - Everything else goes to the build directory.
-- **F9** `fastinc build --full` runs a plain reference build (latexmk-equivalent, same environment) for release and checks.
-- **F10** `fastinc check` builds incrementally and with `--full`, then compares the results using §3.3.
 
 ### 3.2 Non-functional
 
