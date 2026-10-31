@@ -1,4 +1,5 @@
-"""Aux files (PLAN §6.7): main-aux segment slices, structural lines, bookmark records.
+"""Aux files (PLAN §6.7): statements and their classes, main-aux segment slices, the
+canonical main aux, structural lines, bookmark records.
 
 Derived list files (.toc, .lof, ...) are not linked in Python: TeX expands their content when
 writing them (e.g. ``\\protected@file@percent``) and aux macros like ``\\babel@aux`` add entries,
@@ -8,6 +9,7 @@ so every run writes complete list files from the aux files it read (M3).
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,6 +42,164 @@ def segment_slices(main_aux_lines: list[str]) -> dict[str, list[str]]:
         if current is not None:
             current.append(line)
     return slices
+
+
+def statements(lines: Iterable[str]) -> list[str]:
+    """Join aux lines into brace-balanced statements (``\\@setckpt`` and longtable's
+    ``\\LT@`` records span several lines, S8). Escaped braces do not count."""
+    out: list[str] = []
+    pending: list[str] = []
+    depth = 0
+    for line in lines:
+        pending.append(line)
+        depth += _brace_balance(line)
+        if depth <= 0:
+            out.append("\n".join(pending))
+            pending, depth = [], 0
+    if pending:
+        out.append("\n".join(pending))
+    return out
+
+
+def _brace_balance(line: str) -> int:
+    balance, i = 0, 0
+    while i < len(line):
+        c = line[i]
+        if c == "\\":
+            i += 2
+            continue
+        if c == "{":
+            balance += 1
+        elif c == "}":
+            balance -= 1
+        i += 1
+    return balance
+
+
+# Statement classes (§6.7.2)
+RECORD = "record"  # fastinc records
+STRUCTURAL = "structural"  # constant per document or bookkeeping
+LABEL = "label"  # \newlabel: export
+LIST = "list"  # \@writefile: list contribution
+CKPT = "ckpt"  # \@setckpt: exit state
+CITE = "cite"  # \abx@aux@cite/segm: citation (-> .bcf)
+BIBDATA = "bibdata"  # other keyed biblatex data: merged per key
+BOOKMARK = "bookmark"  # \BKM@entry: merge only
+SELF = "self"  # data the writing segment reads back (pgf marks, longtable widths)
+EQP = "eqp"  # eqparbox widths per tag (end of document)
+AGGREGATE = "aggregate"  # OR over typeset segments (KOMA autodot)
+LISTDATA = "listdata"  # written while typesetting lists (KOMA tocbasic widths)
+ABSPAGE = "abspage"  # \@abspage@last: rewritten to the merged page count
+GLOBAL = "global"  # unknown: a change dirties everything
+
+_CLASSES: list[tuple[str, re.Pattern[str]]] = [
+    (RECORD, re.compile(r"^\\fastinc@")),
+    (
+        STRUCTURAL,
+        re.compile(
+            r"^\\(relax\b|providecommand|babel@aux\b|@input\{|catcode\b|selectlanguage\b"
+            r"|@nameuse\{bbl@beforestart\}|abx@aux@(refcontext|read@bbl@mdfivesum|read@bblrerun)\b)"
+        ),
+    ),
+    (LABEL, re.compile(r"^\\newlabel\{")),
+    (LIST, re.compile(r"^\\@writefile\{")),
+    (CKPT, re.compile(r"^\\@setckpt\{")),
+    (CITE, re.compile(r"^\\abx@aux@(cite|segm)\{")),
+    (BIBDATA, re.compile(r"^\\abx@aux@")),
+    (BOOKMARK, re.compile(r"^\\BKM@entry\{")),
+    (SELF, re.compile(r"^\\(pgfsyspdfmark\s*\{|gdef\s*\\LT@[ivxlcdm]+\s*\{)")),
+    (EQP, re.compile(r"^\\expandafter\\gdef\\csname eqp@")),
+    (AGGREGATE, re.compile(r"^\\global\\csname @altsecnumformattrue\\endcsname")),
+    (LISTDATA, re.compile(r"^\\global\\@namedef\{scr@dte@[A-Za-z]+@lastmaxnumwidth\}")),
+    (ABSPAGE, re.compile(r"^\\gdef\s*\\@abspage@last\{")),
+]
+#: classes of a unit's main-aux slice that belong to the unit (taken from its committed run)
+UNIT_CONTENT = (CITE, BOOKMARK, SELF)
+
+
+def classify(stmt: str) -> str:
+    """Class of an aux statement (§6.7.2); unknown statements are :data:`GLOBAL`."""
+    for name, pattern in _CLASSES:
+        if pattern.match(stmt):
+            return name
+    return GLOBAL
+
+
+def command_name(stmt: str) -> str:
+    """The leading control sequence of a statement (for warnings)."""
+    m = re.match(r"\\([A-Za-z@]+|.)", stmt)
+    return f"\\{m.group(1)}" if m else stmt[:20]
+
+
+def statement_key(stmt: str) -> str:
+    """A keyed statement without its last brace group (``\\abx@aux@defaultrefcontext{0}{k}``,
+    ``\\expandafter\\gdef\\csname eqp@this@T\\endcsname``)."""
+    body = stmt.rstrip()
+    if not body.endswith("}"):
+        return body
+    depth = 0
+    for i in range(len(body) - 1, -1, -1):
+        if body[i] == "}" and (i == 0 or body[i - 1] != "\\"):
+            depth += 1
+        elif body[i] == "{" and (i == 0 or body[i - 1] != "\\"):
+            depth -= 1
+            if depth == 0:
+                return body[:i]
+    return body
+
+
+def segment_of_statements(stmts: Sequence[str]) -> list[str | None]:
+    """The segment each statement was written in (None outside slices), as in
+    :func:`segment_slices`; the ``\\fastinc@entry`` statement itself belongs to its slice."""
+    out: list[str | None] = []
+    current: str | None = None
+    for stmt in stmts:
+        m = _SEG_START.match(stmt)
+        if m:
+            current = m.group(1)
+        elif _SEG_END.match(stmt):
+            current = None
+        out.append(current)
+    return out
+
+
+def canonical_main_aux(
+    run: Sequence[str],
+    old: Sequence[str],
+    keep_old: set[str],
+    aggregates: Sequence[str],
+    pages: int,
+) -> list[str]:
+    """The canonical main aux (§6.7.2) from the statements of the latest run's main aux:
+
+    - slices of the segments in ``keep_old`` (not compiled in that run) get their
+      :data:`UNIT_CONTENT` statements from the old canonical main aux;
+    - keyed end-of-document data (:data:`EQP`, :data:`BIBDATA`) is merged per key, the run's
+      values winning;
+    - the :data:`AGGREGATE` statements are replaced by ``aggregates``;
+    - ``\\@abspage@last`` is set to ``pages`` (the merged page count).
+    """
+    old_content: dict[str, list[str]] = {}
+    for seg, stmt in zip(segment_of_statements(old), old, strict=True):
+        if seg in keep_old and classify(stmt) in UNIT_CONTENT:
+            old_content.setdefault(seg, []).append(stmt)
+    run_keys = {statement_key(s) for s in run if classify(s) in (EQP, BIBDATA)}
+    carried = [s for s in old if classify(s) in (EQP, BIBDATA) and statement_key(s) not in run_keys]
+    out: list[str] = []
+    tail: list[str] = []
+    for seg, stmt in zip(segment_of_statements(run), run, strict=True):
+        kind = classify(stmt)
+        if kind == AGGREGATE:
+            continue
+        if kind == ABSPAGE:
+            tail.append(f"\\gdef \\@abspage@last{{{pages}}}")
+            continue
+        if seg in keep_old and kind in UNIT_CONTENT:
+            continue
+        out.append(stmt)
+        if seg in keep_old and _SEG_START.match(stmt):
+            out += old_content.get(seg, [])
+    return out + carried + list(dict.fromkeys(aggregates)) + tail
 
 
 _STRUCTURAL = re.compile(r"^\\(relax\b|providecommand)")
