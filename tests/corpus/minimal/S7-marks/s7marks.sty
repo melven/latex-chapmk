@@ -1,0 +1,33 @@
+% Spike S7 fix candidate: carry the kernel mark state (ltmarks, region "page") across
+% excluded units. At include/after, record the last marks of the 2e classes into the
+% unit aux as {id}{content} (the aux is read with document catcodes, so no expl3 names);
+% for an excluded unit (\@setckpt wrapper, after the kernel restore) set them again, so
+% the next page's top marks equal those of the full run.
+\ProvidesPackage{s7marks}
+\ExplSyntaxOn
+\clist_const:Nn \c__sseven_classes_clist { 2e-left, 2e-right, 2e-right-nonempty }
+\cs_new:Npn \__sseven_split:w \__mark_value:nn #1#2 { {#1} { \exp_not:n {#2} } }
+\AddToHook { include/after }
+  {
+    \clist_map_inline:Nn \c__sseven_classes_clist
+      {
+        \iow_now:Ne \@partaux
+          {
+            \token_to_str:N \sseven@mark { #1 }
+            \exp_last_unbraced:Nv \__sseven_split:w { g__mark_page_last_ #1 _tl }
+          }
+      }
+  }
+\cs_new_protected:Npn \sseven@mark #1#2#3
+  { \tl_gset:cn { sseven_mark_ #1 _tl } { \__mark_value:nn {#2} {#3} } }
+\cs_new_protected:Npn \sseven@restore
+  {
+    \clist_map_inline:Nn \c__sseven_classes_clist
+      {
+        \tl_if_exist:cT { sseven_mark_ ##1 _tl }
+          { \tl_gset_eq:cc { g__mark_page_last_ ##1 _tl } { sseven_mark_ ##1 _tl } }
+      }
+  }
+\ExplSyntaxOff
+\let\sseven@setckpt\@setckpt
+\def\@setckpt#1#2{\sseven@setckpt{#1}{#2\sseven@restore}}
