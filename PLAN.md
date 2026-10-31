@@ -680,7 +680,11 @@ docs/spikes/S1.md ... S10.md
   - a `\foreignlanguage{ngerman}{...}` passage.
 - **Variants:** `twoside` + `openright` (the reference), and `oneside`.
 
-**`tests/corpus/minimal/`** — tiny documents isolating each mechanism, used in spikes and unit tests.
+**`tests/corpus/hgb/`**: a second real-world preamble (class `hgbthesis` from TeX Live), anonymised.
+- What it tests: a class that loads biblatex itself, `underscore`, `tcolorbox`, `arydshln`, listings via the class's own environments, `\input` macro files in the preamble, a local theme file in the source directory.
+- Body: four includes, one of them a sub-chapter include (compilation unit grouping, A5).
+
+**`tests/corpus/minimal/`**: tiny documents isolating each mechanism, used in spikes and unit tests.
 
 ### 8.2 Scenario tests
 
