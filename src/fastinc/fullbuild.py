@@ -40,6 +40,12 @@ class FullBuildResult:
     tool_runs: tuple[str, ...] = field(default=())
 
 
+def _names(names: list[str], limit: int = 5) -> str:
+    """``a, b, c, ... (+12 more)`` for progress messages."""
+    shown = ", ".join(names[:limit])
+    return shown if len(names) <= limit else f"{shown}, ... (+{len(names) - limit} more)"
+
+
 def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -150,7 +156,7 @@ def full_build(
             for p in read_inputs(out / f"{job}.fls", layout.shadow_dir, out)
             if before.get(p) != _digest(p)
         )
-        report(f"pass {n}: " + (f"changed {', '.join(changed)}" if changed else "stable"))
+        report(f"pass {n}: " + (f"changed {_names(changed)}" if changed else "stable"))
         if not changed:
             break
     else:
