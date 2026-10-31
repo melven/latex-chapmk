@@ -477,9 +477,9 @@ Cheap common case: a typo edit means one run, the unit's exit, exports and contr
 - One run per iteration: the dirty compilation units (all: no `\includeonly`; none: glue only) plus the glue; at most 8 runs, then full mode (§6.14). A cold build is the same loop with all units dirty and an empty `canon/`. The loop ends when no unit is dirty and the glue is valid.
 - Dirty rules after a run:
   - sources changed;
-  - imports: keys found by the text scan whose value differs from the one at compile start (label: whole `\newlabel` argument; citation: `.bbl` block and position plus keyed biblatex aux data such as `\abx@aux@number`);
+  - imports: keys found by the text scan (`\label{key}` arguments are definitions, not references) whose value differs from the one at compile start (label: whole `\newlabel` argument; citation: `.bbl` block and position plus keyed biblatex aux data such as `\abx@aux@number`);
   - self data (unit-aux and slice statements of class *self*) differs before/after the compile;
-  - entry state: a unit not compiled in the run whose observed entry vector differs from the one it was compiled with. Tail rule: it and **all later units** are compiled in the next run (no prediction until M5);
+  - entry state: a unit not compiled in the run whose observed entry vector differs from the one it was compiled with, ignoring the counters that its leading numbered heading (`\chapter`, `\part`, `\section`) resets (`\cl@` closure from the `\fastinc@counters` record; assumes the include reads none of them before the heading). Tail rule: it and **all later units** are compiled in the next run (no prediction until M5);
   - eqparbox widths changed: the units of the run; aggregate (KOMA autodot) or unclassified aux data changed: all units;
   - a list file changed for a unit that typesets lists (text scan for `\tableofcontents`, `\listof…`, `\printbibliography`, …, or a derived file in its `F` records).
 - Glue validity: hash of the derived files, the values of keys imported by the main file and glue files, and the glue aux data (list typesetting data, eqparbox, aggregates, backrefs, unclassified, glue self data; keyed data order-insensitive) at the start of the run that produced the committed glue, compared with the current canonical state; glue sources changed → invalid (a glue-only run, no cold build).
@@ -746,7 +746,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | T6 | new nomenclature entry in ch2 | ch2, makeindex, glue |
 | T7 | longtable rows added in ch3 | ch3 (self rerun until stable) |
 | T8 | algorithm comment width change | that unit (self) |
-| T9 | new figure in ch2 | ch2, successors whose figure numbers are unaffected stay clean; glue (LoF) |
+| T9 | new figure in ch2 | ch2; glue (LoF); entry differences in counters reset by the successors' numbered `\chapter` are ignored. *M4 finding:* with hyperref the caption steps the global `\Hy@linkcounter` (anchor names of later captions and `\section*`), so successors follow in a tail run (M5: in parallel) |
 | T10 | ch1 page count changes by 1 (parity) | the misprediction path is exercised; output correct |
 | T11 | move `\appendix` in main.tex | all |
 | T12a | preamble edit after the split | all, no format rebuild |
@@ -871,6 +871,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | unit checkpoint | unit aux | `\fastinc@ckpt{U<k>}{n=v,...}` (complete state vector at unit exit, absolute values) |
 | unit name | main aux | `\fastinc@unit{U<k>}{<path>}` (empty for an excluded unit without checkpoint) |
 | bookmark levels | main aux | `\fastinc@bkmlevels{<id>=<level>,...}` |
+| counters (M4) | main aux, header | `\fastinc@counters{<name>=<register>:<child>/<child>/;...}`: register and `\cl@<name>` reset list of each checkpointed counter |
 | page map | `<job>.frec` | `P <shipout#> <seg> <\c@page> <\thepage text>` per line |
 | file attribution | `<job>.frec` | `F <seg> <path>` per line |
 | stream marker | `.nlo` | `%fastinc-seg <seg>` per line |
