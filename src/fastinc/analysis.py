@@ -318,6 +318,16 @@ def analyse(config: Config) -> Analysis:
                 start -= 1
             split, reason, found = start, match, True
 
+    upto_begin = "".join(clean_lines[:begin])  # \documentclass may share the begin line
+    classes = find_macros(upto_begin, {"documentclass"})
+    class_line = LineIndex(upto_begin).line_of(classes[0].start) if classes else 0
+    structure_reasons: list[str] = []
+    if split <= class_line:
+        structure_reasons.append(
+            "the format split point is not after \\documentclass (same line?); "
+            "put \\documentclass on its own line"
+        )
+
     # 3. includes of the body (up to \end{document}), compilation units
     body_text = "".join(clean_lines[begin - 1 :])
     end_doc = next(
@@ -329,7 +339,7 @@ def analyse(config: Config) -> Analysis:
     headings = {*UNIT_HEADINGS, *config.unit_headings}
     first_commands: list[str | None] = []
     warnings: list[str] = []
-    reasons: list[str] = []
+    reasons: list[str] = list(structure_reasons)
     includes: list[Include] = []
     unit_texts: list[str] = []
     for macro in find_macros(body_text, {"include"}):

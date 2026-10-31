@@ -180,3 +180,10 @@ def test_sections_head_units_only_without_chapters(tmp_path: Path) -> None:
     files["ch/b.tex"] = "\\chapter{B}"
     a = analyse(make(tmp_path, files=files))
     assert [[i.arg for i in u.includes] for u in a.units] == [["ch/a", "ch/a2"], ["ch/b"]]
+
+
+def test_split_must_follow_documentclass(tmp_path: Path) -> None:
+    main = tmp_path / "d.tex"
+    main.write_text("\\documentclass{article}\\begin{document}x\\end{document}\n")
+    a = analyse(Config(main=main))
+    assert any("documentclass" in r for r in a.fallback_reasons)
