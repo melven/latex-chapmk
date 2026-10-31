@@ -322,25 +322,31 @@ Must equal the full run's files byte for byte; this is a unit test against refer
 
 #### 6.7.2 Line classification
 
-| Aux line | Class |
-|---|---|
-| `\newlabel{k}{...}` | export `k` (value = whole argument) |
-| `\@writefile{ext}{...}` | list contribution |
-| `\@setckpt{u}{...}`, `\fastinc@ckpt{u}{...}` | exit state |
-| `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs`, `\fastinc@base` | state records |
-| `\abx@aux@cite{n}{key}` | citation (set and order); written to the **main aux**, immediately, in citation order, one line per key per citation command (S5) |
-| `\abx@aux@refcontext`, `\abx@aux@segm`, `\abx@aux@page`, `\abx@aux@number`, other `\abx@aux@*` | biblatex data, key-scoped where a key is present; others global |
-| `\gdef\LT@<roman>{...}` (longtable) | *self*: read only by the same unit |
-| eqparbox records (exact form [S8]) | *self* (tags are chapter-scoped in the reference document) |
-| `\BKM@entry{...}{...}` (bookmark, main aux) | outline record: used only by the merge (§6.11); a change dirties nothing |
-| `\fastinc@bkmlevels{id=level,...}` (main aux) | outline levels of this run's entries (§6.4.2); merge only |
-| `\babel@aux{...}` | ignored (language state; A1 lint covers `\selectlanguage`) |
-| `\gdef\@abspage@last{N}` | ignored; rewritten to the merged page count in canonical `main.aux` |
-| hyperref/nameref internals (`\providecommand...`, `\hyper@...`) | ignored or main-only (S8) |
-| `\relax`, `\@input`, header lines | structural |
-| anything else | **global**: a change dirties all units and glue; print a warning naming the macro, so the table can be extended |
+Aux files are parsed as brace-balanced statements, not lines: `\@setckpt` and `\LT@…` records span several lines (S8).
 
-[S8] produces the actual inventory of aux lines from the test corpus. The table is then completed.
+| Aux line | File | Class |
+|---|---|---|
+| `\newlabel{k}{...}` | unit / main | export `k` (value = whole argument) |
+| `\@writefile{ext}{...}` | unit / main | list contribution. Main-aux ones come from glue; delayed glue writes (e.g. `\appendix`) may be flushed inside a unit slice (S8) and keep the glue run's position. |
+| `\@setckpt{u}{...}`, `\fastinc@ckpt{u}{...}` | unit | exit state |
+| `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs`, `\fastinc@base` | main | state records; `\fastinc@entry` also delimits the main-aux slices |
+| `\abx@aux@cite{n}{key}`, `\abx@aux@segm{n}{n}{key}` | main, unit slice | citation (set and order), one line per key per citation command (S5) |
+| `\abx@aux@refcontext`, `\abx@aux@defaultrefcontext{n}{key}{…}`, other keyed `\abx@aux@*` | main | biblatex data, merged per key |
+| `\abx@aux@read@bbl@mdfivesum`, `\abx@aux@read@bblrerun` | main, end | ignored (bookkeeping) |
+| `\gdef\LT@<roman>{\LT@entry…}` (longtable) | unit | *self* |
+| `\pgfsyspdfmark{pgfidN}{x}{y}` (pgf `remember picture`, todonotes) | main, unit slice | *self*, keyed by `pgfidN` |
+| `\expandafter\gdef\csname eqp@(this\|next\|minwd\|maxwd)@<tag>\endcsname{…}` (eqparbox) | main, end of document | *self* per tag. Written only for tags typeset in the run, so they are merged per tag from the latest run that wrote the tag. Owner = units of that run. |
+| `\global\csname @altsecnumformattrue\endcsname` (KOMA autodot) | main, end of document | OR-aggregate over the typeset segments; attributed to the run's included units; *global* |
+| `\BKM@entry{...}{...}` (bookmark) | main, unit slice | outline record: merge only (§6.11); a change dirties nothing |
+| `\fastinc@bkmlevels{id=level,...}` | main, end | outline levels (§6.4.2); merge only |
+| `\babel@aux{...}`, `\@nameuse{bbl@beforestart}`, `` \catcode `"\active `` | main, header | structural (language state; A1 lint covers `\selectlanguage`) |
+| `\gdef\@abspage@last{N}` | main, end | rewritten to the merged page count |
+| `\relax`, `\@input{u.aux}`, `\providecommand…` | header / glue | structural |
+| anything else | | **global**: a change dirties all units and glue; print a warning naming the macro, so the table can be extended |
+
+**Canonical main aux** (S8). Start from the main aux of the run that committed the glue, then:
+1. For each unit, replace the unit-content kinds (`\BKM@entry`, `\abx@aux@cite/segm`, `\pgfsyspdfmark`, fastinc records) in its slice with those from the unit's committed slice.
+2. Merge the end-of-document aggregates as in the table.
 
 ### 6.8 Dependency model
 
@@ -725,7 +731,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | S5 | biblatex `.bcf` contents after an `\includeonly` run; `.bcf` patch feasibility. *Done: patch needed and feasible (decision: patch).* |
 | S6 | *Done.* hyperref: `/Dests` name tree, dummy-destination log format, duplicate-destination warning and which definition wins, anchor naming (`section*.N` via `\Hy@linkcounter`), `\HyPL@Entry` semantics. `bookmark`: complete `\BKM@entry` grammar (level, open state, colour and style keys, `srcline`), how the outline is built from it, level-gap handling, and which keys depend on segment state (`id` from `\c@bookmark@seq@number`). |
 | S7 | *Done.* Running heads on the first page of a unit (scrbook marks) in a partial run vs a full run; whether A5 suffices; fix if feasible (restoring mark state). Result: heads differ for includes violating A5, and restoring the mark state does not help. Decision: compilation units (§6.1). |
-| S8 | Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
+| S8 | *Done.* Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
 | S9 | pikepdf merge prototype: two runs → merged PDF with working cross-run links, outline, page labels; verified by §3.3 items 1–3. |
 | S10 | SyncTeX merge prototype; verified with `synctex view/edit`. |
 | S11 | *Deferred to M7 (needs a Windows CI runner).* MiKTeX: format flags, output/aux-directory read order (repeat S2), on-the-fly install settings, `SOURCE_DATE_EPOCH` support, availability of mylatexformat, biber, makeindex and synctex. |
