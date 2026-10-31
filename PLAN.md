@@ -145,7 +145,7 @@ Input: the main file (CLI argument or `fastinc.toml`).
 
 1. **Locate the preamble:** lines `1 .. b-1`, where line `b` contains `\begin{document}`. Comments must be respected (`%` not preceded by `\`). Lines read via `\input` in the preamble are inlined for split detection only.
 2. **Split point `s`** (first line not dumped into the format): the first preamble line matching the deny list (§6.3.2), or a config override `format.split_before = "<regex>"`. If `s` falls inside an `\input`ed preamble file, set `s` to the line of that `\input`.
-3. **Segments** of the main body: tokenise top-level `\include{...}` occurrences. Units `U1..Un` are in document order; glue segments `G0..Gn` (possibly empty) lie between them. Unit ids are the `\include` arguments (e.g. `chapters/intro`).
+3. **Segments** of the main body: tokenise top-level `\include{...}` occurrences. Units `U1..Un` are in document order; glue segments `G0..Gn` (possibly empty) lie between them. Unit ids are the `\include` arguments (e.g. `chapters/intro`). An argument that is absolute or contains `..` is an error: its aux would be written outside the run directory, which TeX Live refuses (`openout_any = p`).
 4. **Fingerprints** (sha256): `pre` (lines `1..s-1` plus inlined files), `post` (lines `s..b-1`), `body` (main-file text from `b` to end, excluding nothing).
 5. **Unsupported-package detection** in the preamble → full-build mode (§6.14).
 
@@ -327,7 +327,7 @@ Must equal the full run's files byte for byte; this is a unit test against refer
 
 1. **Format and preamble:** `pre`, `post`. A change dirties everything.
 2. **Main body:** `body`. A change dirties everything (A3).
-3. **Own sources:** files attributed to *u* via `.ffl`, plus graphics. Files from `.fls` that are attributed to no segment are global inputs (a change dirties everything).
+3. **Own sources:** files attributed to *u* via `.ffl`, plus graphics. Files from `.fls` under the source tree that are attributed to no segment are global inputs (a change dirties everything). Not tracked by hash: files in the TeX distribution (covered by the TeX Live version string and the format fingerprint, §6.3.1) and files generated in the build directory (aux, derived lists, `.bbl`, `.nls`; covered by the dependency model).
 4. **Entry state:** the observed entry vector (§6.9 defines validity).
 5. **Imports:** label keys and cite keys used by *u*. These are determined by a **text scan** of *u*'s attributed TeX files for every known key K: regex `(?<=[{,\[\s])K(?=[},\]\s])`. Comments count too, so this is a safe over-approximation. A label value changes when the whole `\newlabel` argument changes (number, page, title, anchor). A cite value is the key's `.bbl` entry block plus its position in the `.bbl`.
 6. **Self aux:** the class-*self* lines of *u*'s aux at compile start must equal those after compile (standard rerun rule).
