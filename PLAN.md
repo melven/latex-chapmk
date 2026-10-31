@@ -339,7 +339,7 @@ Per segment, `state.json` stores:
 Derived list files (`.toc`, `.lof`, …) are **written by TeX**, not by a Python linker (M3).
 - A Python linker was tried and is not byte-identical: when writing, TeX expands content (`\protected@file@percent` → `%`), and aux macros such as `\babel@aux` add entries.
 - Every run reads all aux files at `\end{document}` (its new ones and the canonical ones of excluded units) and writes complete list files.
-- In M3 the list files stay canonical (verification). Since M4 every run's list files become canonical; the glue compiled in a later run reads them.
+- In M3 the list files stay canonical (verification). Since M4 every run's list files become canonical; the glue compiled in a later run reads them. Since M5 they are spliced per unit (§6.9.3, list-file markers).
 - **Deferred glue writes (M4 finding):** a non-immediate write of the glue (e.g. `\appendix` writes `\def\@chapapp{…}` to `.toc`/`.lof`/…) is flushed at the next shipout. In a full run that is the first page of the next unit, so the line follows that unit's entries; when that unit is excluded, it follows a later unit's entries. The list files then differ in the position of such lines. Consequence: right after a run that compiled such a unit, a run without it changes the list files and costs one glue-only run (T1 checks the steady state). Candidate fix (later): flush pending writes at an excluded `\include` with a dummy shipout that the merge drops.
 
 #### 6.7.2 Line classification
@@ -501,9 +501,19 @@ When a unit's exit state changes (e.g. its page count), successors would otherwi
 6. **Limit:** two consecutive mispredictions for the same unit → that iteration uses a tail run.
 
 Known misprediction cases are harmless and only cost an iteration:
-- page parity with `twoside, openright` (blank pages appear or disappear),
+- page parity with `twoside, openright` (blank pages appear or disappear) — *handled since M5:* see below,
 - reference-string width changes,
 - ToC length changes.
+
+**Implemented in M5** (`predict.py`, `incremental.Fixpoint.groups/batch/_verify`):
+- An iteration is a batch of at most `-j` runs: the selected compilation units are split into contiguous groups balanced by page count; every run compiles its group plus the glue. One run (M4 tail run) if `-j 1`, a global unit exists (it would be in every run), a segment of the zone has no vectors yet, or a unit was mispredicted twice in a row.
+- Vectors per segment (entry, exit, absolute set) are stored from the committing run (`state.vectors`). The prediction starts at the first unit of the batch with its entry observed in the latest run, and composes through all later segments.
+- **Odd start pages:** with `twoside` and `openright` (`\fastinc@layout` record) a unit that starts with a chapter-level heading starts on the next odd page, so its page counter composes as `X + odd(E') − odd(E)` with `odd(e) = e` for odd `e`, else `e + 1`. This removes the parity mispredictions (T10).
+- Predicted exits are written into the checkpoints (`\@setckpt` counters and `\fastinc@ckpt`) of the excluded units in the run directories (not in `canon/`).
+- Runs of a batch are committed in document order; the glue pages come from the last run; biber/makeindex run once per batch.
+- **List files of a batch** (§6.7.1): no run read all new contributions. fastinc.sty writes no-op markers into the list files (`\fastinc@lmark{U<k>}` before and `{/U<k>}` after each unit's contributions, written while the aux files are read at `\end{document}`). The canonical list files are the last run's, with each unit's section spliced in from the run that committed the unit (TeX-written bytes, so exact). Missing markers: the glue is rewritten by a glue-only run.
+- Verification: the actual exit of every unit compiled in a run before the last equals its prediction; at the first mismatch, all units after that run's group are dirty again ("misprediction"), and the glue.
+- Measured on the thesis corpus (4 cores): T2 `-j 1` 8.8 s, `-j 4` 6.8 s (3 iterations each). Each run has a fixed cost of about 1.4 s (format load, glue), so the speedup grows with the size of the units.
 
 #### 6.9.4 Cold build
 
@@ -872,6 +882,8 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | unit name | main aux | `\fastinc@unit{U<k>}{<path>}` (empty for an excluded unit without checkpoint) |
 | bookmark levels | main aux | `\fastinc@bkmlevels{<id>=<level>,...}` |
 | counters (M4) | main aux, header | `\fastinc@counters{<name>=<register>:<child>/<child>/;...}`: register and `\cl@<name>` reset list of each checkpointed counter |
+| layout (M5) | main aux, header | `\fastinc@layout{twoside=0|1,openright=0|1}` |
+| unit start (M5) | unit aux, first statement | `\fastinc@ustart{U<k>}`: at `\end{document}` writes `\fastinc@lmark{U<k>}` into the open list files; `\fastinc@entry{<seg>}` writes `\fastinc@lmark{/<seg>}` |
 | page map | `<job>.frec` | `P <shipout#> <seg> <\c@page> <\thepage text>` per line |
 | file attribution | `<job>.frec` | `F <seg> <path>` per line |
 | stream marker | `.nlo` | `%fastinc-seg <seg>` per line |
