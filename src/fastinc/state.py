@@ -9,7 +9,7 @@ from typing import Any
 
 from fastinc.errors import FastincError
 
-STATE_VERSION = 1
+STATE_VERSION = 2
 STATE_FILE = "state.json"
 
 
@@ -22,6 +22,18 @@ class SegmentArtifact:
 
 
 @dataclass
+class UnitInputs:
+    """What a unit was compiled with (§6.8.1), stored at commit: the observed entry vector,
+    the values of its imported keys at compile start, the hash of the derived list files at
+    compile start if the unit typesets a list, and whether its self data was stable."""
+
+    entry: dict[int, int]
+    imports: dict[str, str]
+    lists: str | None
+    self_stable: bool
+
+
+@dataclass
 class State:
     """Persistent state of the canonical build in ``<build>/canon``.
 
@@ -29,6 +41,13 @@ class State:
     runs must agree on dates. ``segment_files`` maps segment ids to {source path: sha256} of
     the files attributed to them; ``global_files`` are source files read by no particular
     segment (and ``.bib`` data sources); a change of these forces a cold build.
+
+    M4 (§6.6, §6.9): ``units`` holds the compile-time inputs per unit segment, ``citations``
+    the ``.bcf`` citekey elements per segment and ``aggregates`` the end-of-document aggregate
+    statements per segment (from the run that committed the segment). ``glue_inputs`` is the
+    hash of the glue inputs the committed glue was compiled with. ``pending`` holds the dirty
+    units with reasons and ``glue_pending`` why the glue is invalid, if the last build did not
+    reach the fixpoint (e.g. a TeX error).
     """
 
     epoch: int
@@ -39,6 +58,12 @@ class State:
     segment_files: dict[str, dict[str, str]] = field(default_factory=dict)
     global_files: dict[str, str] = field(default_factory=dict)
     next_run: int = 1
+    units: dict[str, UnitInputs] = field(default_factory=dict)
+    citations: dict[str, list[str]] = field(default_factory=dict)
+    aggregates: dict[str, list[str]] = field(default_factory=dict)
+    glue_inputs: str = ""
+    pending: dict[str, list[str]] = field(default_factory=dict)
+    glue_pending: str | None = None
     version: int = STATE_VERSION
 
     def run_names(self) -> set[str]:
@@ -58,6 +83,8 @@ def save_state(state: State, canon_dir: Path) -> None:
     data["segments"] = {
         k: {"run": v.run, "pages": list(v.pages)} for k, v in state.segments.items()
     }
+    for info in data["units"].values():
+        info["entry"] = {str(r): v for r, v in info["entry"].items()}
     tmp = canon_dir / f".{STATE_FILE}.tmp"
     tmp.write_text(json.dumps(data, indent=1, sort_keys=True), encoding="utf-8")
     tmp.replace(canon_dir / STATE_FILE)
@@ -84,6 +111,20 @@ def load_state(canon_dir: Path) -> State | None:
             segment_files={k: dict(v) for k, v in data["segment_files"].items()},
             global_files=dict(data["global_files"]),
             next_run=int(data["next_run"]),
+            units={
+                k: UnitInputs(
+                    entry={int(r): int(v) for r, v in u["entry"].items()},
+                    imports=dict(u["imports"]),
+                    lists=u["lists"],
+                    self_stable=bool(u["self_stable"]),
+                )
+                for k, u in data["units"].items()
+            },
+            citations={k: list(v) for k, v in data["citations"].items()},
+            aggregates={k: list(v) for k, v in data["aggregates"].items()},
+            glue_inputs=str(data["glue_inputs"]),
+            pending={k: list(v) for k, v in data["pending"].items()},
+            glue_pending=data["glue_pending"],
         )
     except (ValueError, KeyError, TypeError) as err:
         raise FastincError(f"{path}: corrupt state ({err}); run 'fastinc clean'") from err

@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+from pathlib import Path
 
 from fastinc.texsource import LineIndex, strip_comments
 
@@ -67,6 +68,8 @@ GLOBAL_COMMANDS = frozenset(
         "DeclareMathOperator",
     ]
 )
+#: source files linted: TeX sources, not packages or data
+LINT_SUFFIXES = (".tex", ".ltx")
 #: environments whose content is not scanned
 VERBATIM_ENVIRONMENTS = frozenset(
     [
@@ -106,6 +109,17 @@ class LintHit:
             f"{self.file}:{self.line}: {self.command} in a unit body: {advice} "
             "(the unit is treated as global: later units are recompiled with it)"
         )
+
+
+def lint_files(source_dir: Path, names: Iterable[str], allow: Iterable[str] = ()) -> list[LintHit]:
+    """Hits in the TeX sources among ``names`` (relative to ``source_dir``)."""
+    hits: list[LintHit] = []
+    for name in names:
+        path = source_dir / name
+        if Path(name).suffix in LINT_SUFFIXES and path.is_file():
+            text = path.read_bytes().decode("utf-8", "surrogateescape")
+            hits += lint_text(text, name, allow)
+    return hits
 
 
 def lint_text(text: str, file: str, allow: Iterable[str] = ()) -> list[LintHit]:

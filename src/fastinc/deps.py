@@ -2,7 +2,8 @@
 
 Keys are namespaced: ``L:<label>`` for ``\\newlabel`` keys, ``C:<citekey>`` for ``.bbl``
 entries. A value is a short hash of the whole ``\\newlabel`` argument (number, page, title,
-anchor; §6.8.1 item 5), or of the ``.bbl`` entry block plus its position (§6.10).
+anchor; §6.8.1 item 5), or of the ``.bbl`` entry block plus its position (§6.10) plus the
+keyed biblatex aux data of the key (e.g. ``\\abx@aux@number`` with ``defernumbers``).
 """
 
 from __future__ import annotations
@@ -12,10 +13,13 @@ import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from fastinc.aux import statements
+from fastinc.aux import normalize_statement, statements
 
 UNDEFINED = "-"
 _NEWLABEL = re.compile(r"^\\newlabel\{(.+?)\}\{(.*)\}\s*$", re.DOTALL)
+_ABX_KEYED = re.compile(r"^\\abx@aux@([A-Za-z@]+)\{[^{}]*\}\{([^{}]+)\}")
+#: biblatex aux statements that are not data of a key (citations, bookkeeping)
+_ABX_NOT_DATA = {"cite", "segm", "backref", "refcontext"}
 _BBL_ENTRY = re.compile(r"^\s*\\entry\{([^}]*)\}")
 _DELIMS = "{},[] \t\r\n"
 _TOKENS = re.compile(r"[{},\[\]\s]+")
@@ -44,8 +48,30 @@ def label_values(aux_lines: Iterable[list[str]]) -> dict[str, str]:
     return values
 
 
-def bbl_values(bbl: Path) -> dict[str, str]:
-    """``C:key`` → hash of ``<position>:<entry block>`` per entry of a biblatex ``.bbl``."""
+def defined_labels(stmts: Iterable[str]) -> list[str]:
+    """``L:key`` of the ``\\newlabel`` statements among ``stmts``."""
+    return [f"L:{m.group(1)}" for m in map(_NEWLABEL.match, stmts) if m]
+
+
+def cite_values(bbl: Path, aux_statements: Iterable[str] = ()) -> dict[str, str]:
+    """``C:key`` → hash of ``<position>:<entry block>`` of the key's ``.bbl`` entry and of
+    the keyed biblatex aux statements naming the key (``\\abx@aux@number{..}{key}...``)."""
+    blocks = _bbl_blocks(bbl)
+    data: dict[str, list[str]] = {}
+    for stmt in aux_statements:
+        m = _ABX_KEYED.match(stmt)
+        if m and m.group(1) not in _ABX_NOT_DATA:
+            data.setdefault(m.group(2), []).append(normalize_statement(stmt))
+    return {
+        f"C:{key}": short_hash(
+            blocks.get(key, UNDEFINED) + "\0" + "\n".join(sorted(data.get(key, [])))
+        )
+        for key in blocks.keys() | data.keys()
+    }
+
+
+def _bbl_blocks(bbl: Path) -> dict[str, str]:
+    """``key`` → ``<position>:<entry block>`` per entry of a biblatex ``.bbl``."""
     if not bbl.is_file():
         return {}
     values: dict[str, str] = {}
@@ -58,7 +84,7 @@ def bbl_values(bbl: Path) -> dict[str, str]:
         elif key is not None:
             block.append(line)
             if line.strip() == "\\endentry":
-                values[f"C:{key}"] = short_hash(f"{len(values)}:" + "\n".join(block))
+                values[key] = f"{len(values)}:" + "\n".join(block)
                 key = None
     return values
 

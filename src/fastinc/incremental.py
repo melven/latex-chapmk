@@ -1,10 +1,22 @@
-"""Incremental builder, M3 scope (PLAN §6.6, §6.9): cold builds, single-step incremental runs
-with strict verification, merge and publish.
+"""Incremental builder (PLAN §5, §6.9; M4): full mode for fallback reasons, otherwise the
+fixpoint loop.
 
-Correctness rule: a unit compiled alone is accepted only if everything it passes on to other
-segments is byte-identical to the canonical state (its aux file, its main-aux slice, its
-nomenclature entries). Then the glue and all other units are still valid. Otherwise a cold
-build follows (M4 replaces this by the dependency model and the fixpoint).
+Each iteration compiles the dirty compilation units (all units: a full run; none: a glue-only
+run) together with the glue in one run, commits the result into the canonical state
+(:mod:`fastinc.canon`) and recomputes the dirty set from the dependency model (§6.8):
+
+- a unit is dirty if its sources changed, an imported label or citation value changed, its
+  self data was unstable, its observed entry state changed or it follows such a unit (tail
+  run: without prediction, M5, the later units are compiled in the same run), unclassified
+  or aggregate aux data changed, or a list file it typesets changed; *global* units (lint,
+  §6.8.4) are compiled in every run, and with all later units when they are dirty;
+- the glue (compiled in every run) is valid if its inputs (derived files, imported values,
+  glue aux data, glue sources) equal those the committed glue run started from.
+
+The loop ends when nothing is dirty and the glue is valid (then every committed segment was
+compiled from the final canonical state); otherwise after :data:`MAX_ITERATIONS` runs the
+build falls back to full mode. A cold build is the same loop starting with all units dirty
+and an empty canonical state (§6.9.4).
 """
 
 from __future__ import annotations
@@ -20,28 +32,23 @@ from pathlib import Path
 from typing import Any
 
 from fastinc.analysis import Analysis
-from fastinc.aux import (
-    bookmark_levels,
-    content_lines,
-    parse_bookmark,
-    read_lines,
-    segment_slices,
-)
+from fastinc.aux import AGGREGATE, GLOBAL, command_name, read_lines, run_input_main_aux, statements
+from fastinc.canon import CanonView, commit_run, read_canon, segments
 from fastinc.config import Config
+from fastinc.deps import TokenScan, changed_imports, imports, read_text, short_hash
 from fastinc.errors import FastincError, TexError
 from fastinc.fmt import FormatInfo, ensure_format, format_stamp
-from fastinc.fullbuild import PassResult, converge, full_build, read_inputs
+from fastinc.fullbuild import full_build, read_inputs
 from fastinc.layout import Layout
-from fastinc.logs import map_paths
-from fastinc.merge_pdf import MergeError, OutlineEntry, PageSource, merge_pdf
-from fastinc.publish import publish, text_writer
-from fastinc.records import RecordError, RunRecords, read_nomenclature, read_run_records
-from fastinc.runner import DERIVED_SUFFIXES, RUN_MAIN, RunSpec, prepare_run_dir, run_one
-from fastinc.state import SegmentArtifact, State, load_state, save_state
-from fastinc.synctex import SyncTexError
-from fastinc.synctex import merge as merge_synctex
+from fastinc.lint import LintHit, lint_files
+from fastinc.outputs import MergeFailedError, failed_run, publish_state
+from fastinc.records import RecordError, RunRecords, read_run_records
+from fastinc.runner import DERIVED_SUFFIXES, RunSpec, prepare_run_dir, run_one
+from fastinc.state import State, UnitInputs, load_state, save_state
 from fastinc.texdist import TexDistribution
+from fastinc.tools import ToolInputError
 
+MAX_ITERATIONS = 8
 #: Packages that force full mode when loaded at all (also by the class; seen in the .fls).
 RUNTIME_UNSUPPORTED = (
     "imakeidx.sty",
@@ -64,7 +71,8 @@ class FallbackError(FastincError):
 
 @dataclass
 class BuildReport:
-    """What a build did (``fastinc build --report``): mode, reason, runs, compiled includes."""
+    """What a build did (``fastinc build --report``): mode, reason, runs (with selection and
+    dirty reasons), compiled includes, lint warnings."""
 
     mode: str  # "full", "cold", "incremental" or "noop"
     reason: str | None = None
@@ -72,6 +80,7 @@ class BuildReport:
     compiled: list[str] = field(default_factory=list)
     seconds: float = 0.0
     pdf: str | None = None
+    warnings: list[str] = field(default_factory=list)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=1)
@@ -142,7 +151,7 @@ def _global_files(ctx: Context, run_dir: Path, attributed: set[str]) -> dict[str
         for m in re.finditer(r"<bcf:datasource[^>]*>([^<]+)</bcf:datasource>", bcf.read_text()):
             if (ctx.analysis.source_dir / m.group(1)).is_file():
                 names.add(Path(m.group(1)).as_posix())
-    return _hashes(ctx, names)
+    return _hashes(ctx, names - attributed)
 
 
 def _changed(ctx: Context, files: dict[str, str]) -> list[str]:
@@ -152,13 +161,6 @@ def _changed(ctx: Context, files: dict[str, str]) -> list[str]:
         if not path.is_file() or _sha(path) != digest:
             out.append(name)
     return out
-
-
-# --- build steps --------------------------------------------------------------------------------
-
-
-def _segments(analysis: Analysis) -> list[str]:
-    return ["G0"] + [s for k in range(1, len(analysis.includes) + 1) for s in (f"U{k}", f"G{k}")]
 
 
 def _check_runtime_support(ctx: Context, run_dir: Path, fmt: FormatInfo) -> None:
@@ -177,77 +179,6 @@ def _check_runtime_support(ctx: Context, run_dir: Path, fmt: FormatInfo) -> None
         )
 
 
-def _failed_run(ctx: Context, run_dir: Path, err: TexError) -> TexError:
-    """Publish the failing run's log (paths mapped) and point the error at it (§6.13)."""
-    log = run_dir / f"{ctx.job}.log"
-    text = log.read_text(errors="replace") if log.is_file() else ""
-    published = publish(
-        text_writer(_map(ctx, run_dir, text)),
-        ctx.layout.output(".log"),
-    )
-    err.log = published
-    return err
-
-
-def _map(ctx: Context, run_dir: Path, text: str) -> str:
-    mapping = [
-        (str(run_dir / RUN_MAIN), str(ctx.analysis.main)),
-        *ctx.layout.path_map(),
-        (RUN_MAIN, ctx.analysis.main.name),
-    ]
-    return map_paths(text, mapping)
-
-
-def _commit_canon(ctx: Context, run_dir: Path) -> None:
-    canon = ctx.layout.canon_dir
-    if canon.exists():
-        shutil.rmtree(canon)
-    canon.mkdir(parents=True)
-    names = [f"{ctx.job}.aux", *(inc.aux_name for inc in ctx.analysis.includes)]
-    names += [f"{ctx.job}{s}" for s in (*DERIVED_SUFFIXES, ".bcf", ".nlo")]
-    for name in names:
-        src = run_dir / name
-        if src.is_file():
-            (canon / name).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(src, canon / name)
-
-
-def cold_build(ctx: Context, epoch: int, next_run: int, fmt: FormatInfo) -> State:
-    """All units in one run (format + fastinc.sty) to the fixpoint; commit as canonical state."""
-    name = f"r{next_run}"
-    spec = RunSpec(name, None)
-    run_dir = prepare_run_dir(ctx.analysis, ctx.layout, spec, deny_names=ctx.config.state_ignore)
-    env = ctx.env(epoch)
-
-    def run_pass() -> PassResult:
-        r = run_one(ctx.analysis, ctx.layout, ctx.dist, env, spec, fmt.name)
-        return PassResult(r.ok, r.first_error)
-
-    try:
-        converge(ctx.job, run_dir, ctx.layout.shadow_dir, ctx.dist, env, run_pass, report=ctx.say)
-    except TexError as err:
-        if err.first_error is None:  # no fixpoint: plain full mode decides
-            raise FallbackError(str(err)) from err
-        raise _failed_run(ctx, run_dir, err) from None
-    _check_runtime_support(ctx, run_dir, fmt)
-    recs = _records(ctx, run_dir)
-    _commit_canon(ctx, run_dir)
-    seg_files = _segment_files(ctx, recs)
-    attributed = {n for files in seg_files.values() for n in files}
-    state = State(
-        epoch=epoch,
-        fingerprints=asdict(ctx.analysis.fingerprints),
-        format_stamp=format_stamp(ctx.analysis, ctx.dist.version),
-        includes=[inc.arg for inc in ctx.analysis.includes],
-        segments={seg: SegmentArtifact(name, _pages(recs, seg)) for seg in _segments(ctx.analysis)},
-        segment_files=seg_files,
-        global_files=_global_files(ctx, run_dir, attributed),
-        next_run=next_run + 1,
-    )
-    save_state(state, ctx.layout.canon_dir)
-    return state
-
-
 def _records(ctx: Context, run_dir: Path) -> RunRecords:
     try:
         return read_run_records(run_dir, ctx.analysis)
@@ -255,184 +186,302 @@ def _records(ctx: Context, run_dir: Path) -> RunRecords:
         raise FallbackError(f"records: {err}") from err
 
 
-def _pages(recs: RunRecords, seg: str) -> tuple[int, ...]:
-    return tuple(p.index for p in recs.pages if p.segment == seg)
+def _short(items: list[str], limit: int = 3) -> str:
+    shown = ", ".join(items[:limit])
+    return shown if len(items) <= limit else f"{shown}, ... (+{len(items) - limit})"
 
 
-def _verify(ctx: Context, run_dir: Path, units: list[int]) -> str | None:
-    """None if the compiled units pass on exactly what the canonical state has, else why not."""
-    canon = ctx.layout.canon_dir
-    new_aux, old_aux = read_lines(run_dir / f"{ctx.job}.aux"), read_lines(canon / f"{ctx.job}.aux")
-    new_slices, old_slices = segment_slices(new_aux), segment_slices(old_aux)
-    new_levels, old_levels = bookmark_levels(new_aux), bookmark_levels(old_aux)
-    nlo_new, nlo_old = run_dir / f"{ctx.job}.nlo", canon / f"{ctx.job}.nlo"
-    new_nom = read_nomenclature(nlo_new) if nlo_new.is_file() else {}
-    old_nom = read_nomenclature(nlo_old) if nlo_old.is_file() else {}
-    for k in units:
-        inc = ctx.analysis.includes[k - 1]
-        old, new = canon / inc.aux_name, run_dir / inc.aux_name
-        if not old.is_file() or not new.is_file():
-            return f"{inc.arg}: aux file missing"
-        if content_lines(read_lines(old)) != content_lines(read_lines(new)):
-            return f"{inc.arg}: aux file changed (labels, lists, state or self data)"
-        seg = f"U{k}"
-        new_slice = _comparable(new_slices.get(seg, []), new_levels)
-        if new_slice != _comparable(old_slices.get(seg, []), old_levels):
-            return f"{inc.arg}: entry state, citations, bookmarks or positions changed"
-        if new_nom.get(seg, []) != old_nom.get(seg, []):
-            return f"{inc.arg}: nomenclature entries changed"
-    return None
+# --- the fixpoint loop -------------------------------------------------------------------------
 
 
-def _comparable(lines: list[str], levels: dict[int, int]) -> list[str]:
-    """Slice lines without structural lines; bookmark entries with their run-local id replaced
-    by their level (S6: ids number the entries of a run)."""
-    out = []
-    for line in content_lines(lines):
-        bkm = parse_bookmark(line)
-        if bkm is not None:
-            line = re.sub(r"\{id=\d+", f"{{level={levels.get(bkm.id)}", line, count=1)
-        out.append(line)
-    return out
+class Fixpoint:
+    """Dirty sets, runs and commits of one build (§6.9.2; one run per iteration, M4)."""
 
+    def __init__(self, ctx: Context, state: State, fmt: FormatInfo) -> None:
+        self.ctx, self.state, self.fmt = ctx, state, fmt
+        self.a = ctx.analysis
+        self.units = [f"U{k}" for k in range(1, len(self.a.includes) + 1)]
+        index = {inc.arg: k for k, inc in enumerate(self.a.includes, start=1)}
+        self.group: dict[int, list[int]] = {}
+        for unit in self.a.units:
+            ks = [index[inc.arg] for inc in unit.includes]
+            for k in ks:
+                self.group[k] = ks
+        self._scans: dict[str, TokenScan] = {}
+        self._lint: dict[str, list[LintHit]] = {}
+        self.warnings: list[str] = []
 
-def _dirty_units(ctx: Context, state: State) -> tuple[list[int], str | None]:
-    """Include indices (1-based) to compile, grouped by compilation unit, or a cold reason."""
-    for seg in _segments(ctx.analysis):
-        if seg.startswith("G") and _changed(ctx, state.segment_files.get(seg, {})):
-            return (
-                [],
-                f"glue sources changed ({', '.join(_changed(ctx, state.segment_files[seg]))})",
+    # sources -------------------------------------------------------------------------------
+
+    def _texts(self, seg: str) -> list[str]:
+        texts = []
+        for name in self.state.segment_files.get(seg, {}):
+            text = read_text(self.a.source_dir / name)
+            if text is not None:
+                texts.append(text)
+        return texts
+
+    def scan(self, seg: str) -> TokenScan:
+        """Token scan of a unit's attributed sources (``"glue"``: main file and glue files)."""
+        if seg not in self._scans:
+            if seg == "glue":
+                texts = [read_text(self.a.main) or ""]
+                for g in segments(self.a):
+                    if g.startswith("G"):
+                        texts += self._texts(g)
+            else:
+                texts = self._texts(seg)
+            self._scans[seg] = TokenScan(texts)
+        return self._scans[seg]
+
+    def lint(self, seg: str) -> list[LintHit]:
+        """A1 lint hits in the TeX sources attributed to a unit (§6.8.4)."""
+        if seg not in self._lint:
+            self._lint[seg] = lint_files(
+                self.a.source_dir, self.state.segment_files.get(seg, {}), self.ctx.config.lint_allow
             )
-    index = {inc.arg: k for k, inc in enumerate(ctx.analysis.includes, start=1)}
-    dirty: list[int] = []
-    for unit in ctx.analysis.units:
-        ks = [index[inc.arg] for inc in unit.includes]
-        if any(_changed(ctx, state.segment_files.get(f"U{k}", {})) for k in ks):
-            dirty += ks
-    return dirty, None
+        return self._lint[seg]
 
+    def is_global(self, seg: str) -> bool:
+        return bool(self.lint(seg))
 
-def _cold_reason(ctx: Context, state: State | None, stamp: str) -> str | None:
-    if state is None:
-        return "no previous state"
-    if state.format_stamp != stamp:
-        return "preamble (format part) or TeX installation changed"
-    if state.fingerprints != asdict(ctx.analysis.fingerprints):
-        return "main file changed (preamble or body)"
-    if state.includes != [inc.arg for inc in ctx.analysis.includes]:
-        return "list of includes changed"
-    changed = _changed(ctx, state.global_files)
-    if changed:
-        return f"global inputs changed ({', '.join(changed[:3])})"
-    return None
+    def glue_inputs(self, view: CanonView) -> str:
+        """The glue's inputs (§6.8.2) as ``lists=..;labels=..;aux=..``."""
+        values = imports(self.scan("glue"), view.values)
+        parts = {
+            "lists": view.lists,
+            "labels": short_hash(json.dumps(sorted(values.items()))),
+            "aux": short_hash("\n".join(view.glue_data())),
+        }
+        return ";".join(f"{k}={v}" for k, v in parts.items())
 
+    def _glue_sources_changed(self) -> list[str]:
+        return [
+            name
+            for g in segments(self.a)
+            if g.startswith("G")
+            for name in _changed(self.ctx, self.state.segment_files.get(g, {}))
+        ]
 
-def incremental_step(ctx: Context, state: State, fmt: FormatInfo) -> tuple[State, list[int]] | str:
-    """Compile the dirty units in one run and commit them; returns the new state and compiled
-    indices, or a reason for a cold build."""
-    dirty, reason = _dirty_units(ctx, state)
-    if reason is not None:
-        return reason
-    if not dirty:
-        return state, []
-    name = state.new_run_name()
-    selection = tuple(ctx.analysis.includes[k - 1].arg for k in dirty)
-    spec = RunSpec(name, selection)
-    run_dir = prepare_run_dir(
-        ctx.analysis,
-        ctx.layout,
-        spec,
-        canon_dir=ctx.layout.canon_dir,
-        deny_names=ctx.config.state_ignore,
-    )
-    ctx.say(f"compiling {', '.join(selection)}")
-    r = run_one(ctx.analysis, ctx.layout, ctx.dist, ctx.env(state.epoch), spec, fmt.name)
-    if not r.ok:
-        raise _failed_run(ctx, run_dir, TexError("pdflatex failed", first_error=r.first_error))
-    recs = _records(ctx, run_dir)
-    why = _verify(ctx, run_dir, dirty)
-    if why is not None:
-        return why
-    new_files = _segment_files(ctx, recs)
-    for k in dirty:
-        seg = f"U{k}"
-        state.segments[seg] = SegmentArtifact(name, _pages(recs, seg))
-        state.segment_files[seg] = new_files.get(seg, {})
-    save_state(state, ctx.layout.canon_dir)
-    return state, dirty
+    # dirty sets ----------------------------------------------------------------------------
 
+    def initial(self) -> tuple[dict[str, list[str]], str | None]:
+        """Dirty units and glue at the start of an incremental build."""
+        dirty = {seg: list(reasons) for seg, reasons in self.state.pending.items()}
+        for seg in self.units:
+            if seg not in self.state.units:
+                dirty.setdefault(seg, []).append("never compiled")
+                continue
+            changed = _changed(self.ctx, self.state.segment_files.get(seg, {}))
+            if changed:
+                dirty.setdefault(seg, []).append(f"sources changed ({_short(changed)})")
+        glue = self.state.glue_pending
+        changed = self._glue_sources_changed()
+        if changed:
+            glue = f"glue sources changed ({_short(changed)})"
+        return dirty, glue
 
-# --- merge and publish ----------------------------------------------------------------------------
+    def after_run(
+        self, recs: RunRecords, compiled: set[str], pre: CanonView, post: CanonView
+    ) -> tuple[dict[str, list[str]], str | None]:
+        """Dirty units and glue after committing a run (§6.9.1)."""
+        dirty: dict[str, list[str]] = {}
 
+        def add(seg: str, reason: str) -> None:
+            dirty.setdefault(seg, []).append(reason)
 
-def publish_state(ctx: Context, state: State) -> Path:
-    """Merge the canonical segments into the published PDF, SyncTeX file and log."""
-    runs: dict[str, RunRecords] = {}
-    slices: dict[str, dict[str, list[str]]] = {}
+        g_pre, g_post = pre.of_class(GLOBAL), post.of_class(GLOBAL)
+        if g_pre != g_post:
+            names = sorted({command_name(s) for s in set(g_pre) ^ set(g_post)})
+            msg = f"unclassified aux data changed ({_short(names)})"
+            self._warn(f"{msg}: all units are recompiled; please report these macros")
+            for seg in self.units:
+                add(seg, msg)
+        if set(pre.of_class(AGGREGATE)) != set(post.of_class(AGGREGATE)):
+            for seg in self.units:
+                add(seg, "aggregate aux data changed (e.g. KOMA autodot)")
+        eqp_pre, eqp_post = pre.eqp(), post.eqp()
+        if any(eqp_pre.get(k) != v for k, v in eqp_post.items()):
+            for seg in sorted(compiled):
+                add(seg, "eqparbox widths changed")
+        for seg in self.units:
+            info = self.state.units.get(seg)
+            if info is None:
+                add(seg, "never compiled")
+                continue
+            if seg in compiled and not info.self_stable:
+                add(seg, "self data unstable (rerun)")
+            if seg not in compiled and seg in recs.entries:
+                entry = recs.entry_state(seg)
+                if entry != info.entry:
+                    regs = sorted(
+                        r
+                        for r in entry.keys() | info.entry.keys()
+                        if entry.get(r) != info.entry.get(r)
+                    )
+                    add(seg, f"entry state changed (registers {_short([str(r) for r in regs])})")
+            keys = changed_imports(info.imports, self.scan(seg), post.values)
+            if keys:
+                add(seg, f"imports changed ({_short(keys)})")
+            if info.lists is not None and info.lists != post.lists:
+                add(seg, "list files changed")
+            changed = _changed(self.ctx, self.state.segment_files.get(seg, {}))
+            if changed:
+                add(seg, f"sources changed ({_short(changed)})")
+        # tail run (§6.9.2, no prediction in M4): recompiling a unit whose entry changed may
+        # change its exit, so all later units are compiled with it, in one run
+        moved = [
+            i
+            for i, seg in enumerate(self.units)
+            if any(r.startswith("entry state changed") for r in dirty.get(seg, []))
+        ]
+        if moved:
+            first = self.a.includes[moved[0]].arg
+            for seg in self.units[moved[0] + 1 :]:
+                add(seg, f"after {first}, whose entry state changed (tail run)")
+        glue = None
+        now = self.glue_inputs(post)
+        if now != self.state.glue_inputs:
+            old = dict(p.split("=", 1) for p in self.state.glue_inputs.split(";") if "=" in p)
+            parts = [k for k, v in (p.split("=", 1) for p in now.split(";")) if old.get(k) != v]
+            glue = f"glue inputs changed ({', '.join(parts)})"
+        changed = self._glue_sources_changed()
+        if changed:
+            glue = f"glue sources changed ({_short(changed)})"
+        return dirty, glue
 
-    def records(run: str) -> RunRecords:
-        if run not in runs:
-            run_dir = ctx.layout.runs_dir / run
-            runs[run] = read_run_records(run_dir, ctx.analysis)
-            slices[run] = segment_slices(read_lines(run_dir / f"{ctx.job}.aux"))
-        return runs[run]
+    def _warn(self, msg: str) -> None:
+        if msg not in self.warnings:
+            self.warnings.append(msg)
+            self.ctx.say(f"warning: {msg}")
 
-    pages: list[PageSource] = []
-    outline: list[OutlineEntry] = []
-    syn: list[tuple[Path, int]] = []
-    for seg in _segments(ctx.analysis):
-        art = state.segments[seg]
-        recs = records(art.run)
-        run_dir = ctx.layout.runs_dir / art.run
-        by_index = {p.index: p for p in recs.pages}
-        for i in art.pages:
-            pages.append(
-                PageSource(run_dir / f"{ctx.job}.pdf", i, by_index[i].value, by_index[i].label)
-            )
-            syn.append((run_dir / f"{ctx.job}.synctex.gz", i))
-        for line in slices[art.run].get(seg, []):
-            bkm = parse_bookmark(line)
-            if bkm is not None:
-                level = recs.bookmark_levels.get(bkm.id, 0)
-                outline.append(OutlineEntry(level, bkm.open, bkm.dest, bkm.title))
-    first_run = ctx.layout.runs_dir / state.segments["G0"].run
-    pdf = publish(
-        lambda tmp: _merge_pdf(pages, outline, first_run / f"{ctx.job}.pdf", tmp),
-        ctx.layout.output(".pdf"),
-    )
-    main_name = f"{ctx.analysis.source_dir}/./{ctx.analysis.main.name}"
+    # runs ----------------------------------------------------------------------------------
 
-    def map_path(path: str) -> str:
-        if Path(path).name == RUN_MAIN:
-            return main_name
-        for old, new in ctx.layout.path_map():
-            if path.startswith(old + "/"):
-                return new + path[len(old) :]
-        return path
+    def plan(self, dirty: Mapping[str, list[str]]) -> tuple[list[int] | None, dict[str, list[str]]]:
+        """Include indices to compile (None = all) and the reasons per unit segment.
 
-    try:
-        publish(lambda tmp: merge_synctex(syn, map_path, tmp), ctx.layout.output(".synctex.gz"))
-    except SyncTexError as err:
-        raise FallbackError(f"SyncTeX merge: {err}") from err
-    texts = []
-    for run in sorted(state.run_names(), key=lambda r: int(r[1:])):
-        log = ctx.layout.runs_dir / run / f"{ctx.job}.log"
-        texts.append(
-            f"%%% fastinc: log of run {run}\n"
-            + _map(ctx, log.parent, log.read_text(errors="replace"))
+        Whole compilation units are compiled. A *global* unit (lint, §6.8.4) changes state
+        that checkpoints do not restore, so it is part of every run; when it is dirty itself,
+        all later units are compiled with it (they see its new state only in the same run).
+        """
+        reasons = {seg: list(r) for seg, r in dirty.items()}
+        ks: set[int] = set()
+        for seg in dirty:
+            ks.update(self.group[int(seg[1:])])
+        n = len(self.units)
+        own = [k for k in sorted(ks) if self.is_global(f"U{k}")]
+        if own:
+            arg = self.a.includes[own[0] - 1].arg
+            for k in range(own[0] + 1, n + 1):
+                if k not in ks:
+                    reasons[f"U{k}"] = [f"follows the global unit {arg} (lint)"]
+                    ks.add(k)
+        for k in range(1, n + 1):
+            if k not in ks and self.is_global(f"U{k}"):
+                reasons[f"U{k}"] = ["global unit (lint): compiled in every run for its state"]
+                ks.update(self.group[k])
+        return (None if len(ks) == n else sorted(ks)), reasons
+
+    def run(
+        self, selection: list[int] | None, dirty: Mapping[str, list[str]], glue: str | None
+    ) -> dict[str, Any]:
+        """Compile ``selection`` plus glue in one run and commit it."""
+        ctx, a, state = self.ctx, self.a, self.state
+        name = state.new_run_name()
+        ks = list(range(1, len(self.units) + 1)) if selection is None else selection
+        args = None if selection is None else tuple(a.includes[k - 1].arg for k in ks)
+        compiled = {f"U{k}" for k in ks}
+        for seg in sorted(compiled, key=lambda s: int(s[1:])):
+            for hit in self.lint(seg):
+                self._warn(hit.message())
+        what = "all units" if args is None else ", ".join(args) if args else "glue only"
+        ctx.say(f"run {name}: {what}")
+        canon = ctx.layout.canon_dir
+        spec = RunSpec(name, args)
+        run_dir = prepare_run_dir(
+            a,
+            ctx.layout,
+            spec,
+            canon_dir=canon if canon.is_dir() else None,
+            deny_names=ctx.config.state_ignore,
         )
-    publish(text_writer("\n".join(texts)), ctx.layout.output(".log"))
-    return pdf
+        main_aux = run_dir / f"{ctx.job}.aux"
+        if main_aux.is_file():
+            excluded = {seg for seg in self.units if seg not in compiled}
+            stmts = run_input_main_aux(statements(read_lines(main_aux)), excluded)
+            main_aux.write_text("\n".join(stmts) + "\n", encoding="utf-8", errors="surrogateescape")
+        pre = read_canon(a, canon)
+        pre_glue = self.glue_inputs(pre)
+        pre_self = {seg: pre.unit_self(seg) for seg in compiled}
+        env = ctx.env(state.epoch)
+        result = run_one(a, ctx.layout, ctx.dist, env, spec, self.fmt.name)
+        if not result.ok:
+            raise failed_run(
+                a, ctx.layout, run_dir, TexError("pdflatex failed", first_error=result.first_error)
+            )
+        recs = _records(ctx, run_dir)
+        _check_runtime_support(ctx, run_dir, self.fmt)
+        try:
+            tools = commit_run(a, ctx.layout, ctx.dist, env, state, name, recs, compiled)
+        except ToolInputError as err:
+            raise FallbackError(str(err)) from err
+        new_files = _segment_files(ctx, recs)
+        for seg in [*compiled, *(g for g in segments(a) if g.startswith("G"))]:
+            state.segment_files[seg] = new_files.get(seg, {})
+            self._scans.pop(seg, None)
+            self._lint.pop(seg, None)
+        self._scans.pop("glue", None)
+        attributed = {n for files in state.segment_files.values() for n in files}
+        state.global_files = {
+            n: h
+            for n, h in {**state.global_files, **_global_files(ctx, run_dir, attributed)}.items()
+            if n not in attributed
+        }
+        post = read_canon(a, canon)
+        derived = tuple(f"{ctx.job}{s}" for s in DERIVED_SUFFIXES)
+        for seg in compiled:
+            scan = self.scan(seg)
+            reads = scan.reads_lists() or any(
+                s == seg and f.endswith(derived) for s, f in recs.files
+            )
+            state.units[seg] = UnitInputs(
+                entry=recs.entry_state(seg),
+                imports=imports(scan, pre.values),
+                lists=pre.lists if reads else None,
+                self_stable=pre_self[seg] == post.unit_self(seg),
+            )
+        state.glue_inputs = pre_glue
+        state.pending, state.glue_pending = self.after_run(recs, compiled, pre, post)
+        save_state(state, canon)
+        return {
+            "name": name,
+            "selection": None if args is None else list(args),
+            "reasons": {a.includes[int(s[1:]) - 1].arg: r for s, r in sorted(dirty.items())},
+            "glue": glue,
+            "tools": tools,
+            "seconds": round(result.seconds, 2),
+        }
+
+    def converge(self, dirty: dict[str, list[str]], glue: str | None) -> list[dict[str, Any]]:
+        """Run until nothing is dirty and the glue is valid (§6.9.2)."""
+        runs: list[dict[str, Any]] = []
+        for _ in range(MAX_ITERATIONS):
+            if not dirty and glue is None:
+                return runs
+            selection, reasons = self.plan(dirty)
+            for seg, why in sorted(reasons.items(), key=lambda x: int(x[0][1:])):
+                arg = self.a.includes[int(seg[1:]) - 1].arg
+                self.ctx.say(f"dirty {arg}: {'; '.join(why)}")
+            if glue is not None:
+                self.ctx.say(f"glue: {glue}")
+            runs.append(self.run(selection, reasons, glue))
+            dirty, glue = self.state.pending, self.state.glue_pending
+        if not dirty and glue is None:
+            return runs
+        raise FallbackError(f"no fixpoint after {MAX_ITERATIONS} runs")
 
 
-def _merge_pdf(
-    pages: list[PageSource], outline: list[OutlineEntry], catalog: Path, out: Path
-) -> None:
-    try:
-        merge_pdf(pages, outline, catalog, out)
-    except MergeError as err:
-        raise FallbackError(f"PDF merge: {err}") from err
+# --- entry point -----------------------------------------------------------------------------
 
 
 def _gc(ctx: Context, state: State) -> None:
@@ -442,9 +491,6 @@ def _gc(ctx: Context, state: State) -> None:
     for d in ctx.layout.runs_dir.iterdir():
         if d.is_dir() and d.name not in keep:
             shutil.rmtree(d)
-
-
-# --- entry point -----------------------------------------------------------------------------
 
 
 def _full(ctx: Context, epoch: int, reason: str, start: float) -> BuildReport:
@@ -466,8 +512,23 @@ def _full(ctx: Context, epoch: int, reason: str, start: float) -> BuildReport:
     )
 
 
+def _cold_reason(ctx: Context, state: State | None, stamp: str) -> str | None:
+    if state is None:
+        return "no previous state"
+    if state.format_stamp != stamp:
+        return "preamble (format part) or TeX installation changed"
+    if state.fingerprints != asdict(ctx.analysis.fingerprints):
+        return "main file changed (preamble or body)"
+    if state.includes != [inc.arg for inc in ctx.analysis.includes]:
+        return "list of includes changed"
+    changed = _changed(ctx, state.global_files)
+    if changed:
+        return f"global inputs changed ({_short(changed)})"
+    return None
+
+
 def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
-    """Build the document: full mode, cold build, incremental step or nothing (§5)."""
+    """Build the document: full mode, or the fixpoint loop (cold or incremental) (§5)."""
     start = time.monotonic()
     canon = ctx.layout.canon_dir
     if full:
@@ -484,53 +545,50 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         state = load_state(canon)
         stamp = format_stamp(ctx.analysis, ctx.dist.version)
         reason = _cold_reason(ctx, state, stamp)
-        if reason is None and state is not None:
-            fmt = ensure_format(ctx.analysis, ctx.layout, ctx.dist, ctx.env(state.epoch))
-            step = incremental_step(ctx, state, fmt)
-            if isinstance(step, tuple):
-                state, compiled = step
-                pdf = publish_state(ctx, state)
-                _gc(ctx, state)
-                mode = "incremental" if compiled else "noop"
-                runs = (
-                    [
-                        {
-                            "name": f"r{state.next_run - 1}",
-                            "selection": [ctx.analysis.includes[k - 1].arg for k in compiled],
-                            "passes": 1,
-                        }
-                    ]
-                    if compiled
-                    else []
-                )
-                return BuildReport(
-                    mode,
-                    None,
-                    runs,
-                    [ctx.analysis.includes[k - 1].arg for k in compiled],
-                    time.monotonic() - start,
-                    str(pdf),
-                )
-            reason = step
-        ctx.say(f"cold build: {reason}")
-        next_run = state.next_run if state is not None else 1
+        if state is None or reason is not None:
+            ctx.say(f"cold build: {reason}")
+            next_run = state.next_run if state is not None else 1
+            if canon.exists():
+                shutil.rmtree(canon)
+            state = State(
+                epoch=epoch,
+                fingerprints=asdict(ctx.analysis.fingerprints),
+                format_stamp=stamp,
+                includes=[inc.arg for inc in ctx.analysis.includes],
+                segments={},
+                next_run=next_run,
+            )
         try:
-            fmt = ensure_format(ctx.analysis, ctx.layout, ctx.dist, ctx.env(epoch))
+            fmt = ensure_format(ctx.analysis, ctx.layout, ctx.dist, ctx.env(state.epoch))
         except TexError as err:
             raise FallbackError(f"format build failed: {err.first_error}") from err
-        state = cold_build(ctx, epoch, next_run, fmt)
-        pdf = publish_state(ctx, state)
+        loop = Fixpoint(ctx, state, fmt)
+        if reason is not None:
+            dirty: dict[str, list[str]] = {seg: ["cold build"] for seg in loop.units}
+            glue: str | None = "cold build"
+        else:
+            dirty, glue = loop.initial()
+        runs = loop.converge(dirty, glue)
+        pdf = publish_state(ctx.analysis, ctx.layout, state)
         _gc(ctx, state)
+        compiled: set[str] = set()
+        for r in runs:
+            if r["selection"] is None:
+                compiled.update(inc.arg for inc in ctx.analysis.includes)
+            else:
+                compiled.update(r["selection"])
+        mode = "cold" if reason is not None else "incremental" if runs else "noop"
         return BuildReport(
-            "cold",
+            mode,
             reason,
-            [{"name": f"r{next_run}", "selection": None}],
-            [inc.arg for inc in ctx.analysis.includes],
+            runs,
+            [inc.arg for inc in ctx.analysis.includes if inc.arg in compiled],
             time.monotonic() - start,
             str(pdf),
+            loop.warnings,
         )
-    except FallbackError as fb:
-        if fb.persistent:
+    except (FallbackError, MergeFailedError) as fb:
+        if isinstance(fb, FallbackError) and fb.persistent:
             canon.mkdir(parents=True, exist_ok=True)
             marker.write_text(json.dumps({**stamp_data, "reason": str(fb)}))
         return _full(ctx, epoch, str(fb), start)

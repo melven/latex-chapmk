@@ -83,6 +83,7 @@ LABEL = "label"  # \newlabel: export
 LIST = "list"  # \@writefile: list contribution
 CKPT = "ckpt"  # \@setckpt: exit state
 CITE = "cite"  # \abx@aux@cite/segm: citation (-> .bcf)
+BACKREF = "backref"  # \abx@aux@backref: citing page (read by the bibliography)
 BIBDATA = "bibdata"  # other keyed biblatex data: merged per key
 BOOKMARK = "bookmark"  # \BKM@entry: merge only
 SELF = "self"  # data the writing segment reads back (pgf marks, longtable widths)
@@ -105,6 +106,7 @@ _CLASSES: list[tuple[str, re.Pattern[str]]] = [
     (LIST, re.compile(r"^\\@writefile\{")),
     (CKPT, re.compile(r"^\\@setckpt\{")),
     (CITE, re.compile(r"^\\abx@aux@(cite|segm)\{")),
+    (BACKREF, re.compile(r"^\\abx@aux@backref\{")),
     (BIBDATA, re.compile(r"^\\abx@aux@")),
     (BOOKMARK, re.compile(r"^\\BKM@entry\{")),
     (SELF, re.compile(r"^\\(pgfsyspdfmark\s*\{|gdef\s*\\LT@[ivxlcdm]+\s*\{)")),
@@ -113,8 +115,9 @@ _CLASSES: list[tuple[str, re.Pattern[str]]] = [
     (LISTDATA, re.compile(r"^\\global\\@namedef\{scr@dte@[A-Za-z]+@lastmaxnumwidth\}")),
     (ABSPAGE, re.compile(r"^\\gdef\s*\\@abspage@last\{")),
 ]
-#: classes of a unit's main-aux slice that belong to the unit (taken from its committed run)
-UNIT_CONTENT = (CITE, BOOKMARK, SELF)
+#: classes of a unit's main-aux slice that belong to the unit (taken from its committed run);
+#: biblatex data there is written at citation time (e.g. ``\\abx@aux@category``)
+UNIT_CONTENT = (CITE, BACKREF, BIBDATA, BOOKMARK, SELF)
 
 
 def classify(stmt: str) -> str:
@@ -131,10 +134,19 @@ def command_name(stmt: str) -> str:
     return f"\\{m.group(1)}" if m else stmt[:20]
 
 
+_ABX_INSTCOUNT = re.compile(r"^(\\abx@aux@number)\{[^{}]*\}")
+
+
+def normalize_statement(stmt: str) -> str:
+    """A statement without run-local parts: biblatex's ``\\c@instcount`` (first argument of
+    ``\\abx@aux@number``) numbers citation instances of a run, it is not data."""
+    return _ABX_INSTCOUNT.sub(r"\1{}", stmt)
+
+
 def statement_key(stmt: str) -> str:
     """A keyed statement without its last brace group (``\\abx@aux@defaultrefcontext{0}{k}``,
-    ``\\expandafter\\gdef\\csname eqp@this@T\\endcsname``)."""
-    body = stmt.rstrip()
+    ``\\expandafter\\gdef\\csname eqp@this@T\\endcsname``); run-local parts are dropped."""
+    body = normalize_statement(stmt).rstrip()
     if not body.endswith("}"):
         return body
     depth = 0
@@ -146,6 +158,18 @@ def statement_key(stmt: str) -> str:
             if depth == 0:
                 return body[:i]
     return body
+
+
+def run_input_main_aux(stmts: Sequence[str], excluded: set[str]) -> list[str]:
+    """The canonical main aux as input of a run that excludes the unit segments ``excluded``:
+    without their citations. biblatex compares the citations of the previous run with the
+    current ones; citations of units the run does not compile would count as removed and
+    suppress e.g. the ``defernumbers`` data (M4)."""
+    return [
+        s
+        for seg, s in zip(segment_of_statements(stmts), stmts, strict=True)
+        if not (seg in excluded and classify(s) == CITE)
+    ]
 
 
 def segment_of_statements(stmts: Sequence[str]) -> list[str | None]:
@@ -174,20 +198,31 @@ def canonical_main_aux(
 
     - slices of the segments in ``keep_old`` (not compiled in that run) get their
       :data:`UNIT_CONTENT` statements from the old canonical main aux;
-    - keyed end-of-document data (:data:`EQP`, :data:`BIBDATA`) is merged per key, the run's
-      values winning;
+    - keyed data outside unit slices (:data:`EQP`, :data:`BIBDATA`, e.g. eqparbox widths and
+      ``defernumbers`` numbers at the end of the document) is merged per key, the run's values
+      winning;
     - the :data:`AGGREGATE` statements are replaced by ``aggregates``;
     - ``\\@abspage@last`` is set to ``pages`` (the merged page count).
     """
     old_content: dict[str, list[str]] = {}
-    for seg, stmt in zip(segment_of_statements(old), old, strict=True):
+    old_segs = segment_of_statements(old)
+    run_segs = segment_of_statements(run)
+    for seg, stmt in zip(old_segs, old, strict=True):
         if seg in keep_old and classify(stmt) in UNIT_CONTENT:
             old_content.setdefault(seg, []).append(stmt)
-    run_keys = {statement_key(s) for s in run if classify(s) in (EQP, BIBDATA)}
-    carried = [s for s in old if classify(s) in (EQP, BIBDATA) and statement_key(s) not in run_keys]
+
+    def keyed(seg: str | None, stmt: str) -> bool:
+        return not (seg or "").startswith("U") and classify(stmt) in (EQP, BIBDATA)
+
+    run_keys = {statement_key(s) for seg, s in zip(run_segs, run, strict=True) if keyed(seg, s)}
+    carried = [
+        s
+        for seg, s in zip(old_segs, old, strict=True)
+        if keyed(seg, s) and statement_key(s) not in run_keys
+    ]
     out: list[str] = []
     tail: list[str] = []
-    for seg, stmt in zip(segment_of_statements(run), run, strict=True):
+    for seg, stmt in zip(run_segs, run, strict=True):
         kind = classify(stmt)
         if kind == AGGREGATE:
             continue

@@ -16,10 +16,11 @@ from fastinc.aux import (
     SELF,
     canonical_main_aux,
     classify,
+    run_input_main_aux,
     statement_key,
     statements,
 )
-from fastinc.deps import TokenScan, bbl_values, changed_imports, imports, label_values
+from fastinc.deps import TokenScan, changed_imports, cite_values, imports, label_values
 from fastinc.lint import lint_text
 from fastinc.tools import ToolInputError, citations_by_segment, patch_bcf
 
@@ -70,6 +71,27 @@ def test_statement_key() -> None:
     )
 
 
+def test_biblatex_instcount_is_not_data() -> None:
+    a = "\\abx@aux@number{2}{k}{0}{ctx}{1}"
+    b = "\\abx@aux@number{7}{k}{0}{ctx}{1}"
+    assert statement_key(a) == statement_key(b) == "\\abx@aux@number{}{k}{0}{ctx}"
+    assert run_input_main_aux(
+        [
+            "\\fastinc@entry{U1}{}",
+            "\\abx@aux@cite{0}{x}",
+            "\\BKM@entry{id=1}{41}",
+            "\\fastinc@entry{U2}{}",
+            "\\abx@aux@cite{0}{y}",
+        ],
+        {"U1"},
+    ) == [
+        "\\fastinc@entry{U1}{}",
+        "\\BKM@entry{id=1}{41}",
+        "\\fastinc@entry{U2}{}",
+        "\\abx@aux@cite{0}{y}",
+    ]
+
+
 def test_canonical_main_aux_keeps_unit_content_of_excluded_units() -> None:
     old = [
         "\\relax",
@@ -79,6 +101,7 @@ def test_canonical_main_aux_keeps_unit_content_of_excluded_units() -> None:
         "\\fastinc@entry{U1}{1=1,}",
         "\\abx@aux@cite{0}{k1}",
         "\\BKM@entry{id=1,dest={41}}{41}",
+        "\\abx@aux@category{lit}{k1}",
         "\\fastinc@entry{G1}{}",
         "\\expandafter\\gdef\\csname eqp@this@A\\endcsname{1pt}",
         "\\expandafter\\gdef\\csname eqp@this@B\\endcsname{2pt}",
@@ -103,7 +126,12 @@ def test_canonical_main_aux_keeps_unit_content_of_excluded_units() -> None:
         run, old, {"U1"}, ["\\global\\csname @altsecnumformattrue\\endcsname"], 12
     )
     i = out.index("\\fastinc@entry{U1}{1=1,}")
-    assert out[i + 1 : i + 3] == ["\\abx@aux@cite{0}{k1}", "\\BKM@entry{id=1,dest={41}}{41}"]
+    assert out[i + 1 : i + 4] == [
+        "\\abx@aux@cite{0}{k1}",
+        "\\BKM@entry{id=1,dest={41}}{41}",
+        "\\abx@aux@category{lit}{k1}",
+    ]
+    assert out.count("\\abx@aux@category{lit}{k1}") == 1
     assert "\\@writefile{toc}{\\addvspace}" in out
     assert "\\expandafter\\gdef\\csname eqp@this@B\\endcsname{3pt}" in out
     assert "\\expandafter\\gdef\\csname eqp@this@A\\endcsname{1pt}" in out
@@ -125,13 +153,19 @@ def test_label_and_cite_values(tmp_path: Path) -> None:
         "\\entry{k1}{article}{}\n\\field{year}{2000}\n\\endentry\n"
         "  \\entry{k2}{book}{}\n\\endentry\n"
     )
-    c = bbl_values(bbl)
+    c = cite_values(bbl)
     assert set(c) == {"C:k1", "C:k2"}
     bbl.write_text(
         "\\entry{k2}{book}{}\n\\endentry\n\\entry{k1}{article}{}\n\\field{year}{2000}\n\\endentry\n"
     )
-    c2 = bbl_values(bbl)
+    c2 = cite_values(bbl)
     assert c2["C:k1"] != c["C:k1"]  # position counts
+    # keyed biblatex aux data (defernumbers) counts, citations and backrefs do not
+    num = "\\abx@aux@number{2}{k1}{0}{nty/global//global/global/global}{1}"
+    with_num = cite_values(bbl, [num, "\\abx@aux@cite{0}{k2}"])
+    assert with_num["C:k1"] != c2["C:k1"] and with_num["C:k2"] == c2["C:k2"]
+    assert cite_values(bbl, [num.replace("{1}", "{2}")])["C:k1"] != with_num["C:k1"]
+    assert cite_values(bbl, ["\\abx@aux@backref{1}{k1}{0}{1}{1}"])["C:k1"] == c2["C:k1"]
 
 
 def test_text_scan_imports() -> None:
@@ -231,3 +265,66 @@ def test_lint_global_commands_comments_verbatim_allow() -> None:
     assert _cmds("\\setlength{\\a}{1pt}", allow=("\\setlength",)) == []
     assert "wrap it in a group" in lint_text("\\def\\x{}", "u.tex")[0].message()
     assert "move it to the preamble" in lint_text("\\appendix", "u.tex")[0].message()
+
+
+# --- graph ---------------------------------------------------------------------------------
+
+
+def test_graph_renderers() -> None:
+    from fastinc.graph import Graph, IncludeNode, to_dot, to_json, to_text
+
+    g = Graph(
+        units=[["a"], ["b", "b2"]],
+        includes=[
+            IncludeNode("a", "U1", 1, ["a.tex"], {"b": ["sec:x"], "bibliography": ["k"]}, [], []),
+            IncludeNode("b", "U2", 2, ["b.tex"], {}, ["b.tex:3: \\setlength ..."], ["x"]),
+            IncludeNode("b2", "U3", 2, [], {}, [], []),
+        ],
+    )
+    text = to_text(g)
+    assert "unit 2: b, b2 [global]" in text and "imports from b: sec:x" in text
+    assert "dirty: x" in text and "files: -" in text
+    dot = to_dot(g)
+    assert '"b" -> "a" [label="1"];' in dot and '"a" -> "b" [style=dashed];' in dot
+    assert "cluster_2" in dot and "color=red" in dot
+    assert '"units"' in to_json(g)
+
+
+def test_graph_without_state(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    from fastinc.cli import main
+
+    (tmp_path / "d.tex").write_text(
+        "\\documentclass{article}\n\\begin{document}\nx\n\\end{document}\n"
+    )
+    assert main(["graph", "d.tex"], cwd=tmp_path) == 2
+    assert "run 'fastinc build' first" in capsys.readouterr().err
+
+
+# --- planning ------------------------------------------------------------------------------
+
+
+def _planner(n: int, groups: list[list[int]], global_units: set[int]):  # type: ignore[no-untyped-def]
+    from types import SimpleNamespace
+
+    from fastinc.incremental import Fixpoint
+
+    fp = object.__new__(Fixpoint)
+    fp.units = [f"U{k}" for k in range(1, n + 1)]
+    fp.group = {k: g for g in groups for k in g}
+    fp.a = SimpleNamespace(includes=[SimpleNamespace(arg=f"c{k}") for k in range(1, n + 1)])
+    fp.is_global = lambda seg: int(seg[1:]) in global_units  # type: ignore[method-assign]
+    return fp
+
+
+def test_plan_groups_and_global_units() -> None:
+    fp = _planner(5, [[1], [2, 3], [4], [5]], set())
+    assert fp.plan({"U3": ["x"]})[0] == [2, 3]
+    assert fp.plan({})[0] == []  # glue only
+    assert fp.plan({f"U{k}": ["x"] for k in range(1, 6)})[0] is None
+    # a global unit is in every run; when dirty itself, all later units join
+    fp = _planner(5, [[1], [2], [3], [4], [5]], {2})
+    sel, reasons = fp.plan({"U4": ["sources changed"]})
+    assert sel == [2, 4] and "compiled in every run" in reasons["U2"][0]
+    sel, reasons = fp.plan({"U2": ["sources changed"]})
+    assert sel == [2, 3, 4, 5] and "follows the global unit c2" in reasons["U5"][0]
+    assert fp.plan({})[0] == [2]

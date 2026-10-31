@@ -13,7 +13,15 @@ from fastinc.aux import (
 )
 from fastinc.errors import FastincError
 from fastinc.merge_pdf import label_style, page_labels
-from fastinc.state import STATE_FILE, SegmentArtifact, State, load_state, save_state
+from fastinc.state import (
+    STATE_FILE,
+    STATE_VERSION,
+    SegmentArtifact,
+    State,
+    UnitInputs,
+    load_state,
+    save_state,
+)
 from fastinc.synctex import SyncTexError, merge, parse, write_lines
 
 
@@ -27,6 +35,12 @@ def test_state_round_trip(tmp_path: Path) -> None:
         {"U1": {"ch1.tex": "h"}},
         {"refs.bib": "g"},
         next_run=3,
+        units={"U1": UnitInputs({0: 3, 446: -1}, {"L:a": "h1"}, None, True)},
+        citations={"U1": ['<bcf:citekey order="1">k</bcf:citekey>']},
+        aggregates={"G0": ["\\global\\csname @altsecnumformattrue\\endcsname"]},
+        glue_inputs="lists=a;labels=b;aux=c",
+        pending={"U1": ["imports changed (L:a)"]},
+        glue_pending="glue inputs changed (lists)",
     )
     save_state(s, tmp_path)
     t = load_state(tmp_path)
@@ -35,7 +49,7 @@ def test_state_round_trip(tmp_path: Path) -> None:
     assert load_state(tmp_path / "missing") is None
     (tmp_path / STATE_FILE).write_text('{"version": 999}')
     assert load_state(tmp_path) is None
-    (tmp_path / STATE_FILE).write_text('{"version": 1}')
+    (tmp_path / STATE_FILE).write_text(f'{{"version": {STATE_VERSION}}}')
     with pytest.raises(FastincError, match="corrupt"):
         load_state(tmp_path)
 

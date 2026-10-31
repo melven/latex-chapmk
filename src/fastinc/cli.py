@@ -1,4 +1,4 @@
-"""Command-line interface (PLAN §6.15): ``build``, ``check``, ``clean``."""
+"""Command-line interface (PLAN §6.15): ``build``, ``check``, ``clean``, ``graph``."""
 
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ from fastinc.check import compare_pdfs, compare_synctex
 from fastinc.config import Config, load_config
 from fastinc.errors import ConfigError, FastincError, TexError
 from fastinc.fullbuild import full_build
+from fastinc.graph import dependency_graph, to_dot, to_json, to_text
 from fastinc.incremental import Context, build, load_epoch
 from fastinc.layout import Layout, make_layout
 from fastinc.shadow import sync_project_shadow
@@ -52,6 +53,10 @@ def _parser() -> argparse.ArgumentParser:
     c = sub.add_parser("clean", help="remove the build directory")
     c.add_argument("main", nargs="?", type=Path)
     c.add_argument("--build-dir", type=Path)
+    g = sub.add_parser("graph", help="compilation units and dependencies of the last build")
+    g.add_argument("main", nargs="?", type=Path)
+    g.add_argument("--build-dir", type=Path)
+    g.add_argument("--format", choices=("text", "dot", "json"), default="text")
     return p
 
 
@@ -87,7 +92,12 @@ def cmd_build(args: argparse.Namespace, cwd: Path) -> int:
     report = _say if config.verbose else (lambda _msg: None)
     ctx = Context(analysis, layout, dist, config, os.environ, report)
     result = build(ctx, epoch, full=getattr(args, "full", False))
-    if result.mode == "full" and result.reason and result.reason != "--full":
+    if not config.verbose:
+        for warning in result.warnings:
+            _say(f"warning: {warning}")
+    if config.verbose:
+        pass  # the builder reported mode and reasons already
+    elif result.mode == "full" and result.reason and result.reason != "--full":
         _say(f"full build: {result.reason}")
     elif result.mode == "cold" and result.reason:
         _say(f"cold build: {result.reason}")
@@ -128,6 +138,19 @@ def cmd_clean(args: argparse.Namespace, cwd: Path) -> int:
     return 0
 
 
+def cmd_graph(args: argparse.Namespace, cwd: Path) -> int:
+    config = load_config(args.main, cwd, build_dir=args.build_dir)
+    analysis = analyse(config)
+    layout = make_layout(config, analysis)
+    try:
+        g = dependency_graph(analysis, layout, config.lint_allow)
+    except FileNotFoundError as err:
+        raise ConfigError(str(err)) from err
+    render = {"text": to_text, "dot": to_dot, "json": to_json}[args.format]
+    sys.stdout.write(render(g))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None, cwd: Path | None = None) -> int:
     """Run the CLI; returns the exit code (0 ok, 1 TeX error, 2 other errors)."""
     args = _parser().parse_args(argv)
@@ -135,6 +158,8 @@ def main(argv: Sequence[str] | None = None, cwd: Path | None = None) -> int:
     try:
         if args.command in ("build", "check"):
             return cmd_build(args, workdir)
+        if args.command == "graph":
+            return cmd_graph(args, workdir)
         return cmd_clean(args, workdir)
     except FastincError as err:
         _say(f"error: {err}")
