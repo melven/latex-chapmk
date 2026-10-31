@@ -58,6 +58,7 @@ def test_texlive_command_lines(tmp_path: Path) -> None:
         "t.nls",
         "t.nlo",
     ]
+    assert tl.makeindex("t.idx", "t.ind", None) == ["makeindex", "-o", "t.ind", "t.idx"]
 
 
 def test_texlive_environment(tmp_path: Path) -> None:

@@ -55,7 +55,7 @@ class TexDistribution(Protocol):
 
     def biber(self, jobname: str, outdir: Path) -> list[str]: ...
 
-    def makeindex(self, input_name: str, output_name: str, style: str) -> list[str]: ...
+    def makeindex(self, input_name: str, output_name: str, style: str | None) -> list[str]: ...
 
 
 class TeXLive:
@@ -131,9 +131,11 @@ class TeXLive:
         """biber, run with cwd = source/shadow tree; reads the .bcf from ``outdir`` (P1)."""
         return ["biber", "--output-directory", str(outdir), jobname]
 
-    def makeindex(self, input_name: str, output_name: str, style: str) -> list[str]:
-        """makeindex with relative names; run with cwd = output directory (S1)."""
-        return ["makeindex", "-s", style, "-o", output_name, input_name]
+    def makeindex(self, input_name: str, output_name: str, style: str | None) -> list[str]:
+        """makeindex with relative names (``style`` None: default style); run with cwd =
+        output directory (S1)."""
+        opts = ["-s", style] if style is not None else []
+        return ["makeindex", *opts, "-o", output_name, input_name]
 
 
 def detect(which: Callable[[str], str | None] = shutil.which) -> TexDistribution:

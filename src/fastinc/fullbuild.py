@@ -80,6 +80,7 @@ class ToolState:
 
     bcf: str | None = None
     nlo: str | None = None
+    idx: str | None = None
     runs: list[str] = field(default_factory=list)
 
 
@@ -91,7 +92,8 @@ def run_tools(
     env: Mapping[str, str],
     state: ToolState,
 ) -> None:
-    """Run biber and makeindex (nomencl) in ``outdir`` when their inputs changed."""
+    """Run biber, makeindex for nomencl (``.nlo``) and makeindex for a generic index
+    (``.idx``, default style, like latexmk) in ``outdir`` when their inputs changed."""
     bcf = outdir / f"{job}.bcf"
     if bcf.is_file() and _digest(bcf) != state.bcf:
         r = run(dist.biber(job, outdir), cwd=cwd, env=env, log_path=outdir / "biber.out")
@@ -107,6 +109,18 @@ def run_tools(
             raise ToolError(f"makeindex failed: {r.output.strip()[-500:]}")
         state.nlo = _digest(nlo)
         state.runs.append("makeindex")
+    idx = outdir / f"{job}.idx"
+    if idx.is_file() and _digest(idx) != state.idx:
+        r = run(
+            dist.makeindex(idx.name, f"{job}.ind", None),
+            cwd=outdir,
+            env=env,
+            log_path=outdir / "makeindex-idx.out",
+        )
+        if not r.ok:
+            raise ToolError(f"makeindex failed: {r.output.strip()[-500:]}")
+        state.idx = _digest(idx)
+        state.runs.append("makeindex (index)")
 
 
 @dataclass(frozen=True)
