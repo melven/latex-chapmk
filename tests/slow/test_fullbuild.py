@@ -39,8 +39,7 @@ def test_failing_build_keeps_previous_pdf(copy_corpus, tmp_path: Path, capsys) -
     )
     assert main(["build", "d.tex"], cwd=src) == 1
     err = capsys.readouterr().err
-    # pdfTeX reports paths relative to its cwd (the shadow tree = the source directory)
-    assert "./d.tex:3: Undefined control sequence" in err
+    assert "d.tex:3: Undefined control sequence" in err  # mapped to the user's main file
     assert (src / "d.pdf").read_bytes() == pdf
     assert "Undefined control sequence" in (src / "d.log").read_text()
 
