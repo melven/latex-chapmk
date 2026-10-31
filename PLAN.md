@@ -30,7 +30,8 @@ One command (`fastinc build main.tex`) replaces `latexmk -pdf -synctex=1`. It pr
 - Units other than `\include` (no automatic splitting at `\chapter`).
 - TikZ externalize. It is disabled by the driver (§6.4.3); re-enabling is a phase-2 option.
 - Byte-identical PDFs.
-- `glossaries`, `imakeidx`/`makeidx`, `minted`, `cleveref`, `bookmark` package. Detect these and fall back to full builds with a warning (§6.14).
+- `glossaries`, `imakeidx`/`makeidx`, `minted`, `cleveref`. Detect these and fall back to full builds with a warning (§6.14).
+- PDF outline via hyperref's `.out` file, i.e. hyperref without the `bookmark` package. v1 supports the outline only through `bookmark`, which KOMA classes load automatically (S1). Without `bookmark`: fall back to full builds; the `.out` route is phase 2.
 
 ---
 
@@ -96,6 +97,7 @@ Short reference for the implementer. Details go into spike notes.
 
 - **`\include{u}` / `\includeonly{...}`.** `\include` performs `\clearpage`, writes into its own `u.aux`, and at the end writes a counter checkpoint `\@setckpt{u}{...}` (all LaTeX counters registered via `\newcounter`) and does another `\clearpage`. With `\includeonly`, excluded units are not typeset; their `u.aux` (read at `\begin{document}` through `\@input` lines in `main.aux`) still provides labels, list entries and the checkpoint, which is restored when the excluded `\include` is reached. Main-file body text is always typeset.
 - **Aux files** carry cross-references (`\newlabel`), list entries (`\@writefile{toc}{...}`), biblatex citation data (`\abx@aux@...`), package data (longtable `\LT@...`, eqparbox), and `\gdef\@abspage@last{N}`. At `\end{document}`, LaTeX re-reads all aux files and writes `.toc`, `.lof`, `.lot`, … from the `\@writefile` lines.
+- **`bookmark` package.** Writes each outline entry as `\BKM@entry{id=N,dest={<hex>},srcline={L},…}{<hex title>}` into the current aux file, so a unit's entries go to the unit aux. The outline is built from the aux of the previous run. It affects only the PDF outline, not typesetting. [S6]
 - **Format files.** `mylatexformat` dumps the TeX state after a partial preamble into a `.fmt` file. Loading it replaces processing that preamble part. Open write streams cannot be dumped; mylatexformat collects `\openout` calls made during the dump and replays them at runtime, with `\jobname` expanded then (S1).
 - **LaTeX hooks** (kernel ≥ 2020-10):
   - `include/before`, `include/end`, `include/after`, `include/excluded` [S3],
@@ -223,7 +225,7 @@ Requirements:
    - Absolute assignments: for each segment, record the set of registers assigned absolutely (hooks on `\setcounter`, counter resets via `\@stpelt`, `\pagenumbering`) as `\fastinc@abs{<seg>}{n,n,...}`, written to the unit aux for units and to the main aux for glue. Used for prediction only (§6.9.3), so missing cases only cost speed.
 3. **Restore.** Reading `\fastinc@ckpt` from the aux stores the vector (`\fastinc@ckpt@<unit>`). At `include/excluded`, after LaTeX's own checkpoint restore, the stored registers are assigned globally.
 4. **Page map.** At `shipout/before`, `\immediate\write` to `\jobname.fpg`: `<\ReadonlyShipoutCounter> <seg> <\the\c@page> <\thepage expanded via \protected@edef>`.
-5. **Segment markers in shared streams.** The streams are `.out` (hyperref outline, `\@outlinefile`) and `.nlo` (`\@nomenclaturefile`). At every segment change, write the line `%fastinc-seg <seg>` into each open stream, using the same write mode (immediate or delayed) as that stream's writer [S6 for `.out`, [S2b] for `.nlo`]. This lets the driver attribute entries to segments.
+5. **Segment markers in shared streams.** The only shared stream is `.nlo` (`\@nomenclaturefile`); outline entries go to the aux files (`bookmark`, §4). At every segment change, write the line `%fastinc-seg <seg>` into the stream, using the same write mode (immediate or delayed) as its writer [S2b]. This lets the driver attribute entries to segments.
 6. **File attribution.** On `file/before`, `\immediate\write` to `\jobname.ffl`: `<seg> <filename>`. Graphics: hook the graphicx file inclusion (`\Gin@setfile` or the pdftex driver's include macro [S3]) and write the same record.
 7. **Aux handlers.** Define `\fastinc@base`, `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs` as no-ops, and `\fastinc@ckpt` as store (aux is read at begin and end document).
 8. **Externalize neutralisation** (§6.4.3), repeated idempotently.
@@ -264,7 +266,7 @@ pdflatex -fmt=<fmt> -interaction=nonstopmode -halt-on-error -file-line-error \
 
 **[S2] verifies** the read search order: that the output directory is read before the working directory; that the shadow tree works (`\include` subdirectories, `\graphicspath`, graphics and `.bib` through symlinks, SyncTeX `Input:` paths as opened); and, for documentation, whether stale aux files in a plain source directory would be read.
 
-**Outputs per run:** `main.pdf`, `main.synctex.gz`, `main.log`, `main.fls`, `main.aux`, unit aux files, `main.fpg`, `main.ffl`, `main.out`, `main.nlo`, `main.bcf`.
+**Outputs per run:** `main.pdf`, `main.synctex.gz`, `main.log`, `main.fls`, `main.aux`, unit aux files, `main.fpg`, `main.ffl`, `main.nlo`, `main.bcf`.
 
 A run with selection *S* compiles the glue plus the units in *S*. A **full run** has *S* = all units. A **glue-only run** has *S* = ∅.
 
@@ -276,7 +278,7 @@ A run with selection *S* compiles the glue plus the units in *S*. A **full run**
 - the canonical `main.aux` and derived files;
 - `main.bcf` and `main.bbl`;
 - `main.nlo` and `main.nls`;
-- bookmark records;
+- bookmark records (`\BKM@entry` lines, part of the committed aux);
 - `state.json`.
 
 Per segment, `state.json` stores:
@@ -289,7 +291,7 @@ Per segment, `state.json` stores:
 
 **Commit after a run with selection *S*:**
 
-1. Each unit in *S*: take its aux, its pages (page map), and its per-segment `.out` and `.nlo` entries (by markers).
+1. Each unit in *S*: take its aux, its pages (page map), and its per-segment `.nlo` entries (by markers). Its bookmark records are part of its aux.
 2. Glue: commit the glue artifacts from the run that §6.9 designates.
 3. Store the observed entry vectors of **all** segments from this run, tagged with the run's input snapshot id.
 4. Unreferenced run directories are garbage-collected after a successful merge (`--keep-runs` disables this).
@@ -318,6 +320,7 @@ Must equal the full run's files byte for byte; this is a unit test against refer
 | `\abx@aux@refcontext`, `\abx@aux@segm`, `\abx@aux@page`, `\abx@aux@number`, other `\abx@aux@*` | biblatex data, key-scoped where a key is present; others global |
 | `\gdef\LT@<roman>{...}` (longtable) | *self*: read only by the same unit |
 | eqparbox records (exact form [S8]) | *self* (tags are chapter-scoped in the reference document) |
+| `\BKM@entry{...}{...}` (bookmark) | outline record: used only by the merge (§6.11); a change dirties nothing |
 | `\babel@aux{...}` | ignored (language state; A1 lint covers `\selectlanguage`) |
 | `\gdef\@abspage@last{N}` | ignored; rewritten to the merged page count in canonical `main.aux` |
 | hyperref/nameref internals (`\HyPL@Entry`, `\providecommand...`, `\hyper@...`) [S6] | ignored or main-only |
@@ -483,8 +486,8 @@ Input: for each segment in document order, its committed artifact `(run PDF, pag
    - Links using named destinations (`/A <</S/GoTo/D (name)>>` or `/Dest (name)`) stay as they are.
    - Direct page-object destinations are remapped via the `(segment, offset)` map.
    - `/P` entries are set to the merged page.
-4. **Outline:** built from the bookmark records of all segments in order. Parse hyperref `.out` lines `\BOOKMARK [level][open]{dest}{title}{parent}% n`; the title is a PDF string with TeX octal escapes → bytes. The original `.out` grammar is verified in [S6].
-   - Each outline item gets `/Dest (dest)` (named) with `/Parent`, `/First`, `/Last`, `/Next`, `/Prev` and `/Count` (open state as hyperref does it).
+4. **Outline:** built from the `\BKM@entry` records in aux reading order (main aux with `\@input` expanded, the same order `bookmark` uses). Decode the hex fields: `dest` → name; the title → PDF string bytes (TeX octal escapes, typically UTF-16BE with BOM). Level, open state and the other keys follow the grammar verified in [S6].
+   - Each outline item gets `/Dest (dest)` (named) with `/Parent`, `/First`, `/Last`, `/Next`, `/Prev` and `/Count` (open state and level-gap handling as `bookmark` does it).
    - The catalog `/PageMode` comes from the reference run.
 5. **Page labels:** from the page map's `(value, \thepage text)` per page, infer the style: arabic → `/D`, roman → `/r`, Roman → `/R`, alph → `/a`, Alph → `/A`, otherwise a prefix-only label `/P`. Compress into a `/PageLabels` number tree. Compare against the reference in tests.
 6. **Catalog and Info:** copy `/Info`, `/OpenAction` (remapped), `/PageMode`, `/PageLayout` and `/ViewerPreferences` from the run that produced `G0`. Do not copy `/Pages`, `/Names`, `/Outlines` or `/PageLabels` (built above).
@@ -515,7 +518,7 @@ Expected side effect: a larger file, because font subsets are duplicated per run
 
 Full mode means plain sequential full runs to a fixpoint inside the build directory (like latexmk), with a SyncTeX file but without merging. Triggers:
 
-- unsupported packages (§1 non-goals);
+- unsupported packages (§1 non-goals); `hyperref` loaded without `bookmark` is detected from the run's `.fls`, because classes may load `bookmark` only at `\begin{document}`;
 - format build failure;
 - a merge error (missing destinations, inconsistent SyncTeX header);
 - the fixpoint not reached (§6.9.2);
@@ -663,7 +666,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 
 - Aux parser and classifier.
 - Linker output equals the full-run `.toc`/`.lof`/`.lot`/`.loalg`/`.tdo`.
-- `.out` parser and outline builder.
+- `\BKM@entry` parser and outline builder (against the outline of full runs).
 - Page-label inference.
 - `.bbl` entry diff; `.bcf` patch.
 - Composition model (including absolute sets).
@@ -688,7 +691,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | S3 | Hook order: `include/before` relative to the initial `\clearpage`; pages from the final `\clearpage` before `include/after`; whether the unit aux is still open (`\@auxout` = `\@partaux`) at `include/after`, else where to write `\fastinc@ckpt`; existence and timing of `include/excluded` relative to the checkpoint restore; file hook for TikZ libraries; graphicx inclusion hook point. |
 | S4 | Enumerating allocated `\count` registers (kernel allocation pointers, extended registers); confirm `LT@tables` and `\Hy@linkcounter` are covered; cost of writing vectors; initial scratch-register deny list (registers whose segment-entry values differ between a partial and a full run on the corpus). |
 | S5 | biblatex `.bcf` contents after an `\includeonly` run; `.bcf` patch feasibility. |
-| S6 | hyperref: `/Dests` name tree, dummy-destination log format, duplicate-destination warning and which definition wins, anchor naming (`section*.N` via `\Hy@linkcounter`), `.out` grammar and write mode, `\HyPL@Entry` semantics. |
+| S6 | hyperref: `/Dests` name tree, dummy-destination log format, duplicate-destination warning and which definition wins, anchor naming (`section*.N` via `\Hy@linkcounter`), `\HyPL@Entry` semantics. `bookmark`: complete `\BKM@entry` grammar (level, open state, colour and style keys, `srcline`), how the outline is built from it, level-gap handling, and which keys depend on segment state (`id` from `\c@bookmark@seq@number`). |
 | S7 | Running heads on the first page of a unit (scrbook marks) in a partial run vs a full run; whether A5 suffices; fix if feasible (restoring mark state). |
 | S8 | Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
 | S9 | pikepdf merge prototype: two runs → merged PDF with working cross-run links, outline, page labels; verified by §3.3 items 1–3. |
@@ -748,7 +751,8 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 - biblatex numeric/nty (renumbering → cite imports);
 - `longtable` (self aux, `LT@tables` in the vector);
 - `eqparbox` (self aux);
-- `hyperref` (named destinations, outline markers, `section*` anchors);
+- `hyperref` (named destinations, `section*` anchors);
+- `bookmark`, auto-loaded by scrbook (`\BKM@entry` outline records in the aux);
 - todonotes (`\listoftodos` via `.tdo`);
 - `loalg` list;
 - `twoside` with `scrbook`'s default `openright` (parity).
@@ -764,6 +768,6 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | unit checkpoint | unit aux | `\fastinc@ckpt{<unit>}{n=v,...}` (registers changed within the unit, absolute values) |
 | page map | `main.fpg` | `<shipout#> <seg> <\c@page> <\thepage text>` per line |
 | file attribution | `main.ffl` | `<seg> <path>` per line |
-| stream marker | `.out`, `.nlo` | `%fastinc-seg <seg>` per line |
+| stream marker | `.nlo` | `%fastinc-seg <seg>` per line |
 
 Segment ids: `G0..Gn` for glue, `U1..Un` for units. The unit-id ↔ `\include` argument map is written once per run as `\fastinc@unit{U<k>}{<include arg>}` in the main aux.
