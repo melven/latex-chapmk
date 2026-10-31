@@ -352,19 +352,33 @@ Glue is compiled in every run, so its pages are valid only if they were produced
 
 #### 6.8.4 Lint (A1)
 
-Scan unit sources (comments stripped) for top-level occurrences of:
+Scan unit sources (comments stripped) for occurrences of the commands below. There are two lists.
+
+**Local-effect commands.** These are a hit only outside an explicit group:
 
 ```
-\def \gdef \edef \xdef \let \global \newcommand \renewcommand \providecommand
-\DeclareRobustCommand \NewDocumentCommand \RenewDocumentCommand \setlength
-\addtolength \pagenumbering \pagestyle \appendix \frontmatter \mainmatter
-\backmatter \selectlanguage \captionsetup \sisetup \lstset \hypersetup \makeatletter
+\def \edef \let \newcommand \renewcommand \providecommand \DeclareRobustCommand
+\NewDocumentCommand \RenewDocumentCommand \NewCommandCopy \newenvironment
+\renewenvironment \setlength \addtolength \captionsetup \sisetup \lstset \tikzset
+\definecolor \makeatletter \catcode \ExplSyntaxOn
 ```
 
-Content inside environments that limit scope (e.g. `{...}` groups, figure environments) is not exempted in v1 (conservative).
+**Global-effect commands.** These are always a hit, grouped or not:
+
+```
+\gdef \xdef \global \newcounter \newlength \newcount \newdimen \newskip \newtoks
+\newtheorem \counterwithin \counterwithout \pagenumbering \pagestyle \appendix
+\frontmatter \mainmatter \backmatter \selectlanguage \hypersetup \KOMAoptions
+\usetikzlibrary \DeclareSIUnit \DeclareMathOperator
+```
+
+- A command from the local list prefixed by `\global` counts as global.
+- **Explicit group:** an environment (`\begin{...}` … `\end{...}`), `\begingroup` … `\endgroup`, or a brace group whose `{` is not a macro argument. A `{` directly after a control word, `}` or `]` counts as an argument, because arguments need not form a group (e.g. `\ifdraft{...}{...}`), so it does not exempt.
+- **Warning text:** for a local command, suggest wrapping it in a group or environment; for a global command, suggest moving it to the preamble.
 
 - A hit gives a warning with `file:line`, and the unit is marked *global*: whenever it is recompiled, all successors are dirty.
 - Config `lint.allow = [...]` lists exceptions.
+- The exemption is a heuristic. The acceptance tests guard it (T18 and a grouped variant).
 
 ### 6.9 Scheduling and fixpoint
 
@@ -636,6 +650,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | T16 | cold build | §3.3; report wall time vs `--full` |
 | T17 | SyncTeX round trip for every segment | §3.3 item 4 |
 | T18 | `\setlength` in ch2 body | lint warning; ch2 is global; successors recompiled after ch2 changes |
+| T18b | `\setlength` inside a `table` environment and inside `{...}` in ch2 | no lint hit; ch2 not global; §3.3 holds |
 | T19 | stale `main.aux` in the source directory | behaviour per [S2] |
 
 ### 8.3 Unit tests
