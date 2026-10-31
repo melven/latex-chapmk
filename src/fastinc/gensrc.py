@@ -31,17 +31,24 @@ def format_source(analysis: Analysis) -> str:
     return "".join(lines) + "\\endofdump" + nl
 
 
-def run_main(analysis: Analysis, selection: Sequence[str] | None) -> str:
+def run_main(
+    analysis: Analysis, selection: Sequence[str] | None, deny_names: Sequence[str] = ()
+) -> str:
     """Per-run main file for a run with the format.
 
-    Lines ``1..s-1`` become empty lines (they are in the format); line ``s`` is prefixed with
-    ``\\csname endofdump\\endcsname\\usepackage{fastinc}`` and, if ``selection`` is not
-    ``None``, ``\\includeonly{...}`` (an empty selection gives a glue-only run). The rest is
-    verbatim, so line numbers equal the user's main file.
+    Lines ``1..s-1`` become empty lines (they are in the format). Line ``s`` is prefixed with
+    ``\\csname endofdump\\endcsname``, the driver parameters for fastinc.sty (extra run-local
+    register names ``deny_names``, config ``[state] ignore``), ``\\usepackage{fastinc}`` and, if
+    ``selection`` is not ``None``, ``\\includeonly{...}`` (an empty selection gives a glue-only
+    run). The rest is verbatim, so line numbers equal the user's main file.
     """
     s = analysis.split_line
     out = [_ending(line) for line in analysis.lines[: s - 1]]
-    prefix = f"\\csname endofdump\\endcsname\\usepackage{{{RUNTIME_PACKAGE}}}"
+    prefix = "\\csname endofdump\\endcsname"
+    if deny_names:
+        names = ",".join(deny_names)
+        prefix += f"\\expandafter\\def\\csname fastinc@denynames\\endcsname{{{names}}}"
+    prefix += f"\\usepackage{{{RUNTIME_PACKAGE}}}"
     if selection is not None:
         prefix += "\\includeonly{" + ",".join(selection) + "}"
     out.append(prefix + analysis.lines[s - 1])

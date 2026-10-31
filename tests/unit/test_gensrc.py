@@ -41,6 +41,11 @@ def test_run_main_keeps_line_numbers(tmp_path: Path) -> None:
     assert lines[3:] == list(a.lines[3:])
     assert "\\includeonly{}" in run_main(a, [])
     assert "includeonly" not in run_main(a, None)
+    deny = split_lines(run_main(a, None, ["foo@cnt", "bar"]))[2]
+    assert deny.startswith(
+        "\\csname endofdump\\endcsname\\expandafter\\def\\csname fastinc@denynames\\endcsname"
+        "{foo@cnt,bar}\\usepackage{fastinc}"
+    )
 
 
 def test_crlf_is_preserved(tmp_path: Path) -> None:
