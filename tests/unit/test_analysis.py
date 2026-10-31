@@ -138,7 +138,6 @@ def test_bibtex_in_body_is_a_fallback_reason(tmp_path: Path) -> None:
         ("\\include{/abs/x}", "absolute paths"),
         ("\\include{my file}", "spaces"),
         ("\\include{missing}", "not found"),
-        ("{\\include{ch/b}}", "top level"),
         ("\\include{ch/a}", "twice"),
     ],
 )
@@ -151,8 +150,15 @@ def test_nested_include_and_missing_begin(tmp_path: Path) -> None:
     files = {"ch/a.tex": "\\chapter{A}\\include{x}", "ch/a2.tex": "x", "ch/b.tex": "x"}
     with pytest.raises(AnalysisError, match="nested"):
         analyse(make(tmp_path, files=files))
-    with pytest.raises(AnalysisError, match="begin"):
-        analyse(make(tmp_path, body="no document\n"))
+
+
+def test_structures_that_only_allow_full_builds(tmp_path: Path) -> None:
+    a = analyse(make(tmp_path, body="\\input{body}\n"))
+    assert a.fallback_reasons == ("\\begin{document} is not in the main file (A2)",)
+    assert (a.includes, a.units, a.split_line) == ((), (), len(a.lines) + 1)
+    b = analyse(make(tmp_path, body=BODY.replace("Glue.", "{\\include{ch/b}}")))
+    assert any("inside a group" in r for r in b.fallback_reasons)
+    assert [i.arg for i in b.includes] == ["ch/a", "ch/a2", "ch/b"]
 
 
 def test_first_unheaded_include_warns(tmp_path: Path) -> None:
@@ -166,3 +172,11 @@ def test_custom_heading(tmp_path: Path) -> None:
     cfg = make(tmp_path, files=files)
     assert len(analyse(cfg).units) == 2
     assert len(analyse(Config(main=cfg.main, unit_headings=("mychapter",))).units) == 3
+
+
+def test_sections_head_units_only_without_chapters(tmp_path: Path) -> None:
+    files = {"ch/a.tex": "\\section{A}", "ch/a2.tex": "\\section*{x}", "ch/b.tex": "\\addsec{B}"}
+    assert len(analyse(make(tmp_path, files=files)).units) == 3  # article-like: sections head
+    files["ch/b.tex"] = "\\chapter{B}"
+    a = analyse(make(tmp_path, files=files))
+    assert [[i.arg for i in u.includes] for u in a.units] == [["ch/a", "ch/a2"], ["ch/b"]]

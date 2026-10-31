@@ -14,6 +14,6 @@ def test_version(capsys: pytest.CaptureFixture[str]) -> None:
 def test_config_errors_exit_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["build"], cwd=tmp_path) == 2
     assert "no main file" in capsys.readouterr().err
-    (tmp_path / "d.tex").write_text("no document")
+    (tmp_path / "d.tex").write_text("\\begin{document}\\include{../x}\\end{document}")
     assert main(["build", "d.tex"], cwd=tmp_path) == 2
-    assert "begin{document}" in capsys.readouterr().err
+    assert "absolute paths and '..'" in capsys.readouterr().err

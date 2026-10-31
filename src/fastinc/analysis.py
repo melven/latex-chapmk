@@ -36,7 +36,8 @@ UNSUPPORTED_PACKAGES = frozenset(
     {"glossaries", "glossaries-extra", "imakeidx", "makeidx", "minted", "cleveref"}
 )
 
-#: First commands that start a compilation unit (A5, §6.1 step 5). Config adds ``units.heading``.
+#: First commands that start a compilation unit (A5, §6.1 step 5). Config adds
+#: ``units.heading`` (treated like these).
 UNIT_HEADINGS: tuple[str, ...] = (
     "chapter",
     "chapter*",
@@ -47,6 +48,10 @@ UNIT_HEADINGS: tuple[str, ...] = (
     "addpart",
     "addpart*",
 )
+
+#: Top-level headings of article-like classes (no ``\\chapter``): they start a compilation unit
+#: only if no include starts with one of :data:`UNIT_HEADINGS`.
+SECTION_HEADINGS: tuple[str, ...] = ("section", "section*", "addsec", "addsec*")
 
 _INPUT_MACROS = {"input", "include"}
 _MAX_INPUT_DEPTH = 20
@@ -179,11 +184,33 @@ def _scan_inputs(
         _scan_inputs(body, source_dir, deny, depth + 1, scan)
 
 
-def _find_begin_document(text: str) -> int:
+def _find_begin_document(text: str) -> int | None:
     for macro in find_macros(text, {"begin"}):
         if macro.argument == "document" and macro.depth == 0:
             return LineIndex(text).line_of(macro.start)
-    raise AnalysisError("no \\begin{document} found in the main file")
+    return None
+
+
+NO_BEGIN_DOCUMENT = "\\begin{document} is not in the main file (A2)"
+
+
+def _unstructured(main: Path, lines: list[str]) -> Analysis:
+    """Analysis of a main file without ``\\begin{document}`` (e.g. it ``\\input``s the
+    document): no format split and no units; only full-mode builds are possible."""
+    end = len(lines) + 1
+    return Analysis(
+        main=main,
+        source_dir=main.parent,
+        lines=tuple(lines),
+        begin_line=end,
+        split_line=end,
+        split_reason=NO_BEGIN_DOCUMENT,
+        preamble_inputs=(),
+        includes=(),
+        units=(),
+        fingerprints=Fingerprints(pre=_sha256(lines), post=_sha256([]), body=_sha256([])),
+        fallback_reasons=(NO_BEGIN_DOCUMENT,),
+    )
 
 
 def _backend_reason(backend: str) -> str:
@@ -265,6 +292,8 @@ def analyse(config: Config) -> Analysis:
     clean = strip_comments(raw)
     clean_lines = split_lines(clean)
     begin = _find_begin_document(clean)
+    if begin is None:
+        return _unstructured(main, lines)
 
     # 1.-2. preamble, inlined inputs, split point
     deny = [re.compile(p) for p in (*DENY_SPLIT, *config.split_before)]
@@ -298,14 +327,18 @@ def analyse(config: Config) -> Analysis:
     body_text = body_text[:end_doc]
     index = LineIndex(body_text)
     headings = {*UNIT_HEADINGS, *config.unit_headings}
+    first_commands: list[str | None] = []
     warnings: list[str] = []
+    reasons: list[str] = []
     includes: list[Include] = []
     unit_texts: list[str] = []
     for macro in find_macros(body_text, {"include"}):
         lineno = begin - 1 + index.line_of(macro.start)
         where = f"{main.name}:{lineno}"
         if macro.depth > 0:
-            raise AnalysisError(f"{where}: \\include must be at the top level of the body (A2)")
+            reason = f"{where}: \\include inside a group is not supported (A2)"
+            reasons += [] if reason in reasons else [reason]
+            continue
         arg = _validate_include_arg(macro.argument, where)
         if any(inc.arg == arg for inc in includes):
             raise AnalysisError(f"{where}: \\include{{{arg}}} appears twice")
@@ -316,7 +349,14 @@ def analyse(config: Config) -> Analysis:
         if find_macros(unit_clean, {"include"}):
             raise AnalysisError(f"{path}: nested \\include is not supported (A2)")
         unit_texts.append(unit_clean)
-        includes.append(Include(arg, path, lineno, _first_command(unit_clean) in headings))
+        first_commands.append(_first_command(unit_clean))
+        includes.append(Include(arg, path, lineno, headed=False))
+    if not any(cmd in headings for cmd in first_commands):  # article-like class (no \chapter)
+        headings |= set(SECTION_HEADINGS)
+    includes = [
+        Include(inc.arg, inc.path, inc.line, cmd in headings)
+        for inc, cmd in zip(includes, first_commands, strict=True)
+    ]
     units = _group_units(includes, warnings)
 
     # 4. fingerprints
@@ -334,7 +374,7 @@ def analyse(config: Config) -> Analysis:
     )
 
     # 5. unsupported features
-    reasons = _fallback_reasons("".join(preamble_texts))
+    reasons += _fallback_reasons("".join(preamble_texts))
     reasons += [r for r in _fallback_reasons(body_text) if r not in reasons]
     for text in unit_texts:
         reasons += [r for r in _fallback_reasons(text) if r not in reasons]
