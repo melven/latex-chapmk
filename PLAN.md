@@ -692,9 +692,9 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | S8 | Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
 | S9 | pikepdf merge prototype: two runs → merged PDF with working cross-run links, outline, page labels; verified by §3.3 items 1–3. |
 | S10 | SyncTeX merge prototype; verified with `synctex view/edit`. |
-| S11 | MiKTeX: format flags, output/aux-directory read order (repeat S2), on-the-fly install settings, `SOURCE_DATE_EPOCH` support, availability of mylatexformat, biber, makeindex and synctex. |
+| S11 | *Deferred to M7 (needs a Windows CI runner).* MiKTeX: format flags, output/aux-directory read order (repeat S2), on-the-fly install settings, `SOURCE_DATE_EPOCH` support, availability of mylatexformat, biber, makeindex and synctex. |
 
-**Done when:** all notes are written and the plan is updated.
+**Done when:** all notes except S11 (deferred to M7) are written and the plan is updated.
 
 ### Later milestones
 
@@ -706,7 +706,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | **M4** | Dependency model, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks | T2–T13, T16, T18, T19 green (T2 via tail run) |
 | **M5** | Prediction (§6.9.3) and parallel successor recompilation | T2 and T10 green with parallel runs; benchmark shows a speedup over M4 for T2 |
 | **M6** | `watch`, `check`, benchmarks, README (usage, assumptions A1–A5, limitations) | §8.4 numbers recorded |
-| **M7** | MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
+| **M7** | Spike S11 (MiKTeX), MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
 
 ---
 
