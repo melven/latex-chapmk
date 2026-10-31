@@ -45,7 +45,7 @@ The user's documents follow these rules. The driver relies on them and checks th
 | A2 | Units are the files given to `\include` in the top-level body of the main file. | Analysis (§6.1). `\include` elsewhere → error. |
 | A3 | Body text of the main file between `\include`s ("glue": title page, ToC, lists, `\appendix`, nomenclature, bibliography, …) may change macros (e.g. `\appendix`, `\mainmatter`). | Glue is compiled in **every** run (standard `\includeonly` semantics). Any change to the main-file body dirties everything. |
 | A4 | Footnotes are not split across a unit boundary. | Holds for the reference document (`\interfootnotelinepenalty=10000`). Acceptance tests guard it. |
-| A5 | Every unit starts with a command that sets running-head marks (`\chapter`, `\addchap`, …), or its first page has no running head. | [S7]; lint warning; acceptance tests guard it. |
+| A5 | Every **compilation unit** starts with a chapter-level heading (`\chapter`, `\chapter*`, `\addchap`, `\part`, …). An `\include` file that does not (e.g. a sub-chapter include) joins the preceding include's compilation unit (§6.1). | S7: running heads of an include that continues a chapter are wrong in a partial run without its predecessor. Grouping makes A5 hold by construction; acceptance tests guard it. |
 
 ---
 
@@ -153,7 +153,8 @@ Input: the main file (CLI argument or `fastinc.toml`).
 2. **Split point `s`** (first line not dumped into the format): the first preamble line matching the deny list (§6.3.2), or a config override `format.split_before = "<regex>"`. If the match lies inside a top-level command or group spanning several lines (e.g. `\ifdraft{` … `}`), set `s` to the line where that command starts (brace-depth tracking, S1). If `s` falls inside an `\input`ed preamble file, set `s` to the line of that `\input`.
 3. **Segments** of the main body: tokenise top-level `\include{...}` occurrences. Units `U1..Un` are in document order; glue segments `G0..Gn` (possibly empty) lie between them. Unit ids are the `\include` arguments (e.g. `chapters/intro`). An argument that is absolute or contains `..` is an error: its aux would be written outside the run directory, which TeX Live refuses (`openout_any = p`).
 4. **Fingerprints** (sha256): `pre` (lines `1..s-1` plus inlined files), `post` (lines `s..b-1`), `body` (main-file text from `b` to end, excluding nothing).
-5. **Unsupported-package detection** in the preamble → full-build mode (§6.14).
+5. **Compilation units** (A5, S7): group consecutive includes. An include whose first command (comments and blank lines skipped) is a chapter-level heading starts a new group; any other include joins the preceding group, together with the glue between them. Heading list: `\chapter`, `\chapter*`, `\addchap`, `\addchap*`, `\part`, `\part*`, `\addpart`, `\addpart*`, plus config `[units] heading`. If the first include of the document is not headed, it forms its own group and a warning is printed. The scheduler (§6.9) selects whole compilation units; segment ids (`U<k>`, `G<k>`) and all records stay per include.
+6. **Unsupported-package detection** in the preamble → full-build mode (§6.14).
 
 ### 6.2 Generated sources, line-number preservation
 
@@ -549,7 +550,19 @@ fastinc build [MAIN] [-j N] [--full] [--build-dir DIR] [--out-dir DIR] [--keep-r
 fastinc watch [MAIN] [same options]        # rebuild on change of any recorded input
 fastinc check [MAIN] [--samples N]         # incremental vs --full, criterion §3.3
 fastinc clean [MAIN]
+fastinc graph [MAIN] [--format text|dot|json]   # compilation units and dependencies
 ```
+
+**`fastinc graph`** shows the build structure from the analysis and the last state:
+- the compilation units (§6.1) with their includes;
+- glue segments;
+- units marked *global* (lint hits);
+- edges:
+  - entry-state chain (exit → successor entry);
+  - imports (label/cite key → exporting unit);
+  - list contributions → derived files → reading segments (ToC, LoF, bibliography, nomenclature).
+
+`--format dot` gives a Graphviz graph. The build report (`fastinc build --report json`) uses the same data and adds, per compiled unit, the dirty reason (§6.9.1 a–f).
 
 `fastinc.toml` (optional):
 
@@ -561,6 +574,8 @@ build_dir = ".fastinc"
 split_before = []              # extra regexes
 [lint]
 allow = []                     # e.g. ["\\setlength"]
+[units]
+heading = []                   # extra chapter-level heading commands (A5)
 [aux]
 self = []                      # extra regexes of aux lines classified "self"
 ignore = []
@@ -673,6 +688,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | T16 | cold build | §3.3; report wall time vs `--full` |
 | T17 | SyncTeX round trip for every segment | §3.3 item 4 |
 | T18 | `\setlength` in ch2 body | lint warning; ch2 is global; successors recompiled after ch2 changes |
+| T20 | ch3 split into `ch3.tex` (starts with `\chapter`) and `ch3b.tex` (continues with `\section`), edit in `ch3b` | one compilation unit {ch3, ch3b} recompiled; running heads identical to `--full` (§3.3) |
 | T18b | `\setlength` inside a `table` environment and inside `{...}` in ch2 | no lint hit; ch2 not global; §3.3 holds |
 | T19 | stale `main.aux` and unit aux files in the source directory | ignored (shadow tree); §3.3 holds |
 | T19b | alternate latexmk → fastinc → edit → latexmk → fastinc in one directory, no cleaning | both builds correct (fastinc: §3.3; latexmk: same as a latexmk build in a clean copy); SyncTeX matches the current pdf |
@@ -707,7 +723,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | S4 | Enumerating allocated `\count` registers (kernel allocation pointers, extended registers); confirm `LT@tables` and `\Hy@linkcounter` are covered; cost of writing vectors; initial scratch-register deny list (registers whose segment-entry values differ between a partial and a full run on the corpus). |
 | S5 | biblatex `.bcf` contents after an `\includeonly` run; `.bcf` patch feasibility. *Done: patch needed and feasible (decision: patch).* |
 | S6 | *Done.* hyperref: `/Dests` name tree, dummy-destination log format, duplicate-destination warning and which definition wins, anchor naming (`section*.N` via `\Hy@linkcounter`), `\HyPL@Entry` semantics. `bookmark`: complete `\BKM@entry` grammar (level, open state, colour and style keys, `srcline`), how the outline is built from it, level-gap handling, and which keys depend on segment state (`id` from `\c@bookmark@seq@number`). |
-| S7 | Running heads on the first page of a unit (scrbook marks) in a partial run vs a full run; whether A5 suffices; fix if feasible (restoring mark state). |
+| S7 | *Done.* Running heads on the first page of a unit (scrbook marks) in a partial run vs a full run; whether A5 suffices; fix if feasible (restoring mark state). Result: heads differ for includes violating A5, and restoring the mark state does not help. Decision: compilation units (§6.1). |
 | S8 | Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
 | S9 | pikepdf merge prototype: two runs → merged PDF with working cross-run links, outline, page labels; verified by §3.3 items 1–3. |
 | S10 | SyncTeX merge prototype; verified with `synctex view/edit`. |
@@ -722,7 +738,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | **M1** | CLI, config, analysis, generated sources, format build, `--full` reference mode, deterministic environment | `--full` matches plain latexmk (§3.3) on the corpus |
 | **M2** | `fastinc-ini.sty` and `fastinc.sty` (all §6.4 records), run directory preparation, runner (process pool) | records present and parseable; unit tests green |
 | **M3** | Single-unit incremental path: commit, aux linker, PDF and SyncTeX merge, logs | T1, T14, T15, T17 green |
-| **M4** | Dependency model, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks | T2–T13, T16, T18, T19 green (T2 via tail run) |
+| **M4** | Dependency model, compilation units, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks, `fastinc graph` and dirty reasons in the report | T2–T13, T16, T18, T19, T20 green (T2 via tail run) |
 | **M5** | Prediction (§6.9.3) and parallel successor recompilation | T2 and T10 green with parallel runs; benchmark shows a speedup over M4 for T2 |
 | **M6** | `watch`, `check`, benchmarks, README (usage, assumptions A1–A5, limitations) | §8.4 numbers recorded |
 | **M7** | Spike S11 (MiKTeX), MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
