@@ -28,7 +28,12 @@ RUN python3 -m venv "$VIRTUAL_ENV"
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 COPY requirements-dev.txt /tmp/requirements-dev.txt
-RUN pip install --no-cache-dir -r /tmp/requirements-dev.txt
+# Optional CA bundle for TLS-intercepting proxies (not stored in the image):
+#   docker build --secret id=ca,src=/path/to/ca-bundle.crt ...
+# The file replaces pip's default bundle, so it must include the public CAs.
+RUN --mount=type=secret,id=ca,required=false \
+    if [ -s /run/secrets/ca ]; then export PIP_CERT=/run/secrets/ca; fi; \
+    pip install --no-cache-dir -r /tmp/requirements-dev.txt
 
 # Fail the build early if a required tool is missing
 RUN set -e; \
