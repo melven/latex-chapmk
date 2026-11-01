@@ -40,7 +40,10 @@ def serialise(lines: Sequence[str]) -> bytes:
 def write_lines(path: Path, lines: Sequence[str]) -> None:
     """Write ``lines`` gzip-compressed (deterministic: no file name or time in the header)."""
     data = serialise(lines)
-    with path.open("wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0) as f:
+    with (
+        path.open("wb") as raw,
+        gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0, compresslevel=6) as f,
+    ):
         f.write(data)
 
 
@@ -121,6 +124,7 @@ def merge(pages: Sequence[tuple[Path, int]], map_path: Callable[[str], str], out
         raise SyncTexError(f"inconsistent SyncTeX headers: {sorted(headers)}")
     header = dict(next(iter(headers)))
     tags: dict[str, int] = {}
+    local: dict[tuple[Path, str], int] = {}  # (file, its tag) -> merged tag; maps each input once
     body: list[str] = []
     count = 0
     for n, (src, index) in enumerate(pages, start=1):
@@ -132,8 +136,11 @@ def merge(pages: Sequence[tuple[Path, int]], map_path: Callable[[str], str], out
         for line in sheet:
             m = _TAGGED.match(line)
             if m:
-                name = map_path(p.inputs[m.group(2)])
-                tag = tags.setdefault(name, len(tags) + 1)
+                key = (src, m.group(2))
+                tag = local.get(key)
+                if tag is None:
+                    name = map_path(p.inputs[m.group(2)])
+                    tag = local[key] = tags.setdefault(name, len(tags) + 1)
                 line = f"{m.group(1)}{tag}," + line[m.end() :]
             if not line.startswith(("]", ")")):
                 count += 1

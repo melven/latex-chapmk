@@ -91,12 +91,14 @@ def publish_state(
     t.lap("merge_pdf")
     main_name = f"{analysis.source_dir}/./{analysis.main.name}"
 
+    prefixes = [(old + "/", new) for old, new in layout.path_map()]
+
     def map_path(path: str) -> str:
         if Path(path).name == RUN_MAIN:
             return main_name
-        for old, new in layout.path_map():
-            if path.startswith(old + "/"):
-                return new + path[len(old) :]
+        for old, new in prefixes:
+            if path.startswith(old):
+                return new + path[len(old) - 1 :]
         return path
 
     try:
