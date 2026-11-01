@@ -5,7 +5,11 @@ The upstream files in ``upstream/`` stay unchanged (licence, see README.md). fas
   -main-preamble.tex and -main-body.tex are inlined;
 - no index (imakeidx/makeindex is not supported in v1): ``\\usepackage{imakeidx}``,
   ``\\makeindex[...]`` and ``\\printindex`` are removed (``\\index`` is then a no-op);
-- the ``bookmark`` package for the outline (v1 supports the outline only via bookmark).
+- the ``bookmark`` package for the outline (v1 supports the outline only via bookmark);
+- ``fastinc.toml``: the manual's verbatim conventions for the A1 lint (``codeexample`` and
+  ``|...|`` short verbatim). With ``allow=True`` also ``lint.allow`` for the commands the
+  chapters use outside groups (helper definitions; the manual violates A1 there), for
+  benchmarks of the disciplined case; ``fastinc check`` verifies the result.
 
 Usage: ``python3 adapt.py DIR`` where DIR is a copy of ``upstream/``; writes DIR/fastinc-main.tex.
 """
@@ -17,6 +21,14 @@ import sys
 from pathlib import Path
 
 MAIN = "fastinc-main.tex"
+CONFIG = """[lint]
+verbatim = ["codeexample"]
+shortverb = ["|"]
+"""
+ALLOW = (
+    'allow = ["\\\\def", "\\\\let", "\\\\makeatletter", "\\\\tikzset", "\\\\providecommand",'
+    ' "\\\\newcommand", "\\\\newcount", "\\\\catcode", "\\\\usetikzlibrary"]\n'
+)
 
 
 def _inline(directory: Path, name: str) -> str:
@@ -32,7 +44,7 @@ def _inline(directory: Path, name: str) -> str:
     return re.sub(r"^\\input\{([^}]+)\}[^\n]*$", repl, text, flags=re.M)
 
 
-def adapt(directory: Path) -> Path:
+def adapt(directory: Path, allow: bool = False) -> Path:
     text = _inline(directory, "pgfmanual.tex")
     for pattern, replacement in (
         (r"^\\usepackage\{imakeidx\}", "% fastinc adapt: imakeidx removed"),
@@ -45,8 +57,9 @@ def adapt(directory: Path) -> Path:
             raise SystemExit(f"adapt.py: pattern {pattern!r} matched {n} times (upstream changed?)")
     out = directory / MAIN
     out.write_text(text, encoding="utf-8")
+    (directory / "fastinc.toml").write_text(CONFIG + (ALLOW if allow else ""), encoding="utf-8")
     return out
 
 
 if __name__ == "__main__":
-    print(adapt(Path(sys.argv[1])))
+    print(adapt(Path(sys.argv[1]), allow="--allow" in sys.argv[2:]))
