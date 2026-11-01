@@ -226,6 +226,7 @@ class Fixpoint:
         self._lint: dict[str, list[LintHit]] = {}
         self.warnings: list[str] = []
         self.register_names: dict[int, str] = {}  # for messages, from the logs
+        self._view: CanonView | None = None  # canonical view after the last batch (unchanged since)
         self.last_entries: dict[str, Vector] = {}  # observed in the latest run
         self.mispredicted: dict[str, int] = {}  # consecutive mispredictions per unit
 
@@ -486,7 +487,7 @@ class Fixpoint:
         if parallel:
             pred, rewrites = self._predictions([g for g in groups if g is not None])
         registers = {n: reg for n, (reg, _) in self._canon_records(canon).counters.items()}
-        pre = read_canon(a, canon)
+        pre = self._view if self._view is not None else read_canon(a, canon)
         pre_glue = self.glue_inputs(pre)
         specs: list[RunSpec] = []
         compiled_by_run: list[set[str]] = []
@@ -551,7 +552,7 @@ class Fixpoint:
         except ToolInputError as err:
             raise FallbackError(str(err)) from err
         t.lap("tools")
-        post = read_canon(a, canon)
+        post = self._view = read_canon(a, canon)
         derived = tuple(f"{ctx.job}{x}" for x in DERIVED_SUFFIXES)
         for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
             for seg in compiled:
