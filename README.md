@@ -1,27 +1,37 @@
 # fastinc
 
-Incremental, parallel pdfLaTeX builds for documents split into `\include` units
-(specification: `PLAN.md`). Status: milestone M4. After a first (cold) build, only the
-chapters affected by an edit are recompiled: the edited compilation unit, units whose
-references, citations or entry state (page and counter values) changed, and the glue (front
-matter, bibliography) when its inputs changed. The PDF and SyncTeX file are merged from the
-runs. Runs are sequential (one run per iteration, later units in one "tail" run); parallel
-recompilation with prediction follows in M5.
+Drop-in replacement for `latexmk -pdf -synctex=1` that rebuilds faster after small edits:
+the preamble is precompiled into a format, only the `\include` units affected by an edit are
+recompiled (in parallel), and the per-run PDFs and SyncTeX files are merged into one
+`main.pdf` / `main.synctex.gz`. The output looks the same as a plain full build (checked by
+`fastinc check`). Specification: `PLAN.md`.
 
 ```
-fastinc build [MAIN] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [-v]
-fastinc check [MAIN]      # build, then compare with a plain full build (PLAN §3.3)
-fastinc clean [MAIN]
+fastinc build [MAIN] [-j N] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [-v]
+fastinc check [MAIN]                            # build + plain full build, compare
 fastinc graph [MAIN] [--format text|dot|json]   # compilation units and dependencies
+fastinc clean [MAIN]
 ```
 
-- The build directory (default `.fastinc/` next to `MAIN`) holds everything generated; only
-  `<main>.pdf`, `<main>.synctex.gz` and `<main>.log` are written next to `MAIN` (or to
-  `--out-dir`). Plain `latexmk`/`pdflatex` builds in the same directory do not interfere.
-- Unsupported documents (PLAN §1) are built in full mode automatically, with the reason printed.
-- State changes in a chapter body that leak to later chapters (e.g. `\setlength` outside a
-  group, PLAN §6.8.4) give a warning; such a chapter is then compiled in every run.
-- Requirements: Python >= 3.10, TeX Live (pdflatex, biber, makeindex), pikepdf.
-- Optional `fastinc.toml` next to the main file, see `PLAN.md` §6.15.
+- Generated files go to `.fastinc/`; only `<main>.pdf`, `.synctex.gz` and `.log` are
+  written next to `MAIN`. Plain latexmk builds in the same directory do not interfere.
+- `-j N`: parallel pdflatex runs (default: CPU count). `--report`: JSON with the runs, the
+  reason each unit was recompiled and the time per phase.
+- Optional `fastinc.toml` next to the main file (`PLAN.md` §6.15).
+- Requirements: Python ≥ 3.10, TeX Live (pdflatex, biber, makeindex), pikepdf.
+
+**Document assumptions** (checked where possible):
+1. Macro definitions and settings are in the preamble; chapter bodies change only counters,
+   labels, citations, list and nomenclature entries. Violations (e.g. `\setlength` outside a
+   group) give a warning, and that chapter is then compiled in every run.
+2. Units are the `\include`s in the top-level body of the main file.
+3. Edits of the main file body rebuild everything.
+4. No footnote is split across an `\include` boundary.
+5. Every compilation unit starts with a chapter-level heading; an `\include` that does not
+   is compiled together with the preceding one.
+
+**Limitations:** pdfLaTeX only; biblatex with biber only; hyperref needs the `bookmark`
+package. Documents using `glossaries`, `imakeidx`/`makeidx`, `minted` or `cleveref` are built
+in full mode (like latexmk), with the reason printed. TikZ externalize is disabled.
 
 License: BSD-3-Clause.
