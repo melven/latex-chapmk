@@ -786,7 +786,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 
 ### 8.4 Benchmarks
 
-`tests/bench/run.py` reports wall times for T1, T2, T4 and T16 against `latexmk` (same environment, externalize off) on the thesis corpus, with `-j 1` and `-j N`. Numbers go into `docs/bench.md`.
+`tests/bench/run.py` reports wall times for T1, T2, T4 and T16 against `latexmk` (same environment, externalize off) with `-j 1` and `-j N`, plus the time per build phase (`--report`). Corpus: the thesis generator scaled up (many and long chapters), since the fixed cost per run (format load, glue) and per build hides the gain on small documents; the private document (`FASTINC_BENCH_DOC`) when available (numbers only). Numbers go into `docs/bench.md`.
 
 ---
 
@@ -819,8 +819,9 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | **M3** | *Done.* Single-unit incremental path: commit, aux slices (no Python linker, §6.7.1), PDF and SyncTeX merge, logs, `fastinc check` / `build --check` (§3.3 comparison), `--report` | T1, T14, T15, T17 green; `check` passes on the corpus |
 | **M4** | *Done.* Full mode also runs makeindex for a generic `<job>.idx` (the reference and fallback must equal latexmk; found on the pgf manual, whose imakeidx call fails with `-output-directory`), dependency model, compilation units, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks, `fastinc graph` and dirty reasons in the report | T2–T13, T16, T18, T19, T20 green (T2 via tail run) |
 | **M5** | *Done.* Prediction (§6.9.3) and parallel successor recompilation | T2 and T10 green with parallel runs; benchmark shows a speedup over M4 for T2 |
-| **M6** | `watch`, benchmarks, README (usage, assumptions A1–A5, limitations) | §8.4 numbers recorded |
+| **M6** | Benchmarks on large documents (§8.4), time breakdown per phase and resulting optimisations, README (short: usage, assumptions A1–A5, limitations) | §8.4 numbers and breakdown recorded |
 | **M7** | Spike S11 (MiKTeX), MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
+| **M8** | `watch` (F8; postponed from M6, not critical for the user) | rebuild on change of a recorded input |
 
 ---
 
