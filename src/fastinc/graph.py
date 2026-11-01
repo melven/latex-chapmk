@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass, field
 
 from fastinc.analysis import Analysis
 from fastinc.canon import read_canon
+from fastinc.config import Config
 from fastinc.deps import defined_labels
 from fastinc.layout import Layout
 from fastinc.lint import lint_files
@@ -38,8 +39,10 @@ class Graph:
     includes: list[IncludeNode] = field(default_factory=list)
 
 
-def dependency_graph(analysis: Analysis, layout: Layout, allow: tuple[str, ...] = ()) -> Graph:
+def dependency_graph(analysis: Analysis, layout: Layout, config: Config | None = None) -> Graph:
     """The graph of the last build; raises ``FileNotFoundError`` without a build state."""
+    cfg = config or Config()
+    lint = (cfg.lint_allow, cfg.lint_verbatim, cfg.lint_shortverb)
     state = load_state(layout.canon_dir)
     if state is None:
         raise FileNotFoundError("no build state: run 'fastinc build' first")
@@ -67,7 +70,7 @@ def dependency_graph(analysis: Analysis, layout: Layout, allow: tuple[str, ...] 
                 unit_of[inc.arg],
                 files,
                 imports,
-                [h.message() for h in lint_files(analysis.source_dir, files, allow)],
+                [h.message() for h in lint_files(analysis.source_dir, files, *lint)],
                 state.pending.get(seg, []),
             )
         )

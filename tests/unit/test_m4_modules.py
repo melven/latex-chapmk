@@ -278,6 +278,11 @@ def test_lint_global_commands_comments_verbatim_allow() -> None:
     assert _cmds("% \\def\\x{1}\ntext 50\\% \\pagestyle{empty}") == [(2, "\\pagestyle", True)]
     assert _cmds("\\begin{verbatim}\n\\def\\x{1}\n\\end{verbatim}\n\\verb|\\def| x") == []
     assert _cmds("\\setlength{\\a}{1pt}", allow=("\\setlength",)) == []
+    # configured verbatim environments and short verbatim characters (pgf manual)
+    code = "\\begin{codeexample}[preamble={\\usetikzlibrary{x}}]\n\\def\\a{}\n\\end{codeexample}"
+    assert _cmds(code) != [] and lint_text(code, "u.tex", verbatim=("codeexample",)) == []
+    short = "write |\\def\\pgfsysdriver{x}| somewhere\n|unclosed \\pagestyle{empty}"
+    assert [h.command for h in lint_text(short, "u.tex", shortverb=("|",))] == ["\\pagestyle"]
     assert "wrap it in a group" in lint_text("\\def\\x{}", "u.tex")[0].message()
     assert "move it to the preamble" in lint_text("\\appendix", "u.tex")[0].message()
 

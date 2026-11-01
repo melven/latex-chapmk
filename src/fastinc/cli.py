@@ -147,7 +147,7 @@ def cmd_graph(args: argparse.Namespace, cwd: Path) -> int:
     analysis = analyse(config)
     layout = make_layout(config, analysis)
     try:
-        g = dependency_graph(analysis, layout, config.lint_allow)
+        g = dependency_graph(analysis, layout, config)
     except FileNotFoundError as err:
         raise ConfigError(str(err)) from err
     render = {"text": to_text, "dot": to_dot, "json": to_json}[args.format]

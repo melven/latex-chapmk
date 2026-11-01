@@ -111,20 +111,36 @@ class LintHit:
         )
 
 
-def lint_files(source_dir: Path, names: Iterable[str], allow: Iterable[str] = ()) -> list[LintHit]:
+def lint_files(
+    source_dir: Path,
+    names: Iterable[str],
+    allow: Iterable[str] = (),
+    verbatim: Iterable[str] = (),
+    shortverb: Iterable[str] = (),
+) -> list[LintHit]:
     """Hits in the TeX sources among ``names`` (relative to ``source_dir``)."""
     hits: list[LintHit] = []
     for name in names:
         path = source_dir / name
         if Path(name).suffix in LINT_SUFFIXES and path.is_file():
             text = path.read_bytes().decode("utf-8", "surrogateescape")
-            hits += lint_text(text, name, allow)
+            hits += lint_text(text, name, allow, verbatim, shortverb)
     return hits
 
 
-def lint_text(text: str, file: str, allow: Iterable[str] = ()) -> list[LintHit]:
-    """Hits in one source text (comments stripped; verbatim content skipped)."""
+def lint_text(
+    text: str,
+    file: str,
+    allow: Iterable[str] = (),
+    verbatim: Iterable[str] = (),
+    shortverb: Iterable[str] = (),
+) -> list[LintHit]:
+    """Hits in one source text (comments stripped; content of verbatim environments, also
+    ``verbatim`` from the config, and of ``\\verb`` and the ``shortverb`` characters
+    (``lint.shortverb``, e.g. ``|``) skipped)."""
     allowed = {a.lstrip("\\") for a in allow}
+    verbatim_envs = VERBATIM_ENVIRONMENTS | set(verbatim)
+    short = set(shortverb)
     text = strip_comments(text)
     lines = LineIndex(text)
     hits: list[LintHit] = []
@@ -143,7 +159,7 @@ def lint_text(text: str, file: str, allow: Iterable[str] = ()) -> list[LintHit]:
                 if arg is not None:
                     pos = arg.end()
                     name = arg.group(1)
-                    if word == "begin" and name in VERBATIM_ENVIRONMENTS:
+                    if word == "begin" and name in verbatim_envs:
                         end = text.find(f"\\end{{{name}}}", pos)
                         pos = len(text) if end < 0 else end
                     elif word == "begin":
@@ -179,6 +195,11 @@ def lint_text(text: str, file: str, allow: Iterable[str] = ()) -> list[LintHit]:
         elif delim == "]":
             prev = "close"
         else:
+            if m.group(4) in short:  # short verbatim up to the same character on the line
+                end = text.find(m.group(4), pos)
+                newline = text.find("\n", pos)
+                if end >= 0 and (newline < 0 or end < newline):
+                    pos = end + 1
             prev = "other"
     return hits
 

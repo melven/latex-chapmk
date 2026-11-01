@@ -256,8 +256,13 @@ class Fixpoint:
     def lint(self, seg: str) -> list[LintHit]:
         """A1 lint hits in the TeX sources attributed to a unit (§6.8.4)."""
         if seg not in self._lint:
+            cfg = self.ctx.config
             self._lint[seg] = lint_files(
-                self.a.source_dir, self.state.segment_files.get(seg, {}), self.ctx.config.lint_allow
+                self.a.source_dir,
+                self.state.segment_files.get(seg, {}),
+                cfg.lint_allow,
+                cfg.lint_verbatim,
+                cfg.lint_shortverb,
             )
         return self._lint[seg]
 

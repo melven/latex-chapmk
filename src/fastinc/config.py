@@ -29,6 +29,8 @@ class Config:
     out_dir: Path | None = None
     split_before: tuple[str, ...] = ()
     lint_allow: tuple[str, ...] = ()
+    lint_verbatim: tuple[str, ...] = ()
+    lint_shortverb: tuple[str, ...] = ()
     aux_self: tuple[str, ...] = ()
     aux_ignore: tuple[str, ...] = ()
     state_ignore: tuple[str, ...] = ()
@@ -51,6 +53,8 @@ _SCHEMA: dict[str, tuple[str, str]] = {
     "out_dir": ("out_dir", "path"),
     "format.split_before": ("split_before", "regexes"),
     "lint.allow": ("lint_allow", "strings"),
+    "lint.verbatim": ("lint_verbatim", "strings"),
+    "lint.shortverb": ("lint_shortverb", "strings"),
     "aux.self": ("aux_self", "regexes"),
     "aux.ignore": ("aux_ignore", "regexes"),
     "state.ignore": ("state_ignore", "strings"),
