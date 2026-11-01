@@ -18,6 +18,7 @@ from fastinc.runner import RUN_MAIN
 from fastinc.state import State
 from fastinc.synctex import SyncTexError
 from fastinc.synctex import merge as merge_synctex
+from fastinc.timing import Timings
 
 
 class MergeFailedError(FastincError):
@@ -44,8 +45,11 @@ def failed_run(analysis: Analysis, layout: Layout, run_dir: Path, err: TexError)
     return err
 
 
-def publish_state(analysis: Analysis, layout: Layout, state: State) -> Path:
+def publish_state(
+    analysis: Analysis, layout: Layout, state: State, timings: Timings | None = None
+) -> Path:
     """Merge the canonical segments into the published PDF, SyncTeX file and log."""
+    t = timings or Timings()
     job = analysis.jobname
     runs: dict[str, RunRecords] = {}
     slices: dict[str, dict[str, list[str]]] = {}
@@ -84,6 +88,7 @@ def publish_state(analysis: Analysis, layout: Layout, state: State) -> Path:
             raise MergeFailedError(f"PDF merge: {err}") from err
 
     pdf = publish(write_pdf, layout.output(".pdf"))
+    t.lap("merge_pdf")
     main_name = f"{analysis.source_dir}/./{analysis.main.name}"
 
     def map_path(path: str) -> str:
@@ -98,6 +103,7 @@ def publish_state(analysis: Analysis, layout: Layout, state: State) -> Path:
         publish(lambda tmp: merge_synctex(syn, map_path, tmp), layout.output(".synctex.gz"))
     except SyncTexError as err:
         raise MergeFailedError(f"SyncTeX merge: {err}") from err
+    t.lap("merge_synctex")
     texts = []
     for run in sorted(state.run_names(), key=lambda r: int(r[1:])):
         log = layout.runs_dir / run / f"{job}.log"
@@ -106,4 +112,5 @@ def publish_state(analysis: Analysis, layout: Layout, state: State) -> Path:
             + map_run_paths(analysis, layout, log.parent, log.read_text(errors="replace"))
         )
     publish(text_writer("\n".join(texts)), layout.output(".log"))
+    t.lap("log")
     return pdf

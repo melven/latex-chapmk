@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -56,6 +57,25 @@ def parse_counters(text: str) -> dict[str, tuple[int, tuple[str, ...]]]:
         reg, _, children = rest.partition(":")
         out[name.strip()] = (int(reg), tuple(c for c in children.split("/") if c))
     return out
+
+
+def tex_phases(recs: RunRecords, total: float) -> dict[str, float]:
+    """Breakdown of a run's TeX time (``total``: process wall time): ``format`` (start until
+    fastinc.sty loads: format and preamble before the split), ``preamble`` (rest until the
+    end of ``\\begin{document}``), ``glue``, ``units`` (compiled and excluded), ``end``
+    (``\\end{document}`` to process exit: aux re-read, list files, PDF finalisation)."""
+    out = {"format": 0.0, "preamble": 0.0, "glue": 0.0, "units": 0.0, "end": 0.0}
+    points = recs.times
+    if not points:
+        return out
+    marks = dict(points)
+    out["format"] = marks.get("load", 0.0)
+    out["preamble"] = marks.get("begin", 0.0) - out["format"]
+    for (name, t), (_, t_next) in itertools.pairwise(points):
+        if name[:1] in "GU" and name[1:].isdigit():
+            out["glue" if name[0] == "G" else "units"] += t_next - t
+    out["end"] = max(0.0, total - marks.get("end", total))
+    return {k: round(v, 3) for k, v in out.items()}
 
 
 def parse_vector_names(text: str) -> dict[str, int]:
@@ -113,6 +133,9 @@ class RunRecords:
     nomenclature: dict[str, list[str]] = field(default_factory=dict)
     #: counter name -> (register index, names of the counters it resets)
     counters: dict[str, tuple[int, tuple[str, ...]]] = field(default_factory=dict)
+    #: elapsed TeX time in seconds at points of the run (``load``, ``begin``, segment ids,
+    #: ``end``; M6 breakdown), in order
+    times: list[tuple[str, float]] = field(default_factory=list)
     #: page layout flags (``twoside``, ``openright``: 0/1)
     layout: dict[str, int] = field(default_factory=dict)
 
@@ -174,6 +197,9 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
         if line.startswith("P "):
             index, seg, value, label = [*line[2:].split(" ", 3), ""][:4]
             recs.pages.append(PageRecord(int(index), seg, int(value), label))
+        elif line.startswith("T "):
+            _, point, value = line.split(" ", 2)
+            recs.times.append((point, int(value) / 65536))
         elif line.startswith("F "):
             seg, _, name = line[2:].partition(" ")
             recs.files.append((seg, name))

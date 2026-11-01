@@ -22,6 +22,7 @@ from fastinc.incremental import Context, build, load_epoch
 from fastinc.layout import Layout, make_layout
 from fastinc.shadow import sync_project_shadow
 from fastinc.texdist import TexDistribution, detect
+from fastinc.timing import Timings
 
 #: Marker file proving that a directory is a fastinc build directory (``clean`` safety).
 BUILD_DIR_MARKER = ".fastinc-build-dir"
@@ -84,13 +85,16 @@ def cmd_build(args: argparse.Namespace, cwd: Path) -> int:
         keep_runs=getattr(args, "keep_runs", False),
         verbose=args.verbose,
     )
+    timings = Timings()
     analysis, layout = _prepare(config)
     dist = detect()
     dist.check_tools()
+    timings.lap("analysis")
     epoch = int(os.environ.get("SOURCE_DATE_EPOCH", int(time.time())))
     sync_project_shadow(analysis, layout.shadow_dir, layout.build_dir)
+    timings.lap("shadow")
     report = _say if config.verbose else (lambda _msg: None)
-    ctx = Context(analysis, layout, dist, config, os.environ, report)
+    ctx = Context(analysis, layout, dist, config, os.environ, report, timings)
     result = build(ctx, epoch, full=getattr(args, "full", False))
     if not config.verbose:
         for warning in result.warnings:

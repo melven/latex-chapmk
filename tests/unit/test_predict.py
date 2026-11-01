@@ -90,3 +90,24 @@ def test_list_extensions_match_the_driver() -> None:
     m = re.search(r"\\providecommand\\fastinc@listexts\{([^}]*)\}", sty)
     assert m is not None
     assert [f".{e}" for e in m.group(1).split(",")] == list(LIST_SUFFIXES)
+
+
+def test_tex_phases_and_timings() -> None:
+    from fastinc.records import RunRecords, tex_phases
+    from fastinc.timing import Timings
+
+    recs = RunRecords(
+        times=[("load", 0.5), ("begin", 0.8), ("G0", 0.8), ("U1", 1.0), ("G1", 1.5), ("end", 1.6)]
+    )
+    assert tex_phases(recs, 2.0) == {
+        "format": 0.5,
+        "preamble": 0.3,
+        "glue": 0.3,
+        "units": 0.5,
+        "end": 0.4,
+    }
+    assert tex_phases(RunRecords(), 1.0)["format"] == 0.0
+    t = Timings()
+    t.lap("a")
+    t.lap("a")
+    assert set(t.as_dict()) == {"a"}

@@ -49,10 +49,12 @@ from fastinc.records import (
     read_main_records,
     read_run_records,
     register_names,
+    tex_phases,
 )
 from fastinc.runner import DERIVED_SUFFIXES, RunSpec, prepare_run_dir, run_batch
 from fastinc.state import State, UnitInputs, load_state, save_state
 from fastinc.texdist import TexDistribution
+from fastinc.timing import Timings
 from fastinc.tools import ToolInputError
 
 MAX_ITERATIONS = 8
@@ -88,6 +90,7 @@ class BuildReport:
     seconds: float = 0.0
     pdf: str | None = None
     warnings: list[str] = field(default_factory=list)
+    timings: dict[str, float] = field(default_factory=dict)  # wall time per phase (M6)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=1)
@@ -103,6 +106,7 @@ class Context:
     config: Config
     base_env: Mapping[str, str]
     say: Callable[[str], None]
+    timings: Timings = field(default_factory=Timings)
 
     @property
     def job(self) -> str:
@@ -517,7 +521,10 @@ class Fixpoint:
         all_compiled = set().union(*compiled_by_run)
         pre_self = {seg: pre.unit_self(seg) for seg in all_compiled}
         env = ctx.env(state.epoch)
+        t = ctx.timings
+        t.lap("prepare")
         results = run_batch(a, ctx.layout, ctx.dist, env, specs, self.fmt.name, len(specs))
+        t.lap("tex")
         for r in results:
             if not r.ok:
                 err = TexError("pdflatex failed", first_error=r.first_error)
@@ -529,17 +536,21 @@ class Fixpoint:
             self.register_names = register_names(
                 [self.fmt.directory / f"{self.fmt.name}.log", results[0].log]
             )
+        t.lap("records")
         for spec, recs, compiled in zip(specs, all_recs, compiled_by_run, strict=True):
             try:
                 commit_run(a, ctx.layout, state, spec.name, recs, compiled)
             except ToolInputError as err:
                 raise FallbackError(str(err)) from err
             self._attribute(recs, compiled, ctx.layout.runs_dir / spec.name)
+        t.lap("commit")
         lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name)
+        t.lap("lists")
         try:
             tools = run_tools(a, ctx.layout, ctx.dist, env, state, specs[-1].name)
         except ToolInputError as err:
             raise FallbackError(str(err)) from err
+        t.lap("tools")
         post = read_canon(a, canon)
         derived = tuple(f"{ctx.job}{x}" for x in DERIVED_SUFFIXES)
         for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
@@ -564,6 +575,7 @@ class Fixpoint:
             glue_after = glue_after or "list files without unit markers (rewritten by the glue)"
         state.pending, state.glue_pending = dirty_after, glue_after
         save_state(state, canon)
+        t.lap("dirty")
         reports = []
         for j, (spec, result) in enumerate(zip(specs, results, strict=True)):
             reports.append(
@@ -579,6 +591,7 @@ class Fixpoint:
                     "glue": glue,
                     "tools": tools if j == len(specs) - 1 else [],
                     "seconds": round(result.seconds, 2),
+                    "tex": tex_phases(all_recs[j], result.seconds),
                 }
             )
         return reports
@@ -678,6 +691,7 @@ def _full(ctx: Context, epoch: int, reason: str, start: float) -> BuildReport:
         ctx.dist.environment(epoch, ctx.base_env),
         report=ctx.say,
     )
+    ctx.timings.lap("full")
     return BuildReport(
         "full",
         reason,
@@ -685,6 +699,7 @@ def _full(ctx: Context, epoch: int, reason: str, start: float) -> BuildReport:
         [inc.arg for inc in ctx.analysis.includes],
         time.monotonic() - start,
         str(result.pdf),
+        timings=ctx.timings.as_dict(),
     )
 
 
@@ -734,6 +749,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
                 segments={},
                 next_run=next_run,
             )
+        ctx.timings.lap("state")
         try:
             fmt = ensure_format(ctx.analysis, ctx.layout, ctx.dist, ctx.env(state.epoch))
         except TexError as err:
@@ -744,9 +760,11 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
             glue: str | None = "cold build"
         else:
             dirty, glue = loop.initial()
+        ctx.timings.lap("format")
         runs = loop.converge(dirty, glue)
-        pdf = publish_state(ctx.analysis, ctx.layout, state)
+        pdf = publish_state(ctx.analysis, ctx.layout, state, ctx.timings)
         _gc(ctx, state)
+        ctx.timings.lap("gc")
         compiled: set[str] = set()
         for r in runs:
             if r["selection"] is None:
@@ -762,6 +780,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
             time.monotonic() - start,
             str(pdf),
             loop.warnings,
+            ctx.timings.as_dict(),
         )
     except (FallbackError, MergeFailedError) as fb:
         if isinstance(fb, FallbackError) and fb.persistent:

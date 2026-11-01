@@ -75,8 +75,13 @@
 %% ---------------------------------------------------------------- records
 \newwrite\fastinc@rec
 \immediate\openout\fastinc@rec=\jobname.frec
+% elapsed TeX time (M6 breakdown): "T <point> <scaled seconds>" at package load, \begin{document},
+% each segment start and \end{document}
+\def\fastinc@time#1{\ifdefined\pdfelapsedtime
+  \immediate\write\fastinc@rec{T #1 \the\pdfelapsedtime}\fi}
+\fastinc@time{load}
 \def\fastinc@main#1{\immediate\write\@mainaux{#1}}
-\def\fastinc@entry@rec{\def\fastinc@pfx{fastinc@b}%
+\def\fastinc@entry@rec{\fastinc@time{\fastinc@seg}\def\fastinc@pfx{fastinc@b}%
   \fastinc@main{\string\fastinc@entry{\fastinc@seg}{\fastinc@vec}}}
 \def\fastinc@gexit@rec{\def\fastinc@pfx{fastinc@b}%
   \fastinc@main{\string\fastinc@gexit{\fastinc@seg}{\fastinc@vec}}}
@@ -206,6 +211,7 @@
     \string\providecommand\string\fastinc@ckpt[2]{}\string\providecommand\string\fastinc@bkmlevels[1]{}%
     \string\providecommand\string\fastinc@counters[1]{}\string\providecommand\string\fastinc@layout[1]{}%
     \string\providecommand\string\fastinc@ustart[1]{}}%
+  \fastinc@time{begin}%
   \fastinc@setup@vector
   \fastinc@counters@rec
   \fastinc@layout@rec
@@ -218,6 +224,7 @@
 % end of the last glue segment; bookmark levels (S6: \BKM@<id> = {parent}{level}{children})
 \def\fastinc@lvl#1#2#3{#2}
 \AddToHook{enddocument}{%
+  \fastinc@time{end}%
   \fastinc@glue@end
   \ifdefined\BKM@id
     \def\fastinc@tmp{}\gdef\fastinc@i{1}%
