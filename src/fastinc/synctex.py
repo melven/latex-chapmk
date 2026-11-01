@@ -139,8 +139,11 @@ def merge(pages: Sequence[tuple[Path, int]], map_path: Callable[[str], str], out
                 key = (src, m.group(2))
                 tag = local.get(key)
                 if tag is None:
-                    name = map_path(p.inputs[m.group(2)])
-                    tag = local[key] = tags.setdefault(name, len(tags) + 1)
+                    if m.group(2) not in p.inputs:  # tag 0: no input file (form xobjects)
+                        tag = local[key] = int(m.group(2))
+                    else:
+                        name = map_path(p.inputs[m.group(2)])
+                        tag = local[key] = tags.setdefault(name, len(tags) + 1)
                 line = f"{m.group(1)}{tag}," + line[m.end() :]
             if not line.startswith(("]", ")")):
                 count += 1
