@@ -41,7 +41,7 @@ def run_main(
 ) -> str:
     """Per-run main file for a run with the format.
 
-    Lines ``1..s-1`` become empty lines (they are in the format). Line ``s`` is prefixed with
+    Lines ``1..s-1`` become empty lines (they are in the format). Line ``s-1`` gets
     ``\\csname endofdump\\endcsname``, the driver parameters for fastinc.sty (extra run-local
     register names ``deny_names``, config ``[state] ignore``), ``\\usepackage{fastinc}`` and, if
     ``selection`` is not ``None``, ``\\includeonly{...}`` (an empty selection gives a glue-only
@@ -56,8 +56,12 @@ def run_main(
     prefix += f"\\usepackage{{{RUNTIME_PACKAGE}}}"
     if selection is not None:
         prefix += "\\includeonly{" + ",".join(selection) + "}"
-    out.append(prefix + analysis.lines[s - 1])
-    out.extend(analysis.lines[s:])
+    # on its own line (s-1, empty here): the statement at line s may span several lines, and
+    # the rest of the line of \endofdump is read in mylatexformat's special catcode state
+    if not out:  # split at line 1: \documentclass not in the format (a fallback reason)
+        raise ValueError("run_main needs a split point after line 1")
+    out[-1] = prefix + out[-1]
+    out.extend(analysis.lines[s - 1 :])
     return "".join(out)
 
 
