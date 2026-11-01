@@ -17,6 +17,7 @@ from fastinc.texsource import (
     LineIndex,
     depth_at_line_starts,
     find_macros,
+    open_conditional_at_line_starts,
     skip_space,
     split_lines,
     split_list,
@@ -307,6 +308,7 @@ def analyse(config: Config) -> Analysis:
     deny = [re.compile(p) for p in (*DENY_SPLIT, *config.split_before)]
     pre_clean = clean_lines[: begin - 1]
     depths = depth_at_line_starts(pre_clean)
+    open_ifs = open_conditional_at_line_starts(pre_clean)
     split, reason, found = begin, "\\begin{document}", False
     input_files: list[Path] = []
     inputs_by_line: dict[int, list[str]] = {}
@@ -321,9 +323,15 @@ def analyse(config: Config) -> Analysis:
             continue
         match = next((p.pattern for p in deny if p.search(line)), None) or scan.deny_match
         if match is not None:
-            start = lineno  # move to the start of the enclosing top-level statement (S1)
-            while start > 1 and depths[start - 1] > 0:
-                start -= 1
+            # move to the start of the enclosing top-level statement (S1): out of brace
+            # groups and out of open conditionals (the format must not end inside an \if)
+            start, moved = lineno, True
+            while moved:
+                moved = False
+                while start > 1 and depths[start - 1] > 0:
+                    start, moved = start - 1, True
+                if open_ifs[start - 1]:
+                    start, moved = open_ifs[start - 1], True
             split, reason, found = start, match, True
 
     upto_begin = "".join(clean_lines[:begin])  # \documentclass may share the begin line

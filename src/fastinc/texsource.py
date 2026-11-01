@@ -202,6 +202,64 @@ def depth_at_line_starts(lines: list[str]) -> list[int]:
     return depths
 
 
+#: TeX's primitive conditionals (pdfTeX/e-TeX)
+PRIMITIVE_CONDITIONALS = frozenset(
+    [
+        "if",
+        "ifcat",
+        "ifx",
+        "ifnum",
+        "ifdim",
+        "ifodd",
+        "ifcase",
+        "ifvmode",
+        "ifhmode",
+        "ifmmode",
+        "ifinner",
+        "ifvoid",
+        "ifhbox",
+        "ifvbox",
+        "ifeof",
+        "iftrue",
+        "iffalse",
+        "ifdefined",
+        "ifcsname",
+        "iffontchar",
+        "ifincsname",
+        "ifpdfprimitive",
+        "ifpdfabsnum",
+        "ifpdfabsdim",
+    ]
+)
+_WORD = re.compile(r"\\([A-Za-z@]+)")
+
+
+def open_conditional_at_line_starts(lines: list[str]) -> list[int]:
+    """For each line of comment-free ``lines``: the 1-based line of the outermost conditional
+    that is still open at the line start (0 if none). Conditionals are TeX primitives and
+    switches defined by ``\\newif`` in ``lines``; ``\\fi`` closes."""
+    switches: set[str] = set()
+    for line in lines:
+        switches.update(m.group(1) for m in re.finditer(r"\\newif\s*\\(if[A-Za-z@]+)", line))
+    out: list[int] = []
+    stack: list[int] = []
+    for lineno, line in enumerate(lines, start=1):
+        out.append(stack[0] if stack else 0)
+        after_newif = False
+        for m in _WORD.finditer(line):
+            name = m.group(1)
+            if after_newif:
+                after_newif = False
+                continue
+            if name == "newif":
+                after_newif = True
+            elif name in PRIMITIVE_CONDITIONALS or name in switches:
+                stack.append(lineno)
+            elif name == "fi" and stack:
+                stack.pop()
+    return out
+
+
 def split_list(arg: str) -> list[str]:
     """Split a comma-separated macro argument (``a, b,c``) into stripped, non-empty items."""
     return [item.strip() for item in arg.split(",") if item.strip()]

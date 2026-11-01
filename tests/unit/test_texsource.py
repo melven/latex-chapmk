@@ -71,3 +71,18 @@ def test_split_lines_only_at_newline() -> None:
 def test_backslash_at_line_end_does_not_stop_scanning() -> None:
     text = "a\\\n\\include{x}\\"
     assert [c.name for c in control_sequences(text)] == ["\n", "include"]
+
+
+def test_open_conditionals() -> None:
+    from fastinc.texsource import open_conditional_at_line_starts
+
+    lines = [
+        "\\newif\\ifext\n",
+        "\\extfalse\n",
+        "\\ifext\n",
+        "  \\ifx\\a\\b x\\else y\\fi\n",
+        "  \\tikzexternalize\n",
+        "\\fi\n",
+        "\\iftoggle{t}{a}{b}\n",  # etoolbox command, not a conditional
+    ]
+    assert open_conditional_at_line_starts(lines) == [0, 0, 0, 3, 3, 3, 0]

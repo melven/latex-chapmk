@@ -192,3 +192,13 @@ def test_split_must_follow_documentclass(tmp_path: Path) -> None:
     main.write_text("\\documentclass{article}\\begin{document}x\\end{document}\n")
     a = analyse(Config(main=main))
     assert any("documentclass" in r for r in a.fallback_reasons)
+
+
+def test_split_moves_out_of_open_conditional(tmp_path: Path) -> None:
+    main = tmp_path / "m.tex"
+    main.write_text(
+        "\\documentclass{book}\n\\usepackage{tikz}\n\\newif\\ifext\n\\extfalse\n"
+        "\\ifext\n  \\tikzexternalize\n\\fi\n\\begin{document}\nx\n\\end{document}\n"
+    )
+    a = analyse(Config(main=main))
+    assert a.split_line == 5 and "tikzexternalize" in a.split_reason
