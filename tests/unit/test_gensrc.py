@@ -26,7 +26,9 @@ def test_format_source(tmp_path: Path) -> None:
     a = analyse(project(tmp_path))
     assert a.split_line == 3
     assert format_source(a) == (
-        "\\RequirePackage{fastinc-ini}\\documentclass{book}\n\\usepackage{tikz}\n\\endofdump\n"
+        "\\RequirePackage{fastinc-ini}\\documentclass{book}\n\\usepackage{tikz}\n"
+        "\\ifdefined\\pdflastobj\\typeout{fastinc-pdf-objects:\\the\\pdflastobj,"
+        "\\the\\pdflastxform,\\the\\pdflastximage}\\fi\\endofdump\n"
     )
 
 

@@ -20,7 +20,8 @@ def _ending(line: str) -> str:
 
 def format_source(analysis: Analysis) -> str:
     """Format source ``pre.tex``: ``\\RequirePackage{fastinc-ini}`` prepended to line 1,
-    lines ``1..s-1`` verbatim, then ``\\endofdump`` (mylatexformat)."""
+    lines ``1..s-1`` verbatim, then the PDF object counters (objects cannot be dumped; checked
+    by :func:`fastinc.fmt.ensure_format`) and ``\\endofdump`` (mylatexformat)."""
     nl = analysis.newline
     lines = list(analysis.lines[: analysis.split_line - 1])
     if not lines:
@@ -28,7 +29,11 @@ def format_source(analysis: Analysis) -> str:
     lines[0] = f"\\RequirePackage{{{INI_PACKAGE}}}{lines[0]}"
     if not lines[-1].endswith("\n"):
         lines[-1] += nl
-    return "".join(lines) + "\\endofdump" + nl
+    check = (
+        "\\ifdefined\\pdflastobj\\typeout{fastinc-pdf-objects:\\the\\pdflastobj,"
+        "\\the\\pdflastxform,\\the\\pdflastximage}\\fi"
+    )
+    return "".join(lines) + check + "\\endofdump" + nl
 
 
 def run_main(

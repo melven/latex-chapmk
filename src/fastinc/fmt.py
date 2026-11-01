@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -73,5 +74,17 @@ def ensure_format(
         log = log_file.read_text(errors="replace") if log_file.is_file() else result.output
         err = first_error(map_paths(log, layout.path_map()))
         raise TexError("format build failed", log=log_file, first_error=err)
+    m = re.search(r"fastinc-pdf-objects:(\d+),(\d+),(\d+)", log_file.read_text(errors="replace"))
+    if m and (int(m.group(2)) or int(m.group(3))):  # objects are dumped fine, xforms/images not
+        fmt_file.unlink(missing_ok=True)
+        raise TexError(
+            "format build failed",
+            log=log_file,
+            first_error=(
+                f"the preamble before line {analysis.split_line} creates PDF form xobjects or "
+                f"images ({m.group(2)}/{m.group(3)}), which a format cannot hold; "
+                "move that code after the split point (fastinc.toml: split.before)"
+            ),
+        )
     stamp_file.write_text(stamp)
     return FormatInfo(fmt_dir, FORMAT_NAME, rebuilt=True)

@@ -58,3 +58,27 @@ def test_format_build_error_is_mapped(tmp_path: Path) -> None:
     with pytest.raises(TexError) as err:
         ensure_format(a, lay, dist, dist.environment(1, os.environ, lay.fmt_dir))
     assert "nonexistent-pkg" in (err.value.first_error or "")
+
+
+def test_pdf_objects_in_the_format_fall_back(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
+    """Code that creates PDF form xobjects cannot be dumped (pgf manual: fadings); the build
+    falls back to full mode with a reason instead of failing in TeX."""
+    from fastinc.cli import main
+
+    src = tmp_path / "s"
+    src.mkdir()
+    (src / "d.tex").write_text(
+        "\\documentclass{article}\n\\setbox0\\hbox{x}\\immediate\\pdfxform0\n\\usepackage{bookmark}\n"
+        "\\begin{document}\nx\n\\end{document}\n"
+    )
+    # \pdfobj is on the deny list: split before it, the format holds no object
+    assert main(["build", "d.tex", "-v"], cwd=src) == 0
+    assert "format build failed" not in capsys.readouterr().err
+    # hidden from the deny list (\csname): caught by the format check
+    (src / "e.tex").write_text(
+        "\\documentclass{article}\n\\setbox0\\hbox{x}\\immediate\\csname pdfxform\\endcsname0\n"
+        "\\usepackage{bookmark}\n\\begin{document}\nx\n\\end{document}\n"
+    )
+    assert main(["build", "e.tex", "-v"], cwd=src) == 0
+    err = capsys.readouterr().err
+    assert "full build: format build failed" in err and "creates PDF form xobjects" in err

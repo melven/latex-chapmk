@@ -202,3 +202,13 @@ def test_split_moves_out_of_open_conditional(tmp_path: Path) -> None:
     )
     a = analyse(Config(main=main))
     assert a.split_line == 5 and "tikzexternalize" in a.split_reason
+
+
+def test_split_before_pdf_object_creators(tmp_path: Path) -> None:
+    main = tmp_path / "m.tex"
+    main.write_text(
+        "\\documentclass{book}\n\\usepackage{tikz}\n\\usetikzlibrary{\n  calc,\n  fadings,\n}\n"
+        "\\begin{document}\nx\n\\end{document}\n"
+    )
+    a = analyse(Config(main=main))
+    assert a.split_line == 3 and "fadings" in a.split_reason

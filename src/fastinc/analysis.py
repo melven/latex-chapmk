@@ -30,6 +30,11 @@ DENY_SPLIT: tuple[str, ...] = (
     r"\\makeindex\b",
     r"\\makeglossaries\b",
     r"\\usepackage\s*(\[[^\]]*\])?\s*\{[^}]*\bminted\b",
+    # code that creates PDF form xobjects or images at load time cannot be dumped into a
+    # format (pgf manual: the fadings library runs \pdfxform); plain \pdfobj objects can
+    r"(?<![\w@])fadings(?![\w@])",
+    r"\\(tikzfading|pgfdeclarefading|pgfdeclareimage)(?![A-Za-z@])",
+    r"\\pdf(xform|ximage)(?![A-Za-z@])",
 )
 
 #: Packages that force full-build mode in v1 (PLAN §1).
