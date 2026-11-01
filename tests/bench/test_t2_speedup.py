@@ -16,7 +16,9 @@ PARA = "\n\n".join(["Additional text to make the chapter longer. " * 40] * 6)
 def _t2(src: Path, jobs: str) -> float:
     ch3 = src / "chapters" / "ch3.tex"
     text = ch3.read_text()
-    ch3.write_text(text.replace("\\section*{Remarks on ch3}", PARA + "\n\\section*{Remarks on ch3}"))
+    ch3.write_text(
+        text.replace("\\section*{Remarks on ch3}", PARA + "\n\\section*{Remarks on ch3}")
+    )
     start = time.monotonic()
     assert main(["build", "main.tex", "-j", jobs], cwd=src) == 0
     return time.monotonic() - start
