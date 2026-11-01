@@ -68,72 +68,77 @@ def figure_source(k: int) -> str:
     )
 
 
-def chapter(idx: int, name: str, title: str, appendix: bool = False) -> str:
+def chapter(
+    idx: int, name: str, title: str, appendix: bool = False, n_main: int = 6, scale: int = 1
+) -> str:
     rng = random.Random(100 + idx)
     k = idx + 1
-    other = (idx + 2) % len(CHAPTERS) + 1  # a different main chapter for cross references
+    other = (idx + 2) % n_main + 1  # a different main chapter for cross references
     cites = [f"ref{(idx * 5 + j) % N_BIB + 1:02d}" for j in range(5)]
     g = NOMENCL_GROUPS[idx % len(NOMENCL_GROUPS)]
-    parts = [
-        f"\\chapter{{{title}}}\\label{{ch:{name}}}",
-        paragraph(rng) + f" See \\cite{{{cites[0]}}} and \\cite{{{cites[1]},{cites[2]}}}."
-        f"\\footnote{{A footnote in {name} with \\cite{{{cites[3]}}}.}}",
-        f"\\section{{Theory of {name}}}\\label{{sec:{name}-theory}}",
-        f"\\nomenclature[{g}]{{$a_{{{k}}}$}}{{coefficient of {name}}}"
-        f"\\nomenclature[{g}]{{$\\mathbf{{v}}_{{{k}}}$}}{{vector of {name}}}",
-        paragraph(rng),
-        f"\\begin{{equation}}\\label{{eq:{name}}}\n  x_{{{k}}} = \\sum_{{i=1}}^{{n}} a_i "
-        f"\\contract b_i \\in \\Rn, \\quad \\argmin_{{y\\in\\R}} \\| y \\|\n\\end{{equation}}",
-        f"\\begin{{theorem}}\\label{{thm:{name}}}\n  {words(rng, 14)}\n\\end{{theorem}}",
-        f"\\begin{{lemma}}\n  {words(rng, 10)}\n\\end{{lemma}}",
-        paragraph(rng),
-        f"\\subsection{{Details of {name}}}\\label{{sub:{name}}}",
-        paragraph(rng),
-    ]
-    if not appendix:
+    parts = [f"\\chapter{{{title}}}\\label{{ch:{name}}}"]
+    for rep in range(scale):  # scale > 1: longer chapters (benchmarks)
+        s = "" if rep == 0 else f"-{rep}"
+        t = "" if rep == 0 else f" (part {rep + 1})"
         parts += [
-            f"\\section{{Figures of {name}}}",
+            paragraph(rng) + f" See \\cite{{{cites[0]}}} and \\cite{{{cites[1]},{cites[2]}}}."
+            f"\\footnote{{A footnote in {name} with \\cite{{{cites[3]}}}.}}",
+            f"\\section{{Theory of {name}{t}}}\\label{{sec:{name}{s}-theory}}",
+            f"\\nomenclature[{g}]{{$a_{{{k}}}$}}{{coefficient of {name}}}"
+            f"\\nomenclature[{g}]{{$\\mathbf{{v}}_{{{k}}}$}}{{vector of {name}}}",
             paragraph(rng),
-            "\\begin{figure}[htb]\n  \\centering\n"
-            f"  \\pgfimage[width=0.55\\textwidth]{{plot{k}}}\n"
-            f"  \\caption{{Measured curve of {name}}}\\label{{fig:{name}}}\n\\end{{figure}}",
-            "\\begin{figure}[htb]\n  \\centering\n"
-            "  \\begin{subfigure}{0.45\\textwidth}\\centering\n"
-            "    \\begin{tikzpicture}\\draw[gnuplot1, thick] (0,0) rectangle (2,1);"
-            "\\node at (1,0.5) {left};\\end{tikzpicture}\n"
-            "    \\caption{Left part}\n  \\end{subfigure}\n"
-            "  \\begin{subfigure}{0.45\\textwidth}\\centering\n"
-            "    \\begin{tikzpicture}\\draw[gnuplot2, thick] (0,0) circle (0.6);"
-            "\\node at (0,0) {right};\\end{tikzpicture}\n"
-            "    \\caption{Right part}\n  \\end{subfigure}\n"
-            f"  \\caption{{Sketches of {name}}}\\label{{fig:{name}-sub}}\n\\end{{figure}}",
+            f"\\begin{{equation}}\\label{{eq:{name}{s}}}\n  x_{{{k}}} = \\sum_{{i=1}}^{{n}} a_i "
+            f"\\contract b_i \\in \\Rn, \\quad \\argmin_{{y\\in\\R}} \\| y \\|\n\\end{{equation}}",
+            f"\\begin{{theorem}}\\label{{thm:{name}{s}}}\n  {words(rng, 14)}\n\\end{{theorem}}",
+            f"\\begin{{lemma}}\n  {words(rng, 10)}\n\\end{{lemma}}",
             paragraph(rng),
-            f"\\section{{Tables of {name}}}",
-            "\\begin{table}[htb]\n  \\centering\n"
-            f"  \\caption{{Parameters of {name}}}\\label{{tab:{name}}}\n"
-            "  \\begin{tabular}{llr}\n    \\toprule\n"
-            "    \\multirow{2}{*}{Case} & \\makecell{Memory\\\\traffic} & Rate \\\\\n"
-            "    & & \\\\\n    \\midrule\n"
-            f"    small & \\SI{{{k}.5}}{{\\GB}} & \\SI{{{k * 3}}}{{\\GFs}} \\\\\n"
-            f"    large & \\SI{{{k * 2}}}{{\\TB}} & \\SI{{{k * 7}}}{{\\GBs}} \\\\\n"
-            "    \\bottomrule\n  \\end{tabular}\n\\end{table}",
-            paragraph(rng),
-            f"\\section{{Algorithms of {name}}}",
-            "\\begin{algorithm}\n"
-            f"  \\caption{{Sweep of {name}}}\\label{{alg:{name}}}\n"
-            "  \\begin{algorithmic}[1]\n"
-            "    \\REQUIRE tensor $x$, tolerance $\\epsilon$ \\COMMENT{input}\n"
-            "    \\FOR{$i = 1, \\dots, d$}\n"
-            f"      \\STATE $x_i \\gets x_i / \\| x_i \\|$ \\COMMENT{{normalise core {k}}}\n"
-            "    \\ENDFOR\n"
-            "    \\ENSURE $x$ \\COMMENT{output}\n"
-            "  \\end{algorithmic}\n\\end{algorithm}",
-            "\\begin{lstlisting}\n"
-            f"// kernel of {name}\n__shared__ double buf[{32 * k}];\n"
-            "for (int i = 0; i < n; i++) y[i] += a * x[i];\n"
-            "#pragma omp parallel for\n\\end{lstlisting}",
+            f"\\subsection{{Details of {name}{t}}}\\label{{sub:{name}{s}}}",
             paragraph(rng),
         ]
+        if not appendix:
+            parts += [
+                f"\\section{{Figures of {name}{t}}}",
+                paragraph(rng),
+                "\\begin{figure}[htb]\n  \\centering\n"
+                f"  \\pgfimage[width=0.55\\textwidth]{{plot{k}}}\n"
+                f"  \\caption{{Measured curve of {name}{t}}}\\label{{fig:{name}{s}}}\n\\end{{figure}}",
+                "\\begin{figure}[htb]\n  \\centering\n"
+                "  \\begin{subfigure}{0.45\\textwidth}\\centering\n"
+                "    \\begin{tikzpicture}\\draw[gnuplot1, thick] (0,0) rectangle (2,1);"
+                "\\node at (1,0.5) {left};\\end{tikzpicture}\n"
+                "    \\caption{Left part}\n  \\end{subfigure}\n"
+                "  \\begin{subfigure}{0.45\\textwidth}\\centering\n"
+                "    \\begin{tikzpicture}\\draw[gnuplot2, thick] (0,0) circle (0.6);"
+                "\\node at (0,0) {right};\\end{tikzpicture}\n"
+                "    \\caption{Right part}\n  \\end{subfigure}\n"
+                f"  \\caption{{Sketches of {name}{t}}}\\label{{fig:{name}{s}-sub}}\n\\end{{figure}}",
+                paragraph(rng),
+                f"\\section{{Tables of {name}{t}}}",
+                "\\begin{table}[htb]\n  \\centering\n"
+                f"  \\caption{{Parameters of {name}{t}}}\\label{{tab:{name}{s}}}\n"
+                "  \\begin{tabular}{llr}\n    \\toprule\n"
+                "    \\multirow{2}{*}{Case} & \\makecell{Memory\\\\traffic} & Rate \\\\\n"
+                "    & & \\\\\n    \\midrule\n"
+                f"    small & \\SI{{{k}.5}}{{\\GB}} & \\SI{{{k * 3}}}{{\\GFs}} \\\\\n"
+                f"    large & \\SI{{{k * 2}}}{{\\TB}} & \\SI{{{k * 7}}}{{\\GBs}} \\\\\n"
+                "    \\bottomrule\n  \\end{tabular}\n\\end{table}",
+                paragraph(rng),
+                f"\\section{{Algorithms of {name}{t}}}",
+                "\\begin{algorithm}\n"
+                f"  \\caption{{Sweep of {name}{t}}}\\label{{alg:{name}{s}}}\n"
+                "  \\begin{algorithmic}[1]\n"
+                "    \\REQUIRE tensor $x$, tolerance $\\epsilon$ \\COMMENT{input}\n"
+                "    \\FOR{$i = 1, \\dots, d$}\n"
+                f"      \\STATE $x_i \\gets x_i / \\| x_i \\|$ \\COMMENT{{normalise core {k}}}\n"
+                "    \\ENDFOR\n"
+                "    \\ENSURE $x$ \\COMMENT{output}\n"
+                "  \\end{algorithmic}\n\\end{algorithm}",
+                "\\begin{lstlisting}\n"
+                f"// kernel of {name}\n__shared__ double buf[{32 * k}];\n"
+                "for (int i = 0; i < n; i++) y[i] += a * x[i];\n"
+                "#pragma omp parallel for\n\\end{lstlisting}",
+                paragraph(rng),
+            ]
     if name == "ch3":
         rows = "\n".join(f"  row {r} & \\SI{{{r}}}{{\\MB}} & {words(rng, 3)} \\\\" for r in range(1, 71))
         parts += [
@@ -158,8 +163,15 @@ def chapter(idx: int, name: str, title: str, appendix: bool = False) -> str:
     return "\n\n".join(parts) + "\n"
 
 
-def main_body() -> str:
-    incs = "\n".join(f"\\include{{chapters/{n}}}" for n, _ in CHAPTERS)
+def chapters(n: int) -> list[tuple[str, str]]:
+    """Main chapters: the six of the corpus, or ``n`` (benchmarks) with repeated titles."""
+    if n == len(CHAPTERS):
+        return CHAPTERS
+    return [(f"ch{k}", CHAPTERS[(k - 1) % len(CHAPTERS)][1]) for k in range(1, n + 1)]
+
+
+def main_body(main: list[tuple[str, str]]) -> str:
+    incs = "\n".join(f"\\include{{chapters/{n}}}" for n, _ in main)
     apps = "\n".join(f"\\include{{chapters/{n}}}" for n, _ in APPENDICES)
     return (
         "\n\\title{Fast incremental builds of a synthetic thesis}\n"
@@ -171,20 +183,32 @@ def main_body() -> str:
     )
 
 
-def generate() -> None:
+def generate(out: Path = HERE, n_chapters: int = len(CHAPTERS), scale: int = 1) -> None:
+    """Write the corpus into ``out`` (default: next to this script, the committed corpus);
+    ``n_chapters`` main chapters, each ``scale`` times as long (benchmarks)."""
+    main = chapters(n_chapters)
+    out.mkdir(parents=True, exist_ok=True)
     preamble = (HERE / "preamble.tex").read_text(encoding="utf-8")
-    (HERE / "main.tex").write_text(preamble + main_body(), encoding="utf-8")
-    (HERE / "chapters").mkdir(exist_ok=True)
-    for idx, (name, title) in enumerate(CHAPTERS):
-        (HERE / "chapters" / f"{name}.tex").write_text(chapter(idx, name, title))
+    (out / "main.tex").write_text(preamble + main_body(main), encoding="utf-8")
+    (out / "chapters").mkdir(exist_ok=True)
+    for idx, (name, title) in enumerate(main):
+        (out / "chapters" / f"{name}.tex").write_text(
+            chapter(idx, name, title, n_main=len(main), scale=scale))
     for idx, (name, title) in enumerate(APPENDICES):
-        (HERE / "chapters" / f"{name}.tex").write_text(
-            chapter(len(CHAPTERS) + idx, name, title, appendix=True))
-    (HERE / "fig").mkdir(exist_ok=True)
-    for k in range(1, len(CHAPTERS) + 1):
-        (HERE / "fig" / f"plot{k}.tex").write_text(figure_source(k))
-    (HERE / "thesis.bib").write_text(bib())
+        (out / "chapters" / f"{name}.tex").write_text(
+            chapter(len(main) + idx, name, title, appendix=True, n_main=len(main), scale=scale))
+    (out / "fig").mkdir(exist_ok=True)
+    for k in range(1, len(main) + 1):
+        (out / "fig" / f"plot{k}.tex").write_text(figure_source(k))
+    (out / "thesis.bib").write_text(bib())
 
 
 if __name__ == "__main__":
-    generate()
+    import argparse
+
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--out", type=Path, default=HERE)
+    ap.add_argument("--chapters", type=int, default=len(CHAPTERS))
+    ap.add_argument("--scale", type=int, default=1)
+    args = ap.parse_args()
+    generate(args.out, args.chapters, args.scale)
