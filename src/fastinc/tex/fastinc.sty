@@ -122,8 +122,17 @@
   \xdef\fastinc@seg{G\fastinc@k}\fastinc@entry@rec\fastinc@mark\gdef\fastinc@absnames{}}
 
 % included unit (S3: after the first \clearpage, unit aux open)
+% "O <seg> 0|1": the unit starts under twoside+openright (local settings such as KOMA's
+% open=any in a group around the \include count; M5 odd-start prediction)
+% 1 if \if@<name> is true (expandable). \ifcsname first: \csname would define an undefined
+% \if@<name> as \relax; \iftrue must not appear in skipped text (it counts as a conditional)
+\def\fastinc@iftrue#1{\ifcsname if@#1\endcsname\expandafter\@firstoftwo\else
+  \expandafter\@secondoftwo\fi{\fastinc@iftrue@{#1}}{0}}
+\def\fastinc@iftrue@#1{\expandafter\ifx\csname if@#1\endcsname\iftrue1\else0\fi}
+\def\fastinc@open@rec{\immediate\write\fastinc@rec{O \fastinc@seg\space
+  \ifnum\fastinc@iftrue{twoside}\fastinc@iftrue{openright}=11 1\else0\fi}}
 \AddToHook{include/before}{%
-  \fastinc@unit@begin{\CurrentFilePath/\CurrentFile}\gdef\fastinc@absnames{}%
+  \fastinc@unit@begin{\CurrentFilePath/\CurrentFile}\gdef\fastinc@absnames{}\fastinc@open@rec
   \immediate\write\@partaux{\string\fastinc@ustart{\fastinc@seg}}}
 % unit end after the final \clearpage, unit aux still open (S3). The checkpoint is the
 % complete vector: the restore of an excluded unit must also undo changes made by the
@@ -184,10 +193,8 @@
 
 % page layout flags for prediction (M5: chapters start on odd pages in twoside+openright)
 \def\fastinc@layout@rec{%
-  \def\fastinc@twoside{0}\def\fastinc@openright{0}%
-  \expandafter\ifx\csname if@twoside\endcsname\iftrue\def\fastinc@twoside{1}\fi
-  \expandafter\ifx\csname if@openright\endcsname\iftrue\def\fastinc@openright{1}\fi
-  \fastinc@main{\string\fastinc@layout{twoside=\fastinc@twoside,openright=\fastinc@openright}}}
+  \fastinc@main{\string\fastinc@layout{twoside=\fastinc@iftrue{twoside},%
+    openright=\fastinc@iftrue{openright}}}}
 
 % list-file markers (M5): \fastinc@lmark{U<k>} before a unit's list contributions (first
 % statement of its aux) and \fastinc@lmark{/<seg>} after each entry record, written while
