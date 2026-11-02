@@ -48,7 +48,15 @@ from fastinc.outputs import (
     mark_published,
     publish_state,
 )
-from fastinc.predict import Vector, normalized, partition, predict, rewrite_checkpoint
+from fastinc.predict import (
+    SegmentVectors,
+    Vector,
+    normalized,
+    partition,
+    pass_through,
+    predict,
+    rewrite_checkpoint,
+)
 from fastinc.records import (
     RecordError,
     RunRecords,
@@ -235,6 +243,7 @@ class Fixpoint:
         self._view: CanonView | None = None  # canonical view after the last batch (unchanged since)
         self.last_entries: dict[str, Vector] = {}  # observed in the latest run
         self.mispredicted: dict[str, int] = {}  # consecutive mispredictions per unit
+        self.state_before: dict[str, SegmentVectors] = {}
 
     # sources -------------------------------------------------------------------------------
 
@@ -446,9 +455,12 @@ class Fixpoint:
 
     def _predictions(
         self, groups: list[list[int]]
-    ) -> tuple[dict[str, tuple[Vector, Vector]], dict[int, dict[str, Vector]]]:
+    ) -> tuple[
+        dict[str, tuple[Vector, Vector]], dict[int, dict[str, tuple[Vector, frozenset[int]]]]
+    ]:
         """Predicted (entry, exit) per segment from the first unit of the batch on, and per
-        run index the predicted exits to write into its excluded units' checkpoints."""
+        run index the checkpoints to write into its excluded units: predicted exit and the
+        pass-through registers (not restored)."""
         first = f"U{groups[0][0]}"
         observed = self.last_entries.get(first)
         entry = observed if observed is not None else self.state.vectors[first].entry
@@ -471,13 +483,14 @@ class Fixpoint:
                 if inc.heading in chapter_level
             )
         pred = predict(segments(self.a), self.state.vectors, first, entry, odd)
-        rewrites: dict[int, dict[str, Vector]] = {}
+        rewrites: dict[int, dict[str, tuple[Vector, frozenset[int]]]] = {}
         for j, group in enumerate(groups):
-            out: dict[str, Vector] = {}
+            out: dict[str, tuple[Vector, frozenset[int]]] = {}
             for k in range(groups[0][0], group[0]):
                 seg = f"U{k}"
-                if pred[seg][1] != normalized(self.state.vectors[seg].exit):
-                    out[seg] = pred[seg][1]
+                keep = pass_through(self.state.vectors[seg])
+                if keep or pred[seg][1] != normalized(self.state.vectors[seg].exit):
+                    out[seg] = (pred[seg][1], keep)
             rewrites[j] = out
         return pred, rewrites
 
@@ -494,9 +507,10 @@ class Fixpoint:
         canon = ctx.layout.canon_dir
         parallel = len(groups) > 1
         pred: dict[str, tuple[Vector, Vector]] = {}
-        rewrites: dict[int, dict[str, Vector]] = {}
+        rewrites: dict[int, dict[str, tuple[Vector, frozenset[int]]]] = {}
         if parallel:
             pred, rewrites = self._predictions([g for g in groups if g is not None])
+            self.state_before = dict(state.vectors)  # verification uses the vectors predicted from
         registers = {n: reg for n, (reg, _) in self._canon_records(canon).counters.items()}
         pre = self._view if self._view is not None else read_canon(a, canon)
         pre_glue = self.glue_inputs(pre)
@@ -525,9 +539,10 @@ class Fixpoint:
                 excluded = {seg for seg in self.units if seg not in compiled}
                 stmts = run_input_main_aux(statements(read_lines(main_aux)), excluded)
                 _write(main_aux, stmts)
-            for seg, exit_ in rewrites.get(j, {}).items():
+            for seg, (exit_, keep) in rewrites.get(j, {}).items():
                 path = run_dir / a.includes[int(seg[1:]) - 1].aux_name
-                _write(path, rewrite_checkpoint(statements(read_lines(path)), exit_, registers))
+                stmts = rewrite_checkpoint(statements(read_lines(path)), exit_, registers, keep)
+                _write(path, stmts)
             specs.append(spec)
             compiled_by_run.append(compiled)
         all_compiled = set().union(*compiled_by_run)
@@ -625,15 +640,23 @@ class Fixpoint:
             for k in group:
                 seg = f"U{k}"
                 actual = normalized(recs.checkpoints.get(seg, {}))
-                if actual == pred[seg][1]:
+                entry = recs.entry_state(seg)
+                keep = pass_through(self.state_before[seg])
+                # pass-through registers must still pass through; the others match the
+                # predicted exit
+                regs = sorted(
+                    r
+                    for r in actual.keys() | pred[seg][1].keys() | keep
+                    if (
+                        actual.get(r, 0) != entry.get(r, 0)
+                        if r in keep
+                        else actual.get(r, 0) != pred[seg][1].get(r, 0)
+                    )
+                )
+                if not regs:
                     self.mispredicted.pop(seg, None)
                     continue
                 self.mispredicted[seg] = self.mispredicted.get(seg, 0) + 1
-                regs = sorted(
-                    r
-                    for r in actual.keys() | pred[seg][1].keys()
-                    if actual.get(r, 0) != pred[seg][1].get(r, 0)
-                )
                 names = [self.register_names.get(r, f"\\count{r}") for r in regs]
                 arg = self.a.includes[k - 1].arg
                 reason = f"misprediction: exit of {arg} ({_short(names)})"
