@@ -35,6 +35,7 @@ class Config:
     aux_ignore: tuple[str, ...] = ()
     state_ignore: tuple[str, ...] = ()
     unit_headings: tuple[str, ...] = ()
+    picture_cache: bool = True
     keep_runs: bool = False
     verbose: bool = False
     config_file: Path | None = field(default=None, compare=False)
@@ -59,6 +60,7 @@ _SCHEMA: dict[str, tuple[str, str]] = {
     "aux.ignore": ("aux_ignore", "regexes"),
     "state.ignore": ("state_ignore", "strings"),
     "units.heading": ("unit_headings", "strings"),
+    "pictures.cache": ("picture_cache", "bool"),
 }
 
 
@@ -78,6 +80,10 @@ def _convert(key: str, kind: str, value: Any, base: Path) -> Any:
         if not isinstance(value, str):
             raise ConfigError(f"{key}: expected a path string, got {value!r}")
         return (base / value).resolve()
+    if kind == "bool":
+        if not isinstance(value, bool):
+            raise ConfigError(f"{key}: expected true or false, got {value!r}")
+        return value
     if kind == "int":
         if not isinstance(value, int) or isinstance(value, bool) or value < 0:
             raise ConfigError(f"{key}: expected a non-negative integer, got {value!r}")

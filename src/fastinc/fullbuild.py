@@ -8,15 +8,25 @@ PDF, SyncTeX file and log are published (path-mapped) to the output directory.
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from fastinc.analysis import Analysis
+from fastinc.aux import read_lines
+from fastinc.deps import cite_values, label_values, short_hash
 from fastinc.errors import TexError, ToolError
 from fastinc.gensrc import full_mode_input
 from fastinc.layout import Layout
 from fastinc.logs import first_error, map_paths
+from fastinc.pictures import (
+    PICS_FILE,
+    collect_garbage,
+    driver_file,
+    export_figures,
+    read_pictures,
+)
 from fastinc.proc import run
 from fastinc.publish import copy_bytes, publish
 from fastinc.synctex import rewrite_paths
@@ -26,7 +36,7 @@ MAX_PASSES = 8
 NOMENCL_STYLE = "nomencl.ist"
 
 # files that are outputs of a pass, never inputs of the next one
-_NOT_INPUTS = (".pdf", ".log", ".fls", ".synctex.gz", ".synctex(busy)", ".blg")
+_NOT_INPUTS = (".pdf", ".log", ".fls", ".synctex.gz", ".synctex(busy)", ".blg", PICS_FILE)
 
 
 @dataclass(frozen=True)
@@ -129,6 +139,7 @@ class PassResult:
 
     ok: bool
     first_error: str | None
+    rerun: str | None = None  # a reason for another pass besides changed files
 
 
 def converge(
@@ -158,10 +169,13 @@ def converge(
         changed = sorted(
             p.name
             for p in read_inputs(outdir / f"{job}.fls", cwd, outdir)
-            if before.get(p) != _digest(p)
+            if not p.name.endswith(_NOT_INPUTS) and before.get(p) != _digest(p)
         )
-        report(f"pass {n}: " + (f"changed {_names(changed)}" if changed else "stable"))
-        if not changed:
+        why = [f"changed {_names(changed)}"] if changed else []
+        if result.rerun is not None:
+            why.append(result.rerun)
+        report(f"pass {n}: " + ("; ".join(why) if why else "stable"))
+        if not why:
             return n, tools
     raise TexError(f"no fixpoint after {max_passes} passes (files keep changing)", log=log)
 
@@ -184,9 +198,13 @@ def full_build(
     *,
     report: Callable[[str], None] = lambda _msg: None,
     max_passes: int = MAX_PASSES,
+    picture_cache: bool = True,
 ) -> FullBuildResult:
     """Full mode: pdflatex on the unmodified sources (with fastinc-ini) to a fixpoint, then
     publish the results.
+
+    With the user's TikZ externalize, pictures are exported into ``layout.full_fig_dir`` and
+    embedded in a further pass (§6.17), so the result equals an externalized build.
 
     On a TeX error the previous published PDF is kept, the failing log is published and a
     :class:`TexError` is raised. The shadow tree must be up to date.
@@ -196,11 +214,25 @@ def full_build(
     for inc in analysis.includes:  # \include writes <arg>.aux into the output directory (S2)
         (out / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
     argv = dist.pdflatex(full_mode_input(analysis), job, out)
+    fig_dir = layout.full_fig_dir if picture_cache else None
+    stamp = short_hash(dist.version + json.dumps(asdict(analysis.fingerprints), sort_keys=True))
 
     def run_pass() -> PassResult:
+        # key part for references in pictures: all label and citation values of the last pass
+        auxes = sorted(out.rglob("*.aux"))
+        values = label_values(read_lines(p) for p in auxes)
+        values.update(cite_values(out / f"{job}.bbl"))
+        refs = short_hash(json.dumps(sorted(values.items())))
+        text = driver_file(fig_dir, layout.shadow_dir, stamp, {"-": refs})
+        (out / PICS_FILE).write_text(text, encoding="utf-8")
         result = run(argv, cwd=layout.shadow_dir, env=env)
         if result.ok and (out / f"{job}.pdf").is_file():
-            return PassResult(True, None)
+            pictures = read_pictures(out / f"{job}.log")
+            exported = 0
+            if fig_dir is not None:
+                exported = export_figures(out / f"{job}.pdf", pictures, fig_dir)
+                collect_garbage(fig_dir, {p.key for p in pictures})
+            return PassResult(True, None, f"{exported} pictures exported" if exported else None)
         log = out / f"{job}.log"
         text = log.read_text(errors="replace") if log.is_file() else result.output
         return PassResult(False, first_error(map_paths(text, layout.path_map())))

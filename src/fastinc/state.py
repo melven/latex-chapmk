@@ -69,6 +69,7 @@ class State:
     glue_pending: str | None = None
     vectors: dict[str, SegmentVectors] = field(default_factory=dict)
     eqp_tags: dict[str, list[str]] = field(default_factory=dict)
+    pictures: dict[str, list[str]] = field(default_factory=dict)  # figure keys per segment
     version: int = STATE_VERSION
 
     def run_names(self) -> set[str]:
@@ -147,6 +148,7 @@ def load_state(canon_dir: Path) -> State | None:
                 for seg, v in data["vectors"].items()
             },
             eqp_tags={k: list(v) for k, v in data.get("eqp_tags", {}).items()},
+            pictures={k: list(v) for k, v in data.get("pictures", {}).items()},
         )
     except (ValueError, KeyError, TypeError) as err:
         raise FastincError(f"{path}: corrupt state ({err}); run 'fastinc clean'") from err

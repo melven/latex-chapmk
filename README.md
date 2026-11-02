@@ -32,6 +32,11 @@ fastinc clean [MAIN]
 
 **Limitations:** pdfLaTeX only; biblatex with biber only; hyperref needs the `bookmark`
 package. Documents using `glossaries`, `imakeidx`/`makeidx`, `minted` or `cleveref` are built
-in full mode (like latexmk), with the reason printed. TikZ externalize is disabled.
+in full mode (like latexmk), with the reason printed.
+
+**TikZ externalize:** if the document calls `\tikzexternalize`, fastinc keeps it but makes the
+figures itself (no shell escape, figures in the build directory; the prefix and system call
+are ignored). Unchanged pictures are reused; the result equals a latexmk build with
+externalize. `[pictures] cache = false` in `fastinc.toml` typesets all pictures inline instead.
 
 License: BSD-3-Clause.

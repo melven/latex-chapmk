@@ -121,7 +121,14 @@ def _check(
     ref_layout = replace(layout, out_dir=layout.build_dir / "check")
     ref_epoch = load_epoch(layout.canon_dir, epoch)
     _say("check: building the --full reference")
-    full_build(analysis, ref_layout, dist, dist.environment(ref_epoch, os.environ), report=ctx.say)
+    full_build(
+        analysis,
+        ref_layout,
+        dist,
+        dist.environment(ref_epoch, os.environ),
+        report=ctx.say,
+        picture_cache=ctx.config.picture_cache,
+    )
     ref, got = ref_layout.output(".pdf"), layout.output(".pdf")
     rep = compare_pdfs(ref, got)
     sources = [analysis.main.name] + [f"{inc.arg}.tex" for inc in analysis.includes]

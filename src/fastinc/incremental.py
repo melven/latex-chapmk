@@ -48,6 +48,16 @@ from fastinc.outputs import (
     mark_published,
     publish_state,
 )
+from fastinc.pictures import (
+    PICS_FILE,
+    collect_garbage,
+    driver_file,
+    export_figures,
+    read_pictures,
+    remove_figures,
+    stale_figures,
+    store_references,
+)
 from fastinc.predict import (
     SegmentVectors,
     Vector,
@@ -301,6 +311,20 @@ class Fixpoint:
         }
         return ";".join(f"{k}={v}" for k, v in parts.items())
 
+    def pictures_file(self, view: CanonView) -> str:
+        """Driver parameters of the picture cache (§6.17) for runs from ``view``: directory and
+        stamp (format, main file). Figures whose code references a label or citation that
+        changed since their export are removed first (the picture is exported again)."""
+        ctx = self.ctx
+        if not ctx.config.picture_cache:
+            return driver_file(None, ctx.layout.shadow_dir, "", {})
+        fig = ctx.layout.fig_dir
+        remove_figures(fig, stale_figures(fig, view.values))
+        stamp = short_hash(
+            self.state.format_stamp + json.dumps(self.state.fingerprints, sort_keys=True)
+        )
+        return driver_file(fig, ctx.layout.shadow_dir, stamp, {})
+
     def _glue_sources_changed(self) -> list[str]:
         return [
             name
@@ -528,6 +552,7 @@ class Fixpoint:
         registers = {n: reg for n, (reg, _) in self._canon_records(canon).counters.items()}
         pre = self._view if self._view is not None else read_canon(a, canon)
         pre_glue = self.glue_inputs(pre)
+        pictures_text = self.pictures_file(pre)
         specs: list[RunSpec] = []
         compiled_by_run: list[set[str]] = []
         for j, group in enumerate(groups):
@@ -557,6 +582,7 @@ class Fixpoint:
                 path = run_dir / a.includes[int(seg[1:]) - 1].aux_name
                 stmts = rewrite_checkpoint(statements(read_lines(path)), exit_, registers, keep)
                 _write(path, stmts)
+            (run_dir / PICS_FILE).write_text(pictures_text, encoding="utf-8")
             specs.append(spec)
             compiled_by_run.append(compiled)
         all_compiled = set().union(*compiled_by_run)
@@ -584,6 +610,7 @@ class Fixpoint:
             except ToolInputError as err:
                 raise FallbackError(str(err)) from err
             self._attribute(recs, compiled, ctx.layout.runs_dir / spec.name)
+        exported = self._pictures(specs, compiled_by_run, pre)
         t.lap("commit")
         lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name)
         t.lap("lists")
@@ -614,6 +641,12 @@ class Fixpoint:
             dirty_after, glue_after = self._verify(groups, all_recs, pred, dirty_after, glue_after)
         if not lists_complete:
             glue_after = glue_after or "list files without unit markers (rewritten by the glue)"
+        for seg, n in sorted(exported.items()):
+            # the run typeset these pictures inline; embedded, the result equals externalize
+            if seg.startswith("U"):
+                dirty_after.setdefault(seg, []).append(f"pictures exported ({n})")
+            else:
+                glue_after = glue_after or f"pictures exported ({n} in the glue)"
         state.pending, state.glue_pending = dirty_after, glue_after
         save_state(state, canon)
         t.lap("dirty")
@@ -692,6 +725,31 @@ class Fixpoint:
                 return dirty, reason
         return dirty, glue
 
+    def _pictures(
+        self, specs: list[RunSpec], compiled_by_run: list[set[str]], pre: CanonView
+    ) -> dict[str, int]:
+        """Export the figures of pictures typeset inline (§6.17) with the values of the keys
+        their code references (``pre``: the runs' input), and record the figure keys per
+        committed segment (units from their run, glue from the last run). Returns the number
+        of exported pictures per segment."""
+        ctx, state = self.ctx, self.state
+        fig = ctx.layout.fig_dir if ctx.config.picture_cache else None
+        glue = [g for g in segments(self.a) if g.startswith("G")]
+        exported: dict[str, int] = {}
+        if fig is None:
+            return exported
+        for spec, compiled in zip(specs, compiled_by_run, strict=True):
+            run_dir = ctx.layout.runs_dir / spec.name
+            pics = read_pictures(run_dir / f"{ctx.job}.log")
+            export_figures(run_dir / f"{ctx.job}.pdf", pics, fig)
+            for seg in [*compiled, *glue]:
+                state.pictures[seg] = sorted({p.key for p in pics if p.segment == seg})
+            for p in pics:
+                if p.exported:
+                    store_references(fig, p, pre.values)
+                    exported[p.segment] = exported.get(p.segment, 0) + 1
+        return exported
+
     def _attribute(self, recs: RunRecords, compiled: set[str], run_dir: Path) -> None:
         """Source files of the compiled units and the glue (F records), global inputs."""
         ctx, state = self.ctx, self.state
@@ -751,6 +809,7 @@ def _full(ctx: Context, epoch: int, reason: str, start: float) -> BuildReport:
         ctx.dist,
         ctx.dist.environment(epoch, ctx.base_env),
         report=ctx.say,
+        picture_cache=ctx.config.picture_cache,
     )
     ctx.timings.lap("full")
     return BuildReport(
@@ -829,6 +888,10 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         else:  # nothing changed: the published files are current (latexmk-like no-op)
             pdf = ctx.layout.output(".pdf")
         _gc(ctx, state)
+        if ctx.config.picture_cache:
+            collect_garbage(
+                ctx.layout.fig_dir, {k for keys in state.pictures.values() for k in keys}
+            )
         ctx.timings.lap("gc")
         compiled: set[str] = set()
         for r in runs:

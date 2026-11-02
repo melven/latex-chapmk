@@ -16,7 +16,8 @@ class Layout:
     """Directory structure of one project (PLAN §5, §6.5, §6.6).
 
     ``build_dir`` contains ``src`` (shadow tree), ``fmt`` (format), ``full`` (full-mode runs),
-    ``runs`` (incremental runs) and ``canon`` (canonical state). Outputs for the user go to
+    ``runs`` (incremental runs), ``canon`` (canonical state) and the picture caches ``fig``
+    (incremental) and ``fig-full`` (full mode; keys differ: §6.17). Outputs for the user go to
     ``out_dir`` (default: the source directory).
     """
 
@@ -44,6 +45,14 @@ class Layout:
     @property
     def canon_dir(self) -> Path:
         return self.build_dir / "canon"
+
+    @property
+    def fig_dir(self) -> Path:
+        return self.build_dir / "fig"
+
+    @property
+    def full_fig_dir(self) -> Path:
+        return self.build_dir / "fig-full"
 
     def output(self, suffix: str) -> Path:
         """Published file ``<out_dir>/<jobname><suffix>`` (``.pdf``, ``.synctex.gz``, ``.log``)."""
