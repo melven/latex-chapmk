@@ -28,7 +28,7 @@ One command (`fastinc build main.tex`) replaces `latexmk -pdf -synctex=1`. It pr
 
 - Engines other than pdfLaTeX.
 - Units other than `\include` (no automatic splitting at `\chapter`).
-- TikZ externalize. It is disabled by the driver (§6.4.3); re-enabling is a phase-2 option.
+- The user's TikZ externalize. It is disabled by the driver (§6.4.3). A fastinc-managed picture cache is evaluated in M7 (§6.17, spike S12).
 - Byte-identical PDFs.
 - `glossaries`, `imakeidx`/`makeidx`, `minted`, `cleveref`. Detect these and fall back to full builds with a warning (§6.14).
 - biblatex with `backend=bibtex` (or classic BibTeX). Only biber is supported; others fall back to full builds.
@@ -61,7 +61,7 @@ The user's documents follow these rules. The driver relies on them and checks th
 - **F5** Internal hyperref links (`\ref`, `\autoref`, `\nameref`, `\hyperref[...]`, `\cite`, ToC entries), outline (bookmarks), page labels and document info work in the merged PDF.
 - **F6** biblatex+biber and nomencl+makeindex are handled.
 - **F7** Errors are reported with paths and line numbers mapped back to the user's sources. On error the previous `main.pdf` is kept.
-- **F8** `fastinc watch`, equivalent to `latexmk -pvc`.
+- **F8** `fastinc watch`, equivalent to `latexmk -pvc` (future, after M9).
 - **F9** `fastinc build --full` runs a plain reference build (latexmk-equivalent, same environment) for release and checks.
 - **F10** `fastinc check` (or `fastinc build --check`) builds incrementally and with `--full`, then compares the results using §3.3. One call, exit code 1 and a per-item report on a difference. Available from M3 on, as a user-facing self-test.
 - **F11** Coexistence with plain LaTeX builds in the same directory, without manual cleaning in between:
@@ -275,7 +275,7 @@ The run main has the fixed name `fastinc-run.tex` and is found via `TEXINPUTS` (
     - `<unit>.aux` of the units.
   - **Refresh:** once per build, before the runs. Parallel runs share it read-only.
   - **Path mapping:** shadow paths map to source paths by prefix substitution, for logs (§6.13) and SyncTeX (§6.12). SyncTeX records absolute, unresolved paths of the form `<cwd>/./<relative>`. Replace only the `<cwd>` prefix and keep the `/./`: `synctex view` matches relative file names by it (S10).
-  - **Platforms:** where symlinks are unavailable (Windows without the privilege), use hardlinks, else copies [M7].
+  - **Platforms:** where symlinks are unavailable (Windows without the privilege), use hardlinks, else copies [M9].
   - **Limitation (accepted in v1):** relative paths that leave the source tree (`\input{../x}`) do not resolve. Absolute paths work.
 - Environment: N4 and `max_print_line=10000` (`TEXMF_OUTPUT_DIRECTORY` is not needed, S2).
 
@@ -359,7 +359,7 @@ Aux files are parsed as brace-balanced statements, not lines: `\@setckpt` and `\
 | `\abx@aux@read@bbl@mdfivesum`, `\abx@aux@read@bblrerun` | main, end | ignored (bookkeeping) |
 | `\gdef\LT@<roman>{\LT@entry…}` (longtable) | unit | *self* |
 | `\pgfsyspdfmark{pgfidN}{x}{y}` (pgf `remember picture`, todonotes) | main, unit slice | *self*, keyed by `pgfidN` |
-| `\expandafter\gdef\csname eqp@(this\|next\|minwd\|maxwd)@<tag>\endcsname{…}` (eqparbox) | main, end of document | *self* per tag. Written only for tags typeset in the run, so they are merged per tag from the latest run that wrote the tag. Owner = units of that run. |
+| `\expandafter\gdef\csname eqp@(this\|next\|minwd\|maxwd)@<tag>\endcsname{…}` (eqparbox) | main, end of document | *self* per tag. Written only for tags typeset in the run, so they are merged per tag from the latest run that wrote the tag. Owners = the segments that use the tag (`Q` records, M6; without records: the units of that run). A tag shared by several units is computed in a partial run from the included owners only (known limitation; `check` detects it). |
 | `\global\csname @altsecnumformattrue\endcsname` (KOMA autodot) | main, end of document | OR-aggregate over the typeset segments; attributed to the run's included units; *global* |
 | `\BKM@entry{...}{...}` (bookmark) | main, unit slice | outline record: merge only (§6.11); a change dirties nothing |
 | `\fastinc@bkmlevels{id=level,...}` | main, end | outline levels (§6.4.2); merge only |
@@ -429,7 +429,7 @@ Scan unit sources (comments stripped) for occurrences of the commands below. The
 
 - A hit gives a warning with `file:line`, and the unit is marked *global*.
   - **M4:** state changed by a global unit (e.g. `\parskip`) is not in the checkpoints, so later units and later glue see it only in a run that compiles the global unit. Therefore a global unit is compiled **in every run**, and when it is dirty itself, all later units are compiled in the same run. (The earlier rule "when recompiled, all successors are dirty" would compile them in a later run without the global unit, i.e. without its state.)
-- Config `lint.allow = [...]` lists exceptions.
+- Config `lint.allow = [...]` lists exceptions; `lint.verbatim` and `lint.shortverb` declare a document's verbatim conventions (M6, pgf manual).
 - The exemption is a heuristic. The acceptance tests guard it (T18 and a grouped variant).
 
 ### 6.9 Scheduling and fixpoint
@@ -480,7 +480,7 @@ Cheap common case: a typo edit means one run, the unit's exit, exports and contr
   - imports: keys found by the text scan (`\label{key}` arguments are definitions, not references) whose value differs from the one at compile start (label: whole `\newlabel` argument; citation: `.bbl` block and position plus keyed biblatex aux data such as `\abx@aux@number`);
   - self data (unit-aux and slice statements of class *self*) differs before/after the compile;
   - entry state: a unit not compiled in the run whose observed entry vector differs from the one it was compiled with, ignoring the counters that its leading numbered heading (`\chapter`, `\part`, `\section`) resets (`\cl@` closure from the `\fastinc@counters` record; assumes the include reads none of them before the heading). Tail rule: it and **all later units** are compiled in the next run (no prediction until M5);
-  - eqparbox widths changed: the units of the run; aggregate (KOMA autodot) or unclassified aux data changed: all units;
+  - eqparbox widths changed: the units that use a changed tag (since M6; before: the units of the run); aggregate (KOMA autodot) or unclassified aux data changed: all units;
   - a list file changed for a unit that typesets lists (text scan for `\tableofcontents`, `\listof…`, `\printbibliography`, …, or a derived file in its `F` records).
 - Glue validity: hash of the derived files, the values of keys imported by the main file and glue files, and the glue aux data (list typesetting data, eqparbox, aggregates, backrefs, unclassified, glue self data; keyed data order-insensitive) at the start of the run that produced the committed glue, compared with the current canonical state; glue sources changed → invalid (a glue-only run, no cold build).
 - The run's input main aux omits the citations of excluded units: biblatex compares the previous citations with the current ones and would treat them as removed, which suppresses e.g. the `defernumbers` data (found on hgb).
@@ -514,6 +514,13 @@ Known misprediction cases are harmless and only cost an iteration:
 - **List files of a batch** (§6.7.1): no run read all new contributions. fastinc.sty writes no-op markers into the list files (`\fastinc@lmark{U<k>}` before and `{/U<k>}` after each unit's contributions, written while the aux files are read at `\end{document}`). The canonical list files are the last run's, with each unit's section spliced in from the run that committed the unit (TeX-written bytes, so exact). Missing markers: the glue is rewritten by a glue-only run.
 - Verification: the actual exit of every unit compiled in a run before the last equals its prediction; at the first mismatch, all units after that run's group are dirty again ("misprediction"), and the glue.
 - Measured on the thesis corpus (4 cores): T2 `-j 1` 8.8 s, `-j 4` 6.8 s (3 iterations each, no misprediction); benchmark `tests/bench/test_t2_speedup.py` (whole build incl. merge), 3 repetitions: `-j 1` 11.0/12.0/11.3 s, `-j 4` 10.2/9.6/10.5 s. Each run has a fixed cost of about 1.4 s (format load, glue) and each build about 4–5 s outside TeX (aux analysis, commit, PDF/SyncTeX merge), so the speedup grows with the size of the units; the driver overhead is an M6 benchmark item.
+
+**Refinements in M6** (found on the user's document):
+- Registers a unit does not modify (no absolute assignment, exit = entry, including registers that are 0) pass through: checkpoints of excluded units in a batch restore only the registers the unit modifies, and verification requires the others to still pass through. Example: biblatex's `maxextraname`, set at `\begin{document}` from the `.bbl`, which the first cold run did not have.
+- Scratch registers are run-local (built-in deny list): `\calc@Acount`, `\calc@Bcount` (calc).
+- `\abx@aux@defaultrefcontext` is not citation data (it is missing in a run without `.bbl`).
+- At a misprediction the chain is predicted again from the actual exit; later groups are dirty only if their start entry changes; the glue is redone in any case (its pages come from the last run) and that run re-checks all entries.
+- Messages name registers with their allocating package (`\c@instcount [biblatex]`).
 
 #### 6.9.4 Cold build
 
@@ -620,7 +627,7 @@ Each trigger prints a one-line reason.
 
 ```
 fastinc build [MAIN] [-j N] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [-v]
-fastinc watch [MAIN] [same options]        # rebuild on change of any recorded input
+fastinc watch [MAIN] [same options]        # future: rebuild on change of any recorded input
 fastinc check [MAIN]                       # = build --check: incremental vs --full, criterion §3.3
 fastinc clean [MAIN]
 fastinc graph [MAIN] [--format text|dot|json]   # compilation units and dependencies
@@ -647,6 +654,8 @@ build_dir = ".fastinc"
 split_before = []              # extra regexes
 [lint]
 allow = []                     # e.g. ["\\setlength"]
+verbatim = []                  # extra verbatim environments, e.g. ["codeexample"] (pgf manual)
+shortverb = []                 # short verbatim characters, e.g. ["|"]
 [units]
 heading = []                   # extra chapter-level heading commands (A5)
 [aux]
@@ -674,12 +683,21 @@ All TeX invocations go through a **distribution adapter** (`texdist.py`) with tw
 - **Line endings:** generated files keep the source's line endings; read and write in binary mode, so line numbers are preserved.
 - **Output replacement:** `os.replace` onto `main.pdf` fails on Windows while a viewer locks the file (e.g. Adobe Reader). Retry with backoff for 2 s, then write `main.fastinc.pdf` and warn. SumatraPDF does not lock.
 - **Processes:** use `subprocess` only, no `fork`; the process pool must be spawn-safe.
-- **Watch mode:** `watchdog` (cross-platform).
+- **Watch mode (future):** `watchdog` (cross-platform).
 - **Performance on Windows:** process start-up and antivirus scanning of many small files are slower. Document the recommendation to exclude the build directory from on-access scanning.
 
 **CI matrix:** Linux/TeX Live, macOS/TeX Live, Windows/TeX Live, Windows/MiKTeX. Scenario tests run on all four. Raster comparison needs poppler, installed via conda on Windows.
 
 ---
+
+### 6.17 Picture cache (M7, planned)
+
+Measured on the user's document (M6): up to 70 % of a unit's TeX time is spent inside pgf/TikZ pictures (`tex.pictures`), and the most expensive unit is the critical path of every batch. Planned design, to be validated by spike S12:
+
+- fastinc.sty loads TikZ's `external` library in incremental runs, with a per-unit file prefix (`<build>/fig/<unit>/`) and the figure index reset per unit, so names do not depend on the selection of a run, and parallel runs never write the same file. The user's `\tikzexternalize` stays neutralised (§6.4.3).
+- Mode "list and make": missing figures are built by fastinc in its pool from the format (no shell escape), then the unit is run again or the figures are placed in the same iteration (S12 decides).
+- Validity: externalize checks only the picture code (md5). A unit's cached pictures are reused only if the unit is recompiled because of its own sources; after import, entry-state or list changes its pictures are rebuilt (they may show references, counters or page numbers). Pictures in the glue and `remember picture`/overlay pictures stay inline.
+- `--full` and `check` typeset pictures inline; §3.3 decides whether embedded figures are equal to inline pictures.
 
 ## 7. Repository layout
 
@@ -806,9 +824,9 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | S8 | *Done.* Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
 | S9 | *Done.* pikepdf merge prototype: two runs → merged PDF with working cross-run links, outline, page labels; verified by §3.3 items 1–3. |
 | S10 | *Done.* SyncTeX merge prototype; verified with `synctex view/edit`. |
-| S11 | *Deferred to M7 (needs a Windows CI runner).* MiKTeX: format flags, output/aux-directory read order (repeat S2), on-the-fly install settings, `SOURCE_DATE_EPOCH` support, availability of mylatexformat, biber, makeindex and synctex. |
+| S11 | *Deferred to M9 (needs a Windows CI runner).* MiKTeX: format flags, output/aux-directory read order (repeat S2), on-the-fly install settings, `SOURCE_DATE_EPOCH` support, availability of mylatexformat, biber, makeindex and synctex. |
 
-**Done when:** all notes except S11 (deferred to M7) are written and the plan is updated.
+**Done when:** all notes except S11 (deferred to M9) are written and the plan is updated.
 
 ### Later milestones
 
@@ -820,8 +838,10 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | **M4** | *Done.* Full mode also runs makeindex for a generic `<job>.idx` (the reference and fallback must equal latexmk; found on the pgf manual, whose imakeidx call fails with `-output-directory`), dependency model, compilation units, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks, `fastinc graph` and dirty reasons in the report | T2–T13, T16, T18, T19, T20 green (T2 via tail run) |
 | **M5** | *Done.* Prediction (§6.9.3) and parallel successor recompilation | T2 and T10 green with parallel runs; benchmark shows a speedup over M4 for T2 |
 | **M6** | *Done* (`docs/bench.md`). Benchmarks on large documents (§8.4), time breakdown per phase and resulting optimisations, README (short: usage, assumptions A1–A5, limitations) | §8.4 numbers and breakdown recorded |
-| **M7** | Spike S11 (MiKTeX), MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
-| **M8** | `watch` (F8; postponed from M6, not critical for the user) | rebuild on change of a recorded input |
+| **M7** | Picture cache (§6.17). First spike S12: evaluate TikZ's `external` library under fastinc (per-unit names, figures built via the format in the pool without shell escape, §3.3 equality with inline pictures, cache validity, glue pictures, `remember picture`); **decision point** with the results; then the implementation (on by default, opt-out in `fastinc.toml`) | S12 note written; typo scenario in a picture-heavy unit reuses its pictures; all scenario and acceptance tests green with the cache |
+| **M8** | Engineering review (intermission): reusable functionality and duplication, software design and layering, modularity, dependencies, test coverage and test design; findings fixed or recorded in `docs/review.md` | review note written; module maps match the code; all tests green |
+| **M9** | Spike S11 (MiKTeX), MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
+| Future | `watch` (F8) | rebuild on change of a recorded input |
 
 ---
 
@@ -838,7 +858,6 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | Larger merged PDF (duplicated fonts) | Accepted; `--full` for release |
 
 **Phase-2 candidates:**
-- TikZ externalize or a per-picture content cache;
 - a content-addressed unit cache (CI / cold checkout);
 - skippable glue;
 - a speculative parallel cold first pass;
@@ -886,6 +905,8 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | layout (M5) | main aux, header | `\fastinc@layout{twoside=0|1,openright=0|1}` |
 | unit start (M5) | unit aux, first statement | `\fastinc@ustart{U<k>}`: at `\end{document}` writes `\fastinc@lmark{U<k>}` into the open list files; `\fastinc@entry{<seg>}` writes `\fastinc@lmark{/<seg>}` |
 | page map | `<job>.frec` | `P <shipout#> <seg> <\c@page> <\thepage text>` per line |
+| elapsed time (M6) | `<job>.frec` | `T <point> <\pdfelapsedtime>`: points `load`, `begin`, each segment id, `end`, `picture+`/`picture-` around every `\pgfpicture` |
+| eqparbox use (M6) | `<job>.frec` | `Q <seg> <tag>` for every eqparbox width computation |
 | file attribution | `<job>.frec` | `F <seg> <path>` per line |
 | stream marker | `.nlo` | `%fastinc-seg <seg>` per line |
 

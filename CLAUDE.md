@@ -5,7 +5,7 @@
 
 ## Workflow
 
-1. Milestones are worked in order: M0 (spikes) → M1 … M7 (`PLAN.md` §9). Do not start features before M0 is done.
+1. Milestones are worked in order: M0 (spikes) → M1 … M9 (`PLAN.md` §9; `watch` is future work). Do not start features before M0 is done.
 2. Each spike S# gets:
    - a minimal reproducer in `tests/corpus/minimal/S#-*/`,
    - a note in `docs/spikes/S#.md` (question, setup, result, consequence for the plan).
@@ -14,6 +14,7 @@
    - S2 shows that the shadow tree (`PLAN.md` §6.5) breaks file resolution or SyncTeX paths,
    - S5 shows that `.bcf` patching is needed or not feasible,
    - S7 shows that running heads differ between partial and full runs,
+   - S12 is done (picture cache: results and options before implementing),
    - any change would weaken the acceptance criterion (`PLAN.md` §3.3),
    - any non-goal (`PLAN.md` §1) seems necessary.
 5. A milestone is done only when its "done when" condition holds and all tests pass.
@@ -78,4 +79,4 @@ pytest -m acceptance -n auto          # scenario tests with the PLAN.md §3.3 co
 - Markers: `slow` (runs TeX), `acceptance` (compares against a reference build), `bench` (manual only).
 - Tests must be xdist-safe: no shared paths outside `tmp_path`/`tmp_path_factory`, no global state beyond the process. Session fixtures (e.g. the built thesis state) run once per worker.
 - Scenario tests (`PLAN.md` §8.2) assert both §3.3 equality and the expected set of compiled units, from `fastinc build --report json`.
-- Windows/macOS/MiKTeX are tested only in CI (`.github/workflows/ci.yml`, extended in M7).
+- Windows/macOS/MiKTeX are tested only in CI (`.github/workflows/ci.yml`, extended in M9).
