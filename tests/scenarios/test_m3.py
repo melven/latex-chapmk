@@ -46,9 +46,16 @@ def test_t1_typo_compiles_one_unit(thesis: Path, capsys: pytest.CaptureFixture[s
     out = capsys.readouterr()
     assert rc == 0, out.out + out.err
     assert selections(rep) == [["chapters/ch3"]]
-    # nothing to do afterwards
+    # nothing to do afterwards: the published files are not even rewritten
+    pdf = thesis / "main.pdf"
+    stamp = pdf.stat().st_mtime_ns
     rc, rep = build(thesis)
     assert (rc, rep["mode"], rep["compiled"]) == (0, "noop", [])
+    assert pdf.stat().st_mtime_ns == stamp and "merge_pdf" not in rep["timings"]
+    # ... unless something else wrote them (e.g. latexmk in the same directory)
+    pdf.write_bytes(b"overwritten")
+    rc, rep = build(thesis)
+    assert (rc, rep["mode"]) == (0, "noop") and pdf.read_bytes()[:5] == b"%PDF-"
 
 
 def test_t14_syntax_error_keeps_previous_pdf(

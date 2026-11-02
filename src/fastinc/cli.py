@@ -13,11 +13,9 @@ from pathlib import Path
 
 import fastinc
 from fastinc.analysis import Analysis, analyse
-from fastinc.check import compare_pdfs, compare_synctex
 from fastinc.config import Config, load_config
 from fastinc.errors import ConfigError, FastincError, TexError
 from fastinc.fullbuild import full_build
-from fastinc.graph import dependency_graph, to_dot, to_json, to_text
 from fastinc.incremental import Context, build, load_epoch
 from fastinc.layout import Layout, make_layout
 from fastinc.shadow import sync_project_shadow
@@ -118,6 +116,8 @@ def _check(
     ctx: Context, analysis: Analysis, layout: Layout, dist: TexDistribution, epoch: int
 ) -> int:
     """Compare the published build with a --full build into <build>/check (same epoch)."""
+    from fastinc.check import compare_pdfs, compare_synctex  # pikepdf: only when checking
+
     ref_layout = replace(layout, out_dir=layout.build_dir / "check")
     ref_epoch = load_epoch(layout.canon_dir, epoch)
     _say("check: building the --full reference")
@@ -143,6 +143,8 @@ def cmd_clean(args: argparse.Namespace, cwd: Path) -> int:
 
 
 def cmd_graph(args: argparse.Namespace, cwd: Path) -> int:
+    from fastinc.graph import dependency_graph, to_dot, to_json, to_text
+
     config = load_config(args.main, cwd, build_dir=args.build_dir)
     analysis = analyse(config)
     layout = make_layout(config, analysis)

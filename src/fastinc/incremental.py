@@ -41,7 +41,13 @@ from fastinc.fmt import FormatInfo, ensure_format, format_stamp
 from fastinc.fullbuild import full_build, read_inputs
 from fastinc.layout import Layout
 from fastinc.lint import LintHit, lint_files
-from fastinc.outputs import MergeFailedError, failed_run, publish_state
+from fastinc.outputs import (
+    MergeFailedError,
+    failed_run,
+    is_published,
+    mark_published,
+    publish_state,
+)
 from fastinc.predict import Vector, normalized, partition, predict, rewrite_checkpoint
 from fastinc.records import (
     RecordError,
@@ -768,7 +774,11 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
             dirty, glue = loop.initial()
         ctx.timings.lap("format")
         runs = loop.converge(dirty, glue)
-        pdf = publish_state(ctx.analysis, ctx.layout, state, ctx.timings)
+        if runs or not is_published(ctx.layout):
+            pdf = publish_state(ctx.analysis, ctx.layout, state, ctx.timings)
+            mark_published(ctx.layout)
+        else:  # nothing changed: the published files are current (latexmk-like no-op)
+            pdf = ctx.layout.output(".pdf")
         _gc(ctx, state)
         ctx.timings.lap("gc")
         compiled: set[str] = set()

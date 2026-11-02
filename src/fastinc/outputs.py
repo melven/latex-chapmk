@@ -3,7 +3,10 @@ file, concatenated log, and the log of a failed run."""
 
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from fastinc.analysis import Analysis
 from fastinc.aux import parse_bookmark, read_lines, segment_slices
@@ -11,7 +14,6 @@ from fastinc.canon import segments
 from fastinc.errors import FastincError, TexError
 from fastinc.layout import Layout
 from fastinc.logs import map_paths
-from fastinc.merge_pdf import MergeError, OutlineEntry, PageSource, merge_pdf
 from fastinc.publish import publish, text_writer
 from fastinc.records import RunRecords, read_run_records
 from fastinc.runner import RUN_MAIN
@@ -19,6 +21,12 @@ from fastinc.state import State
 from fastinc.synctex import SyncTexError
 from fastinc.synctex import merge as merge_synctex
 from fastinc.timing import Timings
+
+if TYPE_CHECKING:
+    from fastinc.merge_pdf import OutlineEntry, PageSource
+
+PUBLISHED_FILE = "published.json"
+_OUTPUTS = (".pdf", ".synctex.gz", ".log")
 
 
 class MergeFailedError(FastincError):
@@ -49,6 +57,8 @@ def publish_state(
     analysis: Analysis, layout: Layout, state: State, timings: Timings | None = None
 ) -> Path:
     """Merge the canonical segments into the published PDF, SyncTeX file and log."""
+    from fastinc.merge_pdf import MergeError, OutlineEntry, PageSource, merge_pdf  # pikepdf
+
     t = timings or Timings()
     job = analysis.jobname
     runs: dict[str, RunRecords] = {}
@@ -116,3 +126,29 @@ def publish_state(
     publish(text_writer("\n".join(texts)), layout.output(".log"))
     t.lap("log")
     return pdf
+
+
+def _published_stamp(layout: Layout) -> dict[str, object]:
+    canon_state = layout.canon_dir / "state.json"
+    outputs: dict[str, list[int] | None] = {}
+    for suffix in _OUTPUTS:
+        path = layout.output(suffix)
+        st = path.stat() if path.is_file() else None
+        outputs[str(path)] = [st.st_size, st.st_mtime_ns] if st else None
+    digest = hashlib.sha256(canon_state.read_bytes()).hexdigest() if canon_state.is_file() else ""
+    return {"state": digest, "outputs": outputs}
+
+
+def is_published(layout: Layout) -> bool:
+    """Whether the published outputs are those of the current canonical state: the state did
+    not change since the last publish and the outputs (size, mtime) were not touched (e.g. by
+    a plain latexmk run in the same directory)."""
+    marker = layout.canon_dir / PUBLISHED_FILE
+    try:
+        return bool(json.loads(marker.read_text()) == _published_stamp(layout))
+    except (OSError, ValueError):
+        return False
+
+
+def mark_published(layout: Layout) -> None:
+    (layout.canon_dir / PUBLISHED_FILE).write_text(json.dumps(_published_stamp(layout)))
