@@ -369,3 +369,23 @@ def test_register_names(tmp_path: Path) -> None:
         516: "\\Hy@x [hyperref]",
         517: "\\c@later",
     }
+
+
+def test_referenced_equals_references() -> None:
+    """TokenScan.referenced (token lookup) gives the same keys as references (per key)."""
+    scan = TokenScan(["see \\ref{fig:a} and~\\cite[p.~3]{k1,k2}% \\ref{old}\n\\ref{with space}"])
+    keys = {
+        "L:fig:a",
+        "L:old",
+        "L:with space",
+        "L:unused",
+        "C:k1",
+        "C:k2",
+        "C:k3",
+        "L:k1",
+        "L:fig",
+        "C:with space",
+        "L:a,b",
+    }
+    assert scan.referenced(keys) == {k for k in keys if scan.references(k)}
+    assert scan.referenced(keys) >= {"L:fig:a", "L:with space", "C:k1", "C:k2"}

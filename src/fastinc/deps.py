@@ -25,6 +25,7 @@ _ABX_NOT_DATA = {"cite", "segm", "backref", "refcontext", "defaultrefcontext"}
 _BBL_ENTRY = re.compile(r"^\s*\\entry\{([^}]*)\}")
 _DELIMS = "{},[] \t\r\n"
 _TOKENS = re.compile(r"[{},\[\]\s]+")
+_HAS_DELIM = re.compile(r"[{},\[\] \t\r\n]")
 _LABEL_DEF = re.compile(r"\\label\s*\{[^{}]*\}")
 #: files never scanned for keys
 _BINARY_SUFFIXES = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".eps", ".ps", ".gz", ".zip"}
@@ -121,6 +122,15 @@ class TokenScan:
             return any(name in text for text in self.texts)
         return name in self.tokens
 
+    def referenced(self, keys: Iterable[str]) -> set[str]:
+        """The referenced keys among ``keys`` (namespaced). Same result as filtering with
+        :meth:`references`, in time linear in the tokens plus the keys containing a
+        delimiter (a membership test per token instead of a scan per key)."""
+        keys = keys if isinstance(keys, (set, frozenset, dict)) else set(keys)
+        found = {k for t in self.tokens for k in (f"L:{t}", f"C:{t}") if k in keys}
+        found |= {k for k in keys if _HAS_DELIM.search(k, 2) and self.references(k)}
+        return found
+
     def reads_lists(self) -> bool:
         """Whether the texts typeset a derived list (ToC, bibliography, nomenclature, ...)."""
         return any(_LIST_READERS.search(text) for text in self.texts)
@@ -128,7 +138,7 @@ class TokenScan:
 
 def imports(scan: TokenScan, values: Mapping[str, str]) -> dict[str, str]:
     """Referenced keys among ``values`` with their value hashes (stored at compile time)."""
-    return {key: value for key, value in values.items() if scan.references(key)}
+    return {key: values[key] for key in sorted(scan.referenced(values))}
 
 
 def changed_imports(
@@ -136,5 +146,5 @@ def changed_imports(
 ) -> list[str]:
     """Keys whose value differs from the one stored at compile time: referenced keys that
     are defined now or were defined then (undefined counts as a value)."""
-    keys = set(stored) | {k for k in values if k not in stored and scan.references(k)}
+    keys = set(stored) | scan.referenced(values)
     return sorted(k for k in keys if stored.get(k, UNDEFINED) != values.get(k, UNDEFINED))
