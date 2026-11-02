@@ -24,11 +24,7 @@ def test_read_pictures(tmp_path: Path) -> None:
     long = "\\draw " + "(0,0) -- " * 2000  # longer than max_print_line: broken by TeX
     first = f"fastinc-picture: s {KEY_A} " + long
     log.write_text(
-        "(./chapter.tex\n"
-        + first[:10000]
-        + "\n"
-        + first[10000:]
-        + "\n"
+        "(./chapter.tex\n" + first[:10000] + "\n" + first[10000:] + "\n"
         f"fastinc-picture: x {KEY_A} 7 6.63135pt U2\n"
         "Overfull \\hbox\n"
         f"fastinc-picture: u {KEY_B} G1\n"
