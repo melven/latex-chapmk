@@ -509,7 +509,7 @@ Known misprediction cases are harmless and only cost an iteration:
 **Implemented in M5** (`predict.py`, `incremental.Fixpoint.groups/batch/_verify`):
 - An iteration is a batch of at most `-j` runs: the selected compilation units are split into contiguous groups balanced by page count; every run compiles its group plus the glue. One run (M4 tail run) if `-j 1`, a global unit exists (it would be in every run), a segment of the zone has no vectors yet, or a unit was mispredicted twice in a row.
 - Vectors per segment (entry, exit, absolute set) are stored from the committing run (`state.vectors`). The prediction starts at the first unit of the batch with its entry observed in the latest run, and composes through all later segments.
-- **Odd start pages:** with `twoside` and `openright` (`\fastinc@layout` record) a unit that starts with a chapter-level heading starts on the next odd page, so its page counter composes as `X + odd(E') − odd(E)` with `odd(e) = e` for odd `e`, else `e + 1`. This removes the parity mispredictions (T10).
+- **Odd start pages:** with `twoside` and `openright` (`\fastinc@layout` record) a unit that starts with a chapter-level heading starts on the next odd page, so its page counter composes as `X + odd(E') − odd(E)` with `odd(e) = e` for odd `e`, else `e + 1`. This removes the parity mispredictions (T10). The flag is recorded per unit at its start (`O` record), so a local `open=any` (e.g. `\begingroup\KOMAoptions{open=any}\include{notation}\endgroup`) counts; units not compiled yet use the document's flags.
 - Predicted exits are written into the checkpoints (`\@setckpt` counters and `\fastinc@ckpt`) of the excluded units in the run directories (not in `canon/`).
 - Runs of a batch are committed in document order; the glue pages come from the last run; biber/makeindex run once per batch.
 - **List files of a batch** (§6.7.1): no run read all new contributions. fastinc.sty writes no-op markers into the list files (`\fastinc@lmark{U<k>}` before and `{/U<k>}` after each unit's contributions, written while the aux files are read at `\end{document}`). The canonical list files are the last run's, with each unit's section spliced in from the run that committed the unit (TeX-written bytes, so exact). Missing markers: the glue is rewritten by a glue-only run.
@@ -912,6 +912,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | bookmark levels | main aux | `\fastinc@bkmlevels{<id>=<level>,...}` |
 | counters (M4) | main aux, header | `\fastinc@counters{<name>=<register>:<child>/<child>/;...}`: register and `\cl@<name>` reset list of each checkpointed counter |
 | layout (M5) | main aux, header | `\fastinc@layout{twoside=0|1,openright=0|1}` |
+| unit start layout | `.frec` | `O <seg> 0\|1` (twoside and openright at the unit start) |
 | unit start (M5) | unit aux, first statement | `\fastinc@ustart{U<k>}`: at `\end{document}` writes `\fastinc@lmark{U<k>}` into the open list files; `\fastinc@entry{<seg>}` writes `\fastinc@lmark{/<seg>}` |
 | page map | `<job>.frec` | `P <shipout#> <seg> <\c@page> <\thepage text>` per line |
 | elapsed time (M6) | `<job>.frec` | `T <point> <\pdfelapsedtime>`: points `load`, `begin`, each segment id, `end`, `picture+`/`picture-` around every `\pgfpicture` |
