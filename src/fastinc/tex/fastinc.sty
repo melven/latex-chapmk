@@ -80,6 +80,10 @@
 \def\fastinc@time#1{\ifdefined\pdfelapsedtime
   \immediate\write\fastinc@rec{T #1 \the\pdfelapsedtime}\fi}
 \fastinc@time{load}
+% time inside pgf pictures (tikzpicture, \tikz, pgfplots: all use \pgfpicture)
+\AtBeginDocument{\ifdefined\pgfpicture
+  \AddToHook{cmd/pgfpicture/before}{\fastinc@time{picture+}}%
+  \AddToHook{cmd/endpgfpicture/after}{\fastinc@time{picture-}}\fi}
 \def\fastinc@main#1{\immediate\write\@mainaux{#1}}
 \def\fastinc@entry@rec{\fastinc@time{\fastinc@seg}\def\fastinc@pfx{fastinc@b}%
   \fastinc@main{\string\fastinc@entry{\fastinc@seg}{\fastinc@vec}}}
@@ -192,6 +196,13 @@
 \def\fastinc@listmarks#1{\@for\fastinc@ext:=\fastinc@listexts\do{%
   \@writefile{\fastinc@ext}{\fastinc@lmark{#1}}}}
 \def\fastinc@ustart#1{\fastinc@listmarks{#1}}
+
+% eqparbox tags used per segment (M6): "Q <segment> <tag>" for every use
+\def\fastinc@eqp#1{\immediate\write\fastinc@rec{Q \fastinc@seg\space#1}}% expandable (eqparbox uses it in \csname)
+\def\fastinc@eqp@hooks{%
+  \AddToHookWithArguments{cmd/eqp@compute@width/before}{\fastinc@eqp{##1}}%
+  \AddToHookWithArguments{cmd/eqp@set@min@width/before}{\fastinc@eqp{##1}}}
+\AtBeginDocument{\ifdefined\eqp@compute@width\fastinc@eqp@hooks\fi}
 
 % aux handlers (aux files are read at \begin and \end{document})
 \def\fastinc@counters#1{}
