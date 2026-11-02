@@ -144,6 +144,10 @@ def test_tex_phases_and_timings() -> None:
         "pictures": 0.0,
     }
     assert tex_phases(RunRecords(), 1.0)["format"] == 0.0
+    from fastinc.records import glue_times
+
+    assert glue_times(recs) == {"G0": 0.2, "G1": 0.1}
+    assert glue_times(recs, minimum=0.15) == {"G0": 0.2}
     t = Timings()
     t.lap("a")
     t.lap("a")

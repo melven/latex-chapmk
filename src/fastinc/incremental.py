@@ -70,6 +70,7 @@ from fastinc.predict import (
 from fastinc.records import (
     RecordError,
     RunRecords,
+    glue_times,
     read_main_records,
     read_run_records,
     register_names,
@@ -673,6 +674,7 @@ class Fixpoint:
                     "tools": tools if j == len(specs) - 1 else [],
                     "seconds": round(result.seconds, 2),
                     "tex": tex_phases(all_recs[j], result.seconds),
+                    "glue_segments": glue_times(all_recs[j]),
                 }
             )
         return reports

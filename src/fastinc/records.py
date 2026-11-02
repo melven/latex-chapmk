@@ -108,6 +108,17 @@ def tex_phases(recs: RunRecords, total: float) -> dict[str, float]:
     return {k: round(v, 3) for k, v in out.items()}
 
 
+def glue_times(recs: RunRecords, minimum: float = 0.05) -> dict[str, float]:
+    """TeX time per glue segment (at least ``minimum`` seconds): which part of the main file
+    body (front matter, lists, bibliography, ...) costs time in every run."""
+    points = [(n, t) for n, t in recs.times if not n.startswith("picture")]
+    out = {}
+    for (name, t), (_, t_next) in itertools.pairwise(points):
+        if name[:1] == "G" and name[1:].isdigit() and t_next - t >= minimum:
+            out[name] = round(t_next - t, 3)
+    return out
+
+
 def parse_vector_names(text: str) -> dict[str, int]:
     """``"twoside=1,openright=0"`` → ``{"twoside": 1, "openright": 0}``."""
     out: dict[str, int] = {}
