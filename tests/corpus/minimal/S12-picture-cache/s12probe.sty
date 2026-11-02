@@ -1,0 +1,86 @@
+% S12 probe: picture cache prototype (spike code, not fastinc.sty).
+% Option "cache": TikZ external in mode "graphics if exists", names fig/<unit>-<n>.
+% A missing picture is typeset inline; a copy of its final box is shipped as an
+% extra page (primitive shipout, no LaTeX hooks) and announced in the log:
+%   S12PIC <name> <abs pdf page> <wd> <ht> <dp>
+% Aux lines written by whatsits of the copy are fenced with \sxiifence.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{s12probe}
+\newif\ifsxii@cache
+\DeclareOption{cache}{\sxii@cachetrue}
+\DeclareOption{inline}{\sxii@cachefalse}
+\newif\ifsxii@ship \sxii@shiptrue
+% option natural: natural size (scale 1), box dimensions set to the inline ones
+\newif\ifsxii@natural
+\DeclareOption{natural}{\sxii@naturaltrue}
+\DeclareOption{noexport}{\sxii@shipfalse}% use the cache, do not export missing pictures
+\ProcessOptions\relax
+\ifsxii@cache
+\usetikzlibrary{external}
+\tikzexternalize[mode=graphics if exists,prefix=fig/]{main}
+\newbox\sxii@box
+\ExplSyntaxOn \cs_new_eq:NN \sxii@shipout \tex_shipout:D \ExplSyntaxOff
+\def\sxii@depth{0}% a macro: a \count would show up in the register delta
+\newcount\sxii@pages
+\def\sxii@name{}
+\def\sxiifence#1{}
+% unit-specific figure names: fig/<unit>-<n>
+\AddToHook{include/before}{%
+  \edef\sxii@tmp{\noexpand\tikzset{external/figure name={\CurrentFile-}}}\sxii@tmp}
+\AddToHook{include/after}{\tikzset{external/figure name={main-figure}}}
+% count registers 0..\count10 before a picture; after it, \sxii@delta lists "r:d," changes
+\def\sxii@i{0}
+\def\sxii@snap{\gdef\sxii@i{0}\sxii@snap@}
+\def\sxii@snap@{\ifnum\sxii@i>\count10 \else
+  \expandafter\xdef\csname sxii@v\sxii@i\endcsname{\the\count\sxii@i}%
+  \xdef\sxii@i{\the\numexpr\sxii@i+1}\expandafter\sxii@snap@\fi}
+\def\sxii@diff{\gdef\sxii@i{0}\gdef\sxii@delta{}\sxii@diff@}
+\def\sxii@diff@{\ifnum\sxii@i>\count10 \else
+  \ifnum\count\sxii@i=\csname sxii@v\sxii@i\endcsname\relax\else
+    \xdef\sxii@delta{\sxii@delta\sxii@i:\the\numexpr\count\sxii@i-\csname sxii@v\sxii@i\endcsname\relax,}\fi
+  \xdef\sxii@i{\the\numexpr\sxii@i+1}\expandafter\sxii@diff@\fi}
+\typeout{S12SERIALREG \meaning\pgf@picture@serial@count}
+% embedded figures get the exact size of the inline box (dpth: width, height = ht+dp)
+\pgfkeys{/pgf/images/include external/.code={%
+  \ifdefined\pgfexternalwidth
+    \ifsxii@natural
+      \setbox2=\hbox{\pgfimage{#1}}\wd2=\pgfexternalwidth\ht2=\pgfexternalheight\box2
+    \else\pgfimage[width=\pgfexternalwidth,height=\pgfexternalheight]{#1}\fi
+  \else\pgfimage{#1}\fi}}
+% a missing figure: typeset inline and export
+\let\sxii@normal\tikzexternal@normalpicture@nographics
+\def\tikzexternal@normalpicture@nographics{%
+  \ifsxii@ship\ifnum\sxii@depth=0 \xdef\sxii@name{\tikzexternal@curfilename}\sxii@snap\fi\fi
+  \sxii@normal}
+% remember picture: positions are recorded at shipout; never export
+\AddToHook{cmd/pgfsys@markposition/before}{\global\let\sxii@name\@empty}
+\AddToHook{cmd/pgfpicture/before}{\xdef\sxii@depth{\the\numexpr\sxii@depth+1}}
+\AddToHook{cmd/endpgfpicture/after}{\xdef\sxii@depth{\the\numexpr\sxii@depth-1}}
+\let\sxii@tpb\pgfsys@typesetpicturebox
+\def\pgfsys@typesetpicturebox#1{%
+  \ifnum\sxii@depth=1
+    \ifx\sxii@name\@empty \sxii@tpb#1\else
+      \setbox\sxii@box=\hbox{\sxii@tpb#1}%
+      \sxii@diff
+      \sxii@export
+      \unhbox\sxii@box
+      \spacefactor\@m % as after the box itself (\unhbox keeps the previous one)
+    \fi
+  \else \sxii@tpb#1\fi}
+\def\sxii@export{%
+  \ifdim\wd\sxii@box>0pt \ifdim\dimexpr\ht\sxii@box+\dp\sxii@box\relax>0pt
+  \begingroup
+    \pdfpagewidth=\wd\sxii@box
+    \pdfpageheight=\dimexpr\ht\sxii@box+\dp\sxii@box\relax
+    \pdfhorigin=0pt \pdfvorigin=0pt
+    \global\advance\sxii@pages 1
+    \immediate\write\@auxout{\string\sxiifence{\sxii@name}}%
+    \setbox0=\vbox{\hbox{\copy\sxii@box}}% baseline at ht from the top
+    \sxii@shipout\box0
+    \immediate\write\@auxout{\string\sxiifence{/\sxii@name}}%
+    \typeout{S12PIC \sxii@name\space\the\numexpr\ReadonlyShipoutCounter+\sxii@pages\relax\space\the\wd\sxii@box\space\the\ht\sxii@box\space\the\dp\sxii@box\space\sxii@delta.}%
+  \endgroup
+  \fi\fi
+  \global\let\sxii@name\@empty}
+\fi
+\endinput
