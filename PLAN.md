@@ -28,7 +28,7 @@ One command (`fastinc build main.tex`) replaces `latexmk -pdf -synctex=1`. It pr
 
 - Engines other than pdfLaTeX.
 - Units other than `\include` (no automatic splitting at `\chapter`).
-- The user's TikZ externalize. It is disabled by the driver (§6.4.3). A fastinc-managed picture cache is evaluated in M7 (§6.17, spike S12).
+- The user's TikZ externalize settings (prefix, shell escape, system calls). fastinc keeps the user's `\tikzexternalize` but redirects it to its own picture cache (§6.4.3, §6.17).
 - Byte-identical PDFs.
 - `glossaries`, `imakeidx`/`makeidx`, `minted`, `cleveref`. Detect these and fall back to full builds with a warning (§6.14).
 - biblatex with `backend=bibtex` (or classic BibTeX). Only biber is supported; others fall back to full builds.
@@ -81,7 +81,7 @@ The user's documents follow these rules. The driver relies on them and checks th
 
 ### 3.3 Acceptance criterion ("identical output")
 
-The reference is `fastinc build --full`: plain latexmk on the unmodified sources, with only the externalize neutralisation injected (§6.4.3) and the same environment (N4). The merged result must match it in:
+The reference is `fastinc build --full`: plain latexmk on the unmodified sources, with only the externalize redirection injected (§6.4.3) and the same environment (N4). The merged result must match it in:
 
 1. Page count; every page rasterised (`pdftoppm -r 150`) pixel-identical.
 2. Extracted text per page (`pdftotext -layout`).
@@ -198,7 +198,7 @@ pdflatex -ini -jobname=pre -output-directory=.fastinc/fmt "&pdflatex" mylatexfor
 
 | Pattern | Reason |
 |---|---|
-| `\tikzexternalize` | Neutralised anyway; keeps the format independent of externalize. |
+| `\tikzexternalize` | Redirected at runtime (§6.4.3); keeps the format independent of externalize. |
 | `\makeindex`, `\makeglossaries`, `\usepackage{minted}` | Unsupported in v1 → full-build mode. |
 | Config additions | User override. |
 
@@ -210,7 +210,7 @@ pdflatex -ini -jobname=pre -output-directory=.fastinc/fmt "&pdflatex" mylatexfor
 
 #### 6.4.1 `fastinc-ini.sty` (loaded before `\documentclass` in format builds and in the `--full` reference build)
 
-1. Externalize neutralisation (§6.4.3).
+1. Externalize redirection (§6.4.3).
 2. Format mode only: the deferral table (§6.3.3; empty in v1).
 
 #### 6.4.2 `fastinc.sty` (runtime, loaded at the split point)
@@ -243,18 +243,19 @@ Requirements:
      - fastinc.sty allocates no registers, because they would enter the state vector; bookkeeping uses global macros.
      - The include counter is advanced on every `\include` (`include/before` or the `\@setckpt` wrapper or `include/excluded`).
      - Driver parameters (`\fastinc@denynames`) are defined before `\usepackage{fastinc}` in the run main.
-8. **Externalize neutralisation** (§6.4.3), repeated idempotently.
+8. **Externalize redirection** (§6.4.3), repeated idempotently.
 9. **Bookmark levels.** At `enddocument`, write `\fastinc@bkmlevels{<id>=<level>,...}` to the main aux, read from bookmark's `\BKM@<id>` macros (S6).
 10. **Deferred commands:** run the entries of the deferral table (§6.3.3; empty in v1).
 
-#### 6.4.3 Externalize neutralisation
+#### 6.4.3 Externalize redirection
 
-Install a file hook for `file/tikzlibraryexternal.code.tex/after` (the older name `file/after/<file>` is deprecated) [S3]. After the library loads, redefine:
+Install a file hook for `file/tikzlibraryexternal.code.tex/after` (the older name `file/after/<file>` is deprecated) [S3]. After the library loads, `\tikzexternalize[<options>]` keeps its effect (every picture is externalized unless disabled), but its settings are altered (S12):
 
-- `\tikzexternalize` → swallow an optional argument, then do nothing;
-- `\tikzexternalenable` and `\tikzexternaldisable` → `\relax`.
+- the user's options are applied first, then fastinc's: mode *graphics if exists*, no system call (no shell escape), prefix in the build directory, figure names per unit (§6.17);
+- `\tikzexternalenable`, `\tikzexternaldisable` and `\tikzsetnextfilename` keep working; the user's `\todo` wrapper keeps working;
+- the user's own figure directory (e.g. `fig_tmp/`) is neither read nor written.
 
-The user's `\todo` wrapper keeps working.
+Without `\tikzexternalize` in the document nothing is changed: pictures are typeset inline.
 
 ### 6.5 Runs
 
@@ -690,14 +691,16 @@ All TeX invocations go through a **distribution adapter** (`texdist.py`) with tw
 
 ---
 
-### 6.17 Picture cache (M7, planned)
+### 6.17 Picture cache (M7)
 
-Measured on the user's document (M6): up to 70 % of a unit's TeX time is spent inside pgf/TikZ pictures (`tex.pictures`), and the most expensive unit is the critical path of every batch. Planned design, to be validated by spike S12:
+Measured on the user's document (M6): up to 70 % of a unit's TeX time is spent inside pgf/TikZ pictures (`tex.pictures`), and the most expensive unit is the critical path of every batch. Design after spike S12 (`docs/spikes/S12.md`) and the user's decision: **the result is identical to a TikZ-externalized build.** The cache is active only for documents that call `\tikzexternalize` (§6.4.3); otherwise pictures stay inline (embedded pictures cannot be pixel-identical to inline ones, S12).
 
-- fastinc.sty loads TikZ's `external` library in incremental runs, with a per-unit file prefix (`<build>/fig/<unit>/`) and the figure index reset per unit, so names do not depend on the selection of a run, and parallel runs never write the same file. The user's `\tikzexternalize` stays neutralised (§6.4.3).
-- Mode "list and make": missing figures are built by fastinc in its pool from the format (no shell escape), then the unit is run again or the figures are placed in the same iteration (S12 decides).
-- Validity: externalize checks only the picture code (md5). A unit's cached pictures are reused only if the unit is recompiled because of its own sources; after import, entry-state or list changes its pictures are rebuilt (they may show references, counters or page numbers). Pictures in the glue and `remember picture`/overlay pictures stay inline.
-- `--full` and `check` typeset pictures inline; §3.3 decides whether embedded figures are equal to inline pictures.
+- **Embedding:** TikZ external's own code (`\pgfimage` at natural size, depth from `.dpth`). Externalize semantics: every picture not disabled by `\tikzexternaldisable` is embedded; side effects inside pictures (links, `remember picture`, labels, counters) behave as with externalize.
+- **Export in the same run, no shell escape:** a picture without a valid cache file is typeset inline, and a copy of its final box is shipped as an extra page (primitive `\shipout`, no LaTeX hooks), announced by a record (name, page, dimensions). The driver splits these pages into `<build>/fig/<unit>/<name>.pdf` plus `.dpth` and drops them, and their SyncTeX sheets, from the merge. The output equals externalize's figure jobs (S12: identical in all §3.3 items, 8 picture kinds).
+- **Extra pass:** a run that exported figures shows them inline, which differs from the externalized result. Its unit is dirty again (reason `pictures exported`) and is rerun with the figures embedded. The same holds for `--full`.
+- **Names:** per unit, so they do not depend on the selection of a run, and parallel runs never write the same file: `<unit>-<n>` with the index reset per unit; `\tikzsetnextfilename` names are kept.
+- **Validity key** (stricter than externalize's md5, so the result equals a fresh externalized build): md5 of the picture code, format stamp, glue hash, counter vector at the picture start, `\linewidth` and the current font, and the values of the labels and citations the picture uses. A cache file is used only if its key matches; otherwise the picture is exported again.
+- Glue pictures are handled like unit pictures (prefix `glue`).
 
 ## 7. Repository layout
 
@@ -838,7 +841,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | **M4** | *Done.* Full mode also runs makeindex for a generic `<job>.idx` (the reference and fallback must equal latexmk; found on the pgf manual, whose imakeidx call fails with `-output-directory`), dependency model, compilation units, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks, `fastinc graph` and dirty reasons in the report | T2–T13, T16, T18, T19, T20 green (T2 via tail run) |
 | **M5** | *Done.* Prediction (§6.9.3) and parallel successor recompilation | T2 and T10 green with parallel runs; benchmark shows a speedup over M4 for T2 |
 | **M6** | *Done* (`docs/bench.md`). Benchmarks on large documents (§8.4), time breakdown per phase and resulting optimisations, README (short: usage, assumptions A1–A5, limitations) | §8.4 numbers and breakdown recorded |
-| **M7** | Picture cache (§6.17). First spike S12: evaluate TikZ's `external` library under fastinc (per-unit names, figures built via the format in the pool without shell escape, §3.3 equality with inline pictures, cache validity, glue pictures, `remember picture`); **decision point** with the results; then the implementation (on by default, opt-out in `fastinc.toml`) | S12 note written; typo scenario in a picture-heavy unit reuses its pictures; all scenario and acceptance tests green with the cache |
+| **M7** | Picture cache (§6.17). First spike S12: evaluate TikZ's `external` library under fastinc (per-unit names, figures built via the format in the pool without shell escape, §3.3 equality with inline pictures, cache validity, glue pictures, `remember picture`); **decision point** with the results; then the implementation (active for documents with `\tikzexternalize`, results identical to an externalized build; opt-out in `fastinc.toml`) | S12 note written; typo scenario in a picture-heavy unit reuses its pictures; all scenario and acceptance tests green with the cache |
 | **M8** | Engineering review (intermission): reusable functionality and duplication, software design and layering, modularity, dependencies, test coverage and test design; findings fixed or recorded in `docs/review.md`. Known items: config `aux.self`/`aux.ignore` are parsed but not used by the classification; the `.sty` change → cold-build rule makes benchmarks sensitive to package edits | review note written; module maps match the code; all tests green |
 | **M9** | Spike S11 (MiKTeX), MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
 | Future | `watch` (F8) | rebuild on change of a recorded input |
@@ -877,7 +880,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | 41 | `hyperref` | format (S1) |
 | 42–43 | orcidlink, todonotes | format |
 | 45–189 | siunitx units, nomenclature groups, theorems (per chapter), autoref names, `\subsecref`, math macros, colours, algorithm float via `\DeclareNewTOC` (`loalg`), `\lstset` | format |
-| 193–201 | `\ifdraft{\tikzexternalize ...; \todo wrapper}` | split point: line 193, the start of the group containing the deny-list match on line 194 (S1); externalize neutralised (§6.4.3); wrapper works |
+| 193–201 | `\ifdraft{\tikzexternalize ...; \todo wrapper}` | split point: line 193, the start of the group containing the deny-list match on line 194 (S1); externalize redirected (§6.4.3); wrapper works |
 
 **Unit-interface relevant items:**
 - `nomencl` (`.nlo` stream with markers);
