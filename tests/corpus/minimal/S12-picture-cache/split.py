@@ -1,6 +1,7 @@
 """S12: split exported picture pages of a cache-mode run into fig/<name>.pdf + .dpth.
 
-usage: split.py RUNDIR FIGDIR   (writes RUNDIR/clean.pdf without the extra pages)
+usage: split.py RUNDIR FIGDIR [ext]   (writes RUNDIR/clean.pdf without the extra pages)
+With "ext", TikZ external semantics: every exported picture is cached, no register replay.
 A picture is not cached if its page carries annotations or is the target of a named
 destination (links/anchors would be lost when embedded) or if aux lines were written
 while its copy was shipped (whatsits: \\label, \\addcontentsline, ...).
@@ -13,6 +14,7 @@ from pathlib import Path
 import pikepdf
 
 run, fig = Path(sys.argv[1]), Path(sys.argv[2])
+ext = sys.argv[3:] == ["ext"]
 fig.mkdir(parents=True, exist_ok=True)
 log = (run / "main.log").read_text(errors="replace")
 pics = [m.groups() for m in re.finditer(r"^S12PIC (\S+) (\d+) (\S+) (\S+) (\S+) (\S*)\.$", log, re.M)]
@@ -48,6 +50,8 @@ for name, page, wd, ht, dp, delta in pics:
         why.append(f"changes registers {changes}")
     if name in fenced:
         why.append(f"whatsits {fenced[name]}")
+    if ext:
+        why, advance = [], "0"
     if why:
         print(f"  {name}: not cached ({'; '.join(why)})")
         continue

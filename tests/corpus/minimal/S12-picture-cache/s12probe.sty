@@ -13,6 +13,9 @@
 % option natural: natural size (scale 1), box dimensions set to the inline ones
 \newif\ifsxii@natural
 \DeclareOption{natural}{\sxii@naturaltrue}
+% option extinc: TikZ external's own embedding (\pgfimage at natural size, depth from .dpth)
+\newif\ifsxii@extinc
+\DeclareOption{extinc}{\sxii@extinctrue}
 \DeclareOption{noexport}{\sxii@shipfalse}% use the cache, do not export missing pictures
 \ProcessOptions\relax
 \ifsxii@cache
@@ -41,12 +44,14 @@
   \xdef\sxii@i{\the\numexpr\sxii@i+1}\expandafter\sxii@diff@\fi}
 \typeout{S12SERIALREG \meaning\pgf@picture@serial@count}
 % embedded figures get the exact size of the inline box (dpth: width, height = ht+dp)
+\ifsxii@extinc\else
 \pgfkeys{/pgf/images/include external/.code={%
   \ifdefined\pgfexternalwidth
     \ifsxii@natural
       \setbox2=\hbox{\pgfimage{#1}}\wd2=\pgfexternalwidth\ht2=\pgfexternalheight\box2
     \else\pgfimage[width=\pgfexternalwidth,height=\pgfexternalheight]{#1}\fi
   \else\pgfimage{#1}\fi}}
+\fi
 % a missing figure: typeset inline and export
 \let\sxii@normal\tikzexternal@normalpicture@nographics
 \def\tikzexternal@normalpicture@nographics{%
