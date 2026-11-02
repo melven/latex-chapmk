@@ -76,3 +76,20 @@ def test_misprediction_path(thesis: Path, capsys: pytest.CaptureFixture[str]) ->
     assert batches(rep)[0] == [["chapters/ch1"], ["chapters/ch5"]]
     assert any("exit of chapters/ch1" in m for m in mispredictions(rep)), rep["runs"]
     assert set(rep["compiled"]) == set(ALL)
+
+
+def test_local_open_any(thesis: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """ch3 is included in a group with KOMA's open=any (as the reference document's notation
+    chapter): it does not start on an odd page. ch2 grows by exactly one page; ch3 moves by one
+    page, predicted from ch3's own recorded openright flag, not the document's."""
+    edit(
+        thesis / "main.tex",
+        "\\include{chapters/ch3}",
+        "\\begingroup\\KOMAoptions{open=any}\\include{chapters/ch3}\\endgroup",
+    )
+    assert checked(thesis, capsys)["mode"] == "cold"
+    with ch(thesis, "ch2").open("a") as f:
+        f.write("\n\\newpage\\mbox{}\\newpage\n")
+    rep = checked(thesis, capsys)
+    assert selections(rep)[0] == ["chapters/ch2"]
+    assert mispredictions(rep) == [], rep["runs"]
