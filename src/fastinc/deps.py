@@ -19,7 +19,9 @@ UNDEFINED = "-"
 _NEWLABEL = re.compile(r"^\\newlabel\{(.+?)\}\{(.*)\}\s*$", re.DOTALL)
 _ABX_KEYED = re.compile(r"^\\abx@aux@([A-Za-z@]+)\{[^{}]*\}\{([^{}]+)\}")
 #: biblatex aux statements that are not data of a key (citations, bookkeeping)
-_ABX_NOT_DATA = {"cite", "segm", "backref", "refcontext"}
+#: (``defaultrefcontext`` names the refcontext, a preamble setting; it is missing in a run
+#: without ``.bbl`` and would make every citation look changed once in cold builds)
+_ABX_NOT_DATA = {"cite", "segm", "backref", "refcontext", "defaultrefcontext"}
 _BBL_ENTRY = re.compile(r"^\s*\\entry\{([^}]*)\}")
 _DELIMS = "{},[] \t\r\n"
 _TOKENS = re.compile(r"[{},\[\]\s]+")
