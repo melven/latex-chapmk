@@ -6,6 +6,7 @@ Library used by the acceptance tests and by ``fastinc check`` (M3). Needs popple
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import tempfile
@@ -16,6 +17,7 @@ from typing import Any
 
 import pikepdf
 
+from fastinc.errors import ToolError
 from fastinc.proc import run
 
 DPI = 150
@@ -121,13 +123,45 @@ def _structure(path: Path) -> tuple[list[str], list[Target], list[Target]]:
     return labels, outline, links
 
 
-def _rasters(pdf: Path, workdir: Path, dpi: int) -> list[bytes]:
-    run(
-        ["pdftoppm", "-r", str(dpi), str(pdf), str(workdir / "p")],
-        cwd=workdir,
-        env=dict(os.environ),
-    )
-    return [f.read_bytes() for f in sorted(workdir.glob("p-*.ppm"))]
+def _page_count(pdf: Path) -> int:
+    r = run(["pdfinfo", str(pdf)], cwd=pdf.parent, env=dict(os.environ))
+    m = re.search(r"^Pages:\s+(\d+)", r.output, re.MULTILINE)
+    if not r.ok or m is None:
+        raise ToolError(f"pdfinfo failed on {pdf}: {r.output.strip()[-300:]}")
+    return int(m.group(1))
+
+
+def _rasters(pdf: Path, workdir: Path, dpi: int, chunk: int = 25) -> list[str]:
+    """SHA-256 of each rendered page. Pages are rendered in chunks and deleted at once (an
+    uncompressed page at 150 dpi has about 6.5 MB; the pgf manual has 1136 pages)."""
+    pages = _page_count(pdf)
+    digests: list[str] = []
+    for first in range(1, pages + 1, chunk):
+        last = min(pages, first + chunk - 1)
+        r = run(
+            [
+                "pdftoppm",
+                "-r",
+                str(dpi),
+                "-f",
+                str(first),
+                "-l",
+                str(last),
+                str(pdf),
+                str(workdir / "p"),
+            ],
+            cwd=workdir,
+            env=dict(os.environ),
+        )
+        files = sorted(workdir.glob("p-*.ppm"))
+        if not r.ok or len(files) != last - first + 1:
+            raise ToolError(
+                f"pdftoppm failed on {pdf} pages {first}-{last}: {r.output.strip()[-300:]}"
+            )
+        for f in files:
+            digests.append(hashlib.sha256(f.read_bytes()).hexdigest())
+            f.unlink()
+    return digests
 
 
 def _texts(pdf: Path, workdir: Path) -> list[str]:
@@ -143,7 +177,7 @@ def compare_pdfs(ref: Path, got: Path, *, dpi: int = DPI, report: Report | None 
     with tempfile.TemporaryDirectory() as t1, tempfile.TemporaryDirectory() as t2:
         ra, ga = _rasters(ref, Path(t1), dpi), _rasters(got, Path(t2), dpi)
         report.compare("page count", [len(ra)], [len(ga)])
-        report.compare("raster pages", [hash(r) for r in ra], [hash(g) for g in ga])
+        report.compare("raster pages", ra, ga)
         report.compare("text pages", _texts(ref, Path(t1)), _texts(got, Path(t2)))
     (rl, ro, rk), (gl, go, gk) = _structure(ref), _structure(got)
     report.compare("page labels", rl, gl)
