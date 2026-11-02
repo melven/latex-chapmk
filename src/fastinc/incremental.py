@@ -261,6 +261,7 @@ class Fixpoint:
         self.mispredicted: dict[str, int] = {}  # consecutive mispredictions per unit
         self.state_before: dict[str, SegmentVectors] = {}
         self.odd: frozenset[str] = frozenset()  # units starting on an odd page (prediction)
+        self.self_changes: dict[str, list[str]] = {}  # macros of changed self data (messages)
 
     # sources -------------------------------------------------------------------------------
 
@@ -388,7 +389,8 @@ class Fixpoint:
                 add(seg, "never compiled")
                 continue
             if seg in compiled and not info.self_stable:
-                add(seg, "self data unstable (rerun)")
+                names = self.self_changes.get(seg, [])
+                add(seg, f"self data unstable ({_short(names) if names else 'rerun'})")
             if seg not in compiled and seg in recs.entries:
                 entry = recs.entry_state(seg)
                 counter = self.a.includes[int(seg[1:]) - 1].resets
@@ -633,6 +635,8 @@ class Fixpoint:
                     lists=pre.lists if reads else None,
                     self_stable=pre_self[seg] == post.unit_self(seg),
                 )
+                changed = set(pre_self[seg]) ^ set(post.unit_self(seg))
+                self.self_changes[seg] = sorted({command_name(s) for s in changed})
         state.glue_inputs = pre_glue
         last = all_recs[-1]
         self.last_entries = {seg: normalized(last.entry_state(seg)) for seg in last.entries}
