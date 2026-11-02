@@ -120,12 +120,27 @@ def test_tex_phases_and_timings() -> None:
     recs = RunRecords(
         times=[("load", 0.5), ("begin", 0.8), ("G0", 0.8), ("U1", 1.0), ("G1", 1.5), ("end", 1.6)]
     )
+    nested = RunRecords(
+        times=[
+            ("load", 0.1),
+            ("begin", 0.2),
+            ("G0", 0.2),
+            ("U1", 0.3),
+            ("picture+", 0.4),
+            ("picture+", 0.5),
+            ("picture-", 0.6),
+            ("picture-", 0.9),
+            ("G1", 1.0),
+        ]
+    )
+    assert tex_phases(nested, 1.0)["pictures"] == 0.5 and tex_phases(nested, 1.0)["units"] == 0.7
     assert tex_phases(recs, 2.0) == {
         "format": 0.5,
         "preamble": 0.3,
         "glue": 0.3,
         "units": 0.5,
         "end": 0.4,
+        "pictures": 0.0,
     }
     assert tex_phases(RunRecords(), 1.0)["format"] == 0.0
     t = Timings()

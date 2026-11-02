@@ -63,11 +63,22 @@ def tex_phases(recs: RunRecords, total: float) -> dict[str, float]:
     """Breakdown of a run's TeX time (``total``: process wall time): ``format`` (start until
     fastinc.sty loads: format and preamble before the split), ``preamble`` (rest until the
     end of ``\\begin{document}``), ``glue``, ``units`` (compiled and excluded), ``end``
-    (``\\end{document}`` to process exit: aux re-read, list files, PDF finalisation)."""
-    out = {"format": 0.0, "preamble": 0.0, "glue": 0.0, "units": 0.0, "end": 0.0}
-    points = recs.times
+    (``\\end{document}`` to process exit: aux re-read, list files, PDF finalisation), and
+    ``pictures``: time inside top-level pgf/TikZ pictures (part of glue and units)."""
+    out = {"format": 0.0, "preamble": 0.0, "glue": 0.0, "units": 0.0, "end": 0.0, "pictures": 0.0}
+    depth, start = 0, 0.0
+    for name, t in recs.times:  # top-level pgf pictures (included in glue/units)
+        if name == "picture+":
+            depth += 1
+            if depth == 1:
+                start = t
+        elif name == "picture-" and depth > 0:
+            depth -= 1
+            if depth == 0:
+                out["pictures"] += t - start
+    points = [(n, t) for n, t in recs.times if not n.startswith("picture")]
     if not points:
-        return out
+        return {k: round(v, 3) for k, v in out.items()}
     marks = dict(points)
     out["format"] = marks.get("load", 0.0)
     out["preamble"] = marks.get("begin", 0.0) - out["format"]
