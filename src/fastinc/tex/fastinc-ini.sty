@@ -46,11 +46,15 @@
   \expandafter\fastinc@unsnap@\fi}
 \def\fastinc@picrefs{\ifcsname fastinc@picrefs@\fastinc@picseg\endcsname
   \csname fastinc@picrefs@\fastinc@picseg\endcsname\fi}
+% the counter state enters the key only if the code shows counters (\the..., \arabic, ...;
+% not \theta): otherwise shifted page numbers would invalidate every later figure
+\edef\fastinc@countersre{\detokenize{\\}(the([^t]|t[^a]|ta[^ ])|arabic|roman|Roman|alph|Alph|%
+  fnsymbol|value|number|romannumeral|c@)}
 % replaces TikZ external's system-call handler; #1: the picture body
 \long\def\fastinc@picture#1{%
   \fastinc@picstate@setup
   \edef\fastinc@pickey{\pdfmdfivesum{\detokenize{#1}|\fastinc@picstamp|\fastinc@picrefs|%
-    \fastinc@picstate|\the\linewidth|\the\hsize|\fontname\font|\f@size|\the\baselineskip|%
+    \ifnum\pdfmatch{\fastinc@countersre}{\detokenize{#1}}=1 \fastinc@picstate\fi|\the\linewidth|\the\hsize|\fontname\font|\f@size|\the\baselineskip|%
     \ifdefined\current@color\current@color\fi}}%
   \ifx\fastinc@picdir\@empty\expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi
   {\tikzexternaldisable\tikzpicture#1\end{tikzpicture}}% no cache: plain inline picture
