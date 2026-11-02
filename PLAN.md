@@ -664,6 +664,8 @@ self = []                      # extra regexes of aux lines classified "self"
 ignore = []
 [state]
 ignore = []                    # extra \count registers excluded from the state vector
+[pictures]
+cache = true                   # false: pictures inline even with \tikzexternalize (§6.17)
 ```
 
 ### 6.16 Cross-platform
@@ -691,16 +693,20 @@ All TeX invocations go through a **distribution adapter** (`texdist.py`) with tw
 
 ---
 
-### 6.17 Picture cache (M7)
+### 6.17 Picture cache (M7, done)
 
 Measured on the user's document (M6): up to 70 % of a unit's TeX time is spent inside pgf/TikZ pictures (`tex.pictures`), and the most expensive unit is the critical path of every batch. Design after spike S12 (`docs/spikes/S12.md`) and the user's decision: **the result is identical to a TikZ-externalized build.** The cache is active only for documents that call `\tikzexternalize` (§6.4.3); otherwise pictures stay inline (embedded pictures cannot be pixel-identical to inline ones, S12).
 
-- **Embedding:** TikZ external's own code (`\pgfimage` at natural size, depth from `.dpth`). Externalize semantics: every picture not disabled by `\tikzexternaldisable` is embedded; side effects inside pictures (links, `remember picture`, labels, counters) behave as with externalize.
-- **Export in the same run, no shell escape:** a picture without a valid cache file is typeset inline, and a copy of its final box is shipped as an extra page (primitive `\shipout`, no LaTeX hooks), announced by a record (name, page, dimensions). The driver splits these pages into `<build>/fig/<unit>/<name>.pdf` plus `.dpth` and drops them, and their SyncTeX sheets, from the merge. The output equals externalize's figure jobs (S12: identical in all §3.3 items, 8 picture kinds).
-- **Extra pass:** a run that exported figures shows them inline, which differs from the externalized result. Its unit is dirty again (reason `pictures exported`) and is rerun with the figures embedded. The same holds for `--full`.
-- **Names:** per unit, so they do not depend on the selection of a run, and parallel runs never write the same file: `<unit>-<n>` with the index reset per unit; `\tikzsetnextfilename` names are kept.
-- **Validity key** (stricter than externalize's md5, so the result equals a fresh externalized build): md5 of the picture code, format stamp, glue hash, counter vector at the picture start, `\linewidth` and the current font, and the values of the labels and citations the picture uses. A cache file is used only if its key matches; otherwise the picture is exported again.
-- Glue pictures are handled like unit pictures (prefix `glue`).
+- **Embedding:** TikZ external's own code (`\pgfincludeexternalgraphics`: `\pgfimage` at natural size, depth from `.dpth`). Externalize semantics: every picture not disabled by `\tikzexternaldisable` is embedded; side effects inside pictures (links, `remember picture`, labels) behave as with externalize. A picture typeset inline for export is followed by a restore of the `\count` registers it changed (as if skipped, like externalize), so the state of later pictures does not depend on the cache.
+- **Export in the same run, no shell escape:** a picture without a cached figure is typeset inline, and a copy of its final box is shipped as an extra page (primitive `\shipout`, no LaTeX hooks), announced by a log record (key, PDF page, depth, segment). The driver writes `<key>.pdf` plus `.dpth`. Page records count the extra pages, so the merge and the SyncTeX merge skip them. The figures equal externalize's figure jobs (S12: identical in all §3.3 items, 8 picture kinds).
+- **Extra pass:** a run that exported figures shows them inline, which differs from the externalized result. Its unit is dirty again (reason `pictures exported`), the glue likewise, and is rerun with the figures embedded. The same holds for `--full` (another pass).
+- **Names = keys** (content-addressed): independent of the selection of a run; parallel runs that export the same picture write the same file. Caches: `<build>/fig` (incremental) and `<build>/fig-full` (full mode); figures not referenced by the state (or the last full pass) are removed.
+- **Validity** (stricter than externalize's md5, so the result equals a fresh externalized build):
+  - key: md5 of the picture code, a stamp (format stamp and main-file fingerprints), the state at the picture start (incremental: the state vector without run-local registers; full mode: all `\count` registers), `\linewidth`, `\hsize`, the current font, `\baselineskip` and colour; full mode also a digest of all label and citation values;
+  - references: an exported figure stores its code (`.src`) and the values of the label and citation keys the code references (`.deps`, text scan as in §6.8); before each batch, figures with a changed, new or removed referenced key are removed, so the picture is exported again. References hidden in preamble macros are not seen (as with externalize).
+  - A typo leaves all keys unchanged; a new label elsewhere leaves pictures that do not reference it cached.
+- **PDF merge:** pdfTeX writes the font descriptor of a font that also occurs in an included PDF with font-file metrics (Ascent = FontBBox top, no XHeight), otherwise with TFM metrics. Runs see only some figures, so the merge normalises the descriptors to the whole-document rule (text extraction, §3.3 item 2, depends on them).
+- Driver parameters: `fastinc-pics.tex` in the run (or full-mode output) directory, read at `\begin{document}`. `[pictures] cache = false`: pictures are typeset inline (externalize effectively off).
 
 ## 7. Repository layout
 
@@ -841,7 +847,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | **M4** | *Done.* Full mode also runs makeindex for a generic `<job>.idx` (the reference and fallback must equal latexmk; found on the pgf manual, whose imakeidx call fails with `-output-directory`), dependency model, compilation units, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks, `fastinc graph` and dirty reasons in the report | T2–T13, T16, T18, T19, T20 green (T2 via tail run) |
 | **M5** | *Done.* Prediction (§6.9.3) and parallel successor recompilation | T2 and T10 green with parallel runs; benchmark shows a speedup over M4 for T2 |
 | **M6** | *Done* (`docs/bench.md`). Benchmarks on large documents (§8.4), time breakdown per phase and resulting optimisations, README (short: usage, assumptions A1–A5, limitations) | §8.4 numbers and breakdown recorded |
-| **M7** | Picture cache (§6.17). First spike S12: evaluate TikZ's `external` library under fastinc (per-unit names, figures built via the format in the pool without shell escape, §3.3 equality with inline pictures, cache validity, glue pictures, `remember picture`); **decision point** with the results; then the implementation (active for documents with `\tikzexternalize`, results identical to an externalized build; opt-out in `fastinc.toml`) | S12 note written; typo scenario in a picture-heavy unit reuses its pictures; all scenario and acceptance tests green with the cache |
+| **M7** | *Done.* Picture cache (§6.17). First spike S12: evaluate TikZ's `external` library under fastinc (per-unit names, figures built via the format in the pool without shell escape, §3.3 equality with inline pictures, cache validity, glue pictures, `remember picture`); **decision point** with the results; then the implementation (active for documents with `\tikzexternalize`, results identical to an externalized build; opt-out in `fastinc.toml`) | S12 note written; typo scenario in a picture-heavy unit reuses its pictures; all scenario and acceptance tests green with the cache |
 | **M8** | Engineering review (intermission): reusable functionality and duplication, software design and layering, modularity, dependencies, test coverage and test design; findings fixed or recorded in `docs/review.md`. Known items: config `aux.self`/`aux.ignore` are parsed but not used by the classification; the `.sty` change → cold-build rule makes benchmarks sensitive to package edits | review note written; module maps match the code; all tests green |
 | **M9** | Spike S11 (MiKTeX), MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
 | Future | `watch` (F8) | rebuild on change of a recorded input |
