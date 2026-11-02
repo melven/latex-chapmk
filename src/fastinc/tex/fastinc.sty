@@ -160,7 +160,8 @@
 
 % page map and file attribution (\jobname.frec)
 \AddToHook{shipout/before}{\protected@edef\fastinc@tmp{\thepage}%
-  \immediate\write\fastinc@rec{P \the\ReadonlyShipoutCounter\space\fastinc@seg\space
+  \immediate\write\fastinc@rec{P \the\numexpr\ReadonlyShipoutCounter+\fastinc@pics\relax\space%
+    \fastinc@seg\space
     \the\c@page\space\fastinc@tmp}}
 \AddToHook{file/before}{\immediate\write\fastinc@rec{F \fastinc@seg\space
   \CurrentFilePathUsed/\CurrentFileUsed}}
@@ -246,9 +247,12 @@
     \fastinc@main{\string\fastinc@bkmlevels{\fastinc@tmp}}%
   \fi}
 
-% externalize neutralisation again (idempotent; §6.4.3) and the deferral table (§6.3.3)
-\ifdefined\tikzexternalize\ifdefined\fastinc@neutralise@externalize
-  \fastinc@neutralise@externalize\fi\fi
+% picture cache (§6.17; fastinc-ini.sty): records carry the segment, the key's state part is
+% the state vector (run-local registers excluded, so keys do not depend on the selection)
+\def\fastinc@picseg{\fastinc@seg}
+\def\fastinc@picstate@setup{\let\fastinc@pfx\fastinc@all}
+\def\fastinc@picstate{\fastinc@vec}
+% the deferral table (§6.3.3)
 \fastinc@deferred
 
 \endinput
