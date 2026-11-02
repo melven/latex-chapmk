@@ -70,6 +70,7 @@ class State:
     vectors: dict[str, SegmentVectors] = field(default_factory=dict)
     eqp_tags: dict[str, list[str]] = field(default_factory=dict)
     pictures: dict[str, list[str]] = field(default_factory=dict)  # figure keys per segment
+    openright: dict[str, bool] = field(default_factory=dict)  # unit starts on an odd page
     version: int = STATE_VERSION
 
     def run_names(self) -> set[str]:
@@ -149,6 +150,7 @@ def load_state(canon_dir: Path) -> State | None:
             },
             eqp_tags={k: list(v) for k, v in data.get("eqp_tags", {}).items()},
             pictures={k: list(v) for k, v in data.get("pictures", {}).items()},
+            openright={k: bool(v) for k, v in data.get("openright", {}).items()},
         )
     except (ValueError, KeyError, TypeError) as err:
         raise FastincError(f"{path}: corrupt state ({err}); run 'fastinc clean'") from err

@@ -170,6 +170,8 @@ class RunRecords:
     eqp_uses: dict[str, set[str]] = field(default_factory=dict)
     #: page layout flags (``twoside``, ``openright``: 0/1)
     layout: dict[str, int] = field(default_factory=dict)
+    #: per compiled unit: starts under twoside+openright (``O`` records)
+    openright: dict[str, bool] = field(default_factory=dict)
 
     def reset_registers(self, counter: str) -> set[int]:
         """Registers of the counters reset, directly or transitively, when ``counter`` is
@@ -238,6 +240,9 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
         elif line.startswith("F "):
             seg, _, name = line[2:].partition(" ")
             recs.files.append((seg, name))
+        elif line.startswith("O "):
+            seg, _, flag = line[2:].partition(" ")
+            recs.openright[seg] = flag.strip() == "1"
 
 
 def read_nomenclature(path: Path) -> dict[str, list[str]]:

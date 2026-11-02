@@ -506,23 +506,23 @@ class Fixpoint:
         observed = self.last_entries.get(first)
         entry = observed if observed is not None else self.state.vectors[first].entry
         layout = self._canon_records(self.ctx.layout.canon_dir).layout
-        odd: frozenset[str] = frozenset()
-        if layout.get("twoside") and layout.get("openright"):
-            chapter_level = {
-                "part",
-                "part*",
-                "chapter",
-                "chapter*",
-                "addchap",
-                "addchap*",
-                "addpart",
-                "addpart*",
-            }
-            odd = frozenset(
-                f"U{k}"
-                for k, inc in enumerate(self.a.includes, start=1)
-                if inc.heading in chapter_level
-            )
+        default = bool(layout.get("twoside") and layout.get("openright"))
+        chapter_level = {
+            "part",
+            "part*",
+            "chapter",
+            "chapter*",
+            "addchap",
+            "addchap*",
+            "addpart",
+            "addpart*",
+        }
+        # per unit as recorded at its start (a local open=any counts), else the document's
+        odd = frozenset(
+            f"U{k}"
+            for k, inc in enumerate(self.a.includes, start=1)
+            if inc.heading in chapter_level and self.state.openright.get(f"U{k}", default)
+        )
         self.odd = odd
         pred = predict(segments(self.a), self.state.vectors, first, entry, odd)
         rewrites: dict[int, dict[str, tuple[Vector, frozenset[int]]]] = {}
@@ -612,6 +612,9 @@ class Fixpoint:
             except ToolInputError as err:
                 raise FallbackError(str(err)) from err
             self._attribute(recs, compiled, ctx.layout.runs_dir / spec.name)
+            for seg in compiled:
+                if seg in recs.openright:
+                    state.openright[seg] = recs.openright[seg]
         exported = self._pictures(specs, compiled_by_run, pre)
         t.lap("commit")
         lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name)
