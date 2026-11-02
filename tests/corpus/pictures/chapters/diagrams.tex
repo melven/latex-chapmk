@@ -1,0 +1,15 @@
+\chapter{Diagrams}
+\section{Graphs}\label{sec:diagrams}
+\begin{center}
+  \begin{tikzpicture}[every node/.style={draw,circle}]
+    \node (a) at (0,0) {A}; \node (b) at (2,0.5) {B}; \node (c) at (1,-1) {$\int_0^1 x\,dx$};
+    \draw[->] (a) to[bend left] (b); \draw[->] (b) -- (c) -- (a);
+  \end{tikzpicture}
+\end{center}
+A picture that shows a reference:
+\begin{tikzpicture}\node[draw]{see Chapter~\ref{ch:plots} and Figure~\ref{fig:axis}};\end{tikzpicture}
+
+\begin{tikzpicture}
+  \fill[pattern=north east lines] (0,0) rectangle (3,1);
+  \fill[red,opacity=0.4] (4,0.5) circle (0.5);
+\end{tikzpicture}

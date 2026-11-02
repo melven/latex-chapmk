@@ -1,7 +1,10 @@
-"""M1 acceptance: ``fastinc build --full`` equals plain latexmk (PLAN §3.3, §9 M1).
+"""M1/M7 acceptance: ``fastinc build --full`` equals plain latexmk (PLAN §3.3, §9 M1).
 
-Both builds use the same environment (N4) and inject fastinc-ini before \\documentclass
-(externalize neutralisation, §6.4.3); latexmk gets a rule for nomencl.
+Both builds use the same environment (N4); latexmk gets a rule for nomencl. latexmk runs the
+unmodified document with shell escape, so the user's TikZ externalize (thesis corpus, draft
+mode) makes its figures with its own figure jobs; fastinc redirects externalize to its picture
+cache (§6.4.3, §6.17) and must give the same result. latexmk builds in the source directory:
+externalize's figure jobs read the main aux from there.
 """
 
 import os
@@ -28,31 +31,33 @@ sub nlo2nls {
 """
 
 
-def latexmk(src: Path, main_name: str, outdir: Path) -> None:
-    rc = outdir.parent / "latexmkrc"
+def latexmk(src: Path, main_name: str, rc_dir: Path) -> Path:
+    """latexmk with shell escape in ``src``; returns the PDF."""
+    rc = rc_dir / "latexmkrc"
     rc.write_text(LATEXMKRC)
+    (src / "fig_tmp").mkdir(exist_ok=True)  # externalize prefix of the thesis corpus
     argv = [
         "latexmk",
         "-pdf",
+        "-shell-escape",
         "-synctex=1",
         "-interaction=nonstopmode",
         "-halt-on-error",
         "-file-line-error",
-        f"-outdir={outdir}",
         "-r",
         str(rc),
-        "-usepretex=\\RequirePackage{fastinc-ini}",
         f"-jobname={Path(main_name).stem}",
         main_name,
     ]
     env = TeXLive().environment(EPOCH, os.environ)
     r = run(argv, cwd=src, env=env)
     assert r.ok, r.output[-3000:]
+    return src / f"{Path(main_name).stem}.pdf"
 
 
 @pytest.mark.parametrize(
     ("corpus", "variant"),
-    [("thesis", "twoside"), ("thesis", "oneside"), ("hgb", None)],
+    [("thesis", "twoside"), ("thesis", "oneside"), ("hgb", None), ("pictures", None)],
 )
 def test_full_build_matches_latexmk(
     copy_corpus,
@@ -69,9 +74,8 @@ def test_full_build_matches_latexmk(
         lines[0] = lines[0].replace("twoside", "oneside")
         main_tex.write_text("\n".join(lines))
     assert main(["build", "main.tex", "--full", "--out-dir", str(tmp_path / "fi")], cwd=src) == 0
-    latexmk(src, "main.tex", tmp_path / "lmk")
-
-    ours, ref = tmp_path / "fi" / "main.pdf", tmp_path / "lmk" / "main.pdf"
+    ref = latexmk(src, "main.tex", tmp_path)
+    ours = tmp_path / "fi" / "main.pdf"
     report = compare_pdfs(ref, ours)
     sources = ["main.tex"] + [f"{inc.arg}.tex" for inc in analyse(Config(main=main_tex)).includes]
     compare_synctex(ref, ours, sources, src, report=report)

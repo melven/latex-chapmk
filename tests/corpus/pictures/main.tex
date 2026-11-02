@@ -1,0 +1,25 @@
+\documentclass[twoside,openright]{scrbook}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{tikz}
+\usetikzlibrary{external,patterns}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{todonotes}
+\usepackage{hyperref}
+% as in the reference document: externalize, but not the todo notes (remember picture)
+\tikzexternalize[shell escape=-enable-write18,prefix=fig_tmp/]
+\NewCommandCopy\origtodo\todo
+\RenewDocumentCommand\todo{O{}m}{%
+  \tikzexternaldisable\origtodo[#1]{#2}\tikzexternalenable}
+\begin{document}
+\begin{titlepage}
+  \centering
+  {\Huge Pictures}\par\bigskip
+  \begin{tikzpicture}\shade[ball color=blue] (0,0) circle (1);\end{tikzpicture}
+\end{titlepage}
+\tableofcontents
+\include{chapters/plots}
+\include{chapters/diagrams}
+\include{chapters/text}
+\end{document}
