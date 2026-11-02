@@ -42,7 +42,7 @@ def write_lines(path: Path, lines: Sequence[str]) -> None:
     data = serialise(lines)
     with (
         path.open("wb") as raw,
-        gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0, compresslevel=6) as f,
+        gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0, compresslevel=1) as f,
     ):
         f.write(data)
 

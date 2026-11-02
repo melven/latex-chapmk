@@ -237,6 +237,26 @@ def _short(items: list[str], limit: int = 3) -> str:
     return shown if len(items) <= limit else f"{shown}, ... (+{len(items) - limit})"
 
 
+class _UsedCache(dict[str, list[list[Any]]]):
+    """A cache that looks up ``old`` entries and holds only the entries used or added (saved
+    after the build, so it does not grow with every edit)."""
+
+    def __init__(self, old: dict[str, list[list[Any]]]) -> None:
+        super().__init__()
+        self.old = old
+
+    def __contains__(self, key: object) -> bool:
+        return dict.__contains__(self, key) or key in self.old
+
+    def __getitem__(self, key: str) -> list[list[Any]]:
+        if not dict.__contains__(self, key):
+            self[key] = self.old[key]
+        return dict.__getitem__(self, key)
+
+
+LINT_CACHE = "lint-cache.json"
+
+
 # --- the fixpoint loop -------------------------------------------------------------------------
 
 
@@ -255,6 +275,13 @@ class Fixpoint:
                 self.group[k] = ks
         self._scans: dict[str, TokenScan] = {}
         self._lint: dict[str, list[LintHit]] = {}
+        # lint results by file content (persistent: linting all units is the largest Python
+        # cost of a typo build otherwise); only entries used by this build are saved
+        try:
+            old = json.loads((ctx.layout.canon_dir / LINT_CACHE).read_text())
+        except (OSError, ValueError):
+            old = {}
+        self.lint_cache = _UsedCache(old if isinstance(old, dict) else {})
         self.warnings: list[str] = []
         self.register_names: dict[int, str] = {}  # for messages, from the logs
         self._view: CanonView | None = None  # canonical view after the last batch (unchanged since)
@@ -297,6 +324,7 @@ class Fixpoint:
                 cfg.lint_allow,
                 cfg.lint_verbatim,
                 cfg.lint_shortverb,
+                self.lint_cache,
             )
         return self._lint[seg]
 
@@ -891,6 +919,8 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
             dirty, glue = loop.initial()
         ctx.timings.lap("format")
         runs = loop.converge(dirty, glue)
+        if runs:  # a no-op build lints nothing
+            (canon / LINT_CACHE).write_text(json.dumps(dict(loop.lint_cache)))
         if runs or not is_published(ctx.layout):
             pdf = publish_state(ctx.analysis, ctx.layout, state, ctx.timings)
             mark_published(ctx.layout)

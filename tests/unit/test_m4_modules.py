@@ -389,3 +389,18 @@ def test_referenced_equals_references() -> None:
     }
     assert scan.referenced(keys) == {k for k in keys if scan.references(k)}
     assert scan.referenced(keys) >= {"L:fig:a", "L:with space", "C:k1", "C:k2"}
+
+
+def test_lint_cache(tmp_path: Path) -> None:
+    """Cached hits equal fresh ones; a changed file or changed options are linted again."""
+    from fastinc.lint import lint_files
+
+    (tmp_path / "a.tex").write_text("\\chapter{A}\n\\def\\x{1}\n")
+    cache: dict[str, list[list[object]]] = {}
+    first = lint_files(tmp_path, ["a.tex"], cache=cache)  # type: ignore[arg-type]
+    assert len(cache) == 1 and first
+    assert lint_files(tmp_path, ["a.tex"], cache=cache) == first  # type: ignore[arg-type]
+    assert lint_files(tmp_path, ["a.tex"], allow=["def"], cache=cache) == []  # type: ignore[arg-type]
+    (tmp_path / "a.tex").write_text("\\chapter{A}\n")
+    assert lint_files(tmp_path, ["a.tex"], cache=cache) == []  # type: ignore[arg-type]
+    assert len(cache) == 3

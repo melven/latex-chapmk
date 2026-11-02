@@ -5,10 +5,13 @@ A unit with a hit is *global*: whenever it is recompiled, all later units are di
 
 from __future__ import annotations
 
+import hashlib
+import json
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from fastinc.texsource import LineIndex, strip_comments
 
@@ -117,14 +120,28 @@ def lint_files(
     allow: Iterable[str] = (),
     verbatim: Iterable[str] = (),
     shortverb: Iterable[str] = (),
+    cache: dict[str, list[list[Any]]] | None = None,
 ) -> list[LintHit]:
-    """Hits in the TeX sources among ``names`` (relative to ``source_dir``)."""
+    """Hits in the TeX sources among ``names`` (relative to ``source_dir``). ``cache`` maps a
+    digest of file name, content and options to the file's hits (as lists, JSON-ready);
+    entries are added for linted files."""
+    options = json.dumps([sorted(allow), sorted(verbatim), sorted(shortverb)])
     hits: list[LintHit] = []
     for name in names:
         path = source_dir / name
         if Path(name).suffix in LINT_SUFFIXES and path.is_file():
-            text = path.read_bytes().decode("utf-8", "surrogateescape")
-            hits += lint_text(text, name, allow, verbatim, shortverb)
+            data = path.read_bytes()
+            key = hashlib.sha256(
+                name.encode() + b"\0" + options.encode() + b"\0" + data
+            ).hexdigest()
+            if cache is not None and key in cache:
+                hits += [LintHit(*h) for h in cache[key]]
+                continue
+            text = data.decode("utf-8", "surrogateescape")
+            found = lint_text(text, name, allow, verbatim, shortverb)
+            if cache is not None:
+                cache[key] = [[h.file, h.line, h.command, h.is_global] for h in found]
+            hits += found
     return hits
 
 
