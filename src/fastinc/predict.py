@@ -35,15 +35,13 @@ def odd_start(page: int) -> int:
     return page if page % 2 else page + 1
 
 
-def pass_through(seg: SegmentVectors) -> frozenset[int]:
-    """Registers the segment does not modify: no absolute assignment, exit equal to entry
-    (e.g. biblatex's ``maxextraname``, set at ``\\begin{document}`` from the ``.bbl``). They
-    are not restored from checkpoints of excluded units, so a run carries their current
-    values through (§6.9.3, M6)."""
-    return frozenset(
-        r
-        for r in seg.entry.keys() | seg.exit.keys()
-        if r not in seg.absolute and seg.entry.get(r, 0) == seg.exit.get(r, 0)
+def modified(seg: SegmentVectors) -> frozenset[int]:
+    """Registers the segment modifies: absolute assignments and exit different from entry.
+    All other registers pass through (e.g. biblatex's ``maxextraname``, set at
+    ``\\begin{document}`` from the ``.bbl``, also when it was 0): checkpoints of excluded
+    units do not restore them, so a run carries their current values (§6.9.3, M6)."""
+    return frozenset(seg.absolute) | frozenset(
+        r for r in seg.entry.keys() | seg.exit.keys() if seg.entry.get(r, 0) != seg.exit.get(r, 0)
     )
 
 
@@ -114,7 +112,7 @@ def rewrite_checkpoint(
     stmts: Sequence[str],
     exit: Mapping[int, int],
     registers: Mapping[str, int],
-    drop: frozenset[int] = frozenset(),
+    keep: frozenset[int] | None = None,
 ) -> list[str]:
     """Unit-aux statements with the checkpoint (``\\\\@setckpt`` counters and the complete
     ``\\\\fastinc@ckpt`` vector) set to the predicted ``exit``; ``registers`` maps counter
@@ -125,7 +123,7 @@ def rewrite_checkpoint(
 
             def counter(m: re.Match[str]) -> str:
                 reg = registers.get(m.group(1))
-                if reg is not None and reg in drop:
+                if reg is not None and keep is not None and reg not in keep:
                     return ""
                 value = exit.get(reg, 0) if reg is not None and reg >= 0 else int(m.group(2))
                 return f"\\setcounter{{{m.group(1)}}}{{{value}}}"
@@ -137,7 +135,7 @@ def rewrite_checkpoint(
             m = _CKPT.match(stmt)
             if m:
                 regs = sorted({int(x.split("=")[0]) for x in m.group(2).split(",") if "=" in x})
-                regs = sorted((set(regs) | set(exit)) - drop)
+                regs = sorted(r for r in set(regs) | set(exit) if keep is None or r in keep)
                 vec = "".join(f"{r}={exit.get(r, 0)}," for r in regs)
                 stmt = f"{m.group(1)}{vec}{m.group(3)}"
         out.append(stmt)

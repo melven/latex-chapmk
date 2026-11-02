@@ -51,9 +51,9 @@ from fastinc.outputs import (
 from fastinc.predict import (
     SegmentVectors,
     Vector,
+    modified,
     normalized,
     partition,
-    pass_through,
     predict,
     rewrite_checkpoint,
 )
@@ -215,6 +215,12 @@ def _write(path: Path, stmts: list[str]) -> None:
     path.write_text("\n".join(stmts) + "\n", encoding="utf-8", errors="surrogateescape")
 
 
+def _eqp_tag(key: str) -> str:
+    """``\\expandafter\\gdef\\csname eqp@this@T\\endcsname`` -> ``T``."""
+    m = re.search(r"eqp@[a-z]+@(.*?)\\endcsname", key)
+    return m.group(1) if m else key
+
+
 def _short(items: list[str], limit: int = 3) -> str:
     shown = ", ".join(items[:limit])
     return shown if len(items) <= limit else f"{shown}, ... (+{len(items) - limit})"
@@ -340,9 +346,10 @@ class Fixpoint:
             for seg in self.units:
                 add(seg, "aggregate aux data changed (e.g. KOMA autodot)")
         eqp_pre, eqp_post = pre.eqp(), post.eqp()
-        if any(eqp_pre.get(k) != v for k, v in eqp_post.items()):
+        tags = sorted({_eqp_tag(k) for k, v in eqp_post.items() if eqp_pre.get(k) != v})
+        if tags:
             for seg in sorted(compiled):
-                add(seg, "eqparbox widths changed")
+                add(seg, f"eqparbox widths changed ({_short(tags)})")
         for seg in self.units:
             info = self.state.units.get(seg)
             if info is None:
@@ -460,7 +467,7 @@ class Fixpoint:
     ]:
         """Predicted (entry, exit) per segment from the first unit of the batch on, and per
         run index the checkpoints to write into its excluded units: predicted exit and the
-        pass-through registers (not restored)."""
+        registers the unit modifies (only those are restored)."""
         first = f"U{groups[0][0]}"
         observed = self.last_entries.get(first)
         entry = observed if observed is not None else self.state.vectors[first].entry
@@ -488,9 +495,7 @@ class Fixpoint:
             out: dict[str, tuple[Vector, frozenset[int]]] = {}
             for k in range(groups[0][0], group[0]):
                 seg = f"U{k}"
-                keep = pass_through(self.state.vectors[seg])
-                if keep or pred[seg][1] != normalized(self.state.vectors[seg].exit):
-                    out[seg] = (pred[seg][1], keep)
+                out[seg] = (pred[seg][1], modified(self.state.vectors[seg]))
             rewrites[j] = out
         return pred, rewrites
 
@@ -641,16 +646,16 @@ class Fixpoint:
                 seg = f"U{k}"
                 actual = normalized(recs.checkpoints.get(seg, {}))
                 entry = recs.entry_state(seg)
-                keep = pass_through(self.state_before[seg])
-                # pass-through registers must still pass through; the others match the
-                # predicted exit
+                keep = modified(self.state_before[seg])
+                # registers the unit modifies match the predicted exit; all others must still
+                # pass through (exit = entry)
                 regs = sorted(
                     r
-                    for r in actual.keys() | pred[seg][1].keys() | keep
+                    for r in actual.keys() | pred[seg][1].keys() | entry.keys()
                     if (
-                        actual.get(r, 0) != entry.get(r, 0)
+                        actual.get(r, 0) != pred[seg][1].get(r, 0)
                         if r in keep
-                        else actual.get(r, 0) != pred[seg][1].get(r, 0)
+                        else actual.get(r, 0) != entry.get(r, 0)
                     )
                 )
                 if not regs:

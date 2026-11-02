@@ -43,21 +43,22 @@ def test_partition_contiguous_balanced() -> None:
     assert len(groups) == 4 and [i for g in groups for i in g] == list(range(8))
 
 
-def test_pass_through_registers() -> None:
-    from fastinc.predict import pass_through
+def test_modified_registers() -> None:
+    from fastinc.predict import modified
 
     seg = SegmentVectors({0: 5, 7: 3, 8: 2, 9: 1}, {0: 9, 7: 3, 8: 2}, frozenset({8}))
-    # 7 unchanged (pass-through); 8 unchanged but assigned absolutely; 9 reset to 0
-    assert pass_through(seg) == {7}
+    # 0 changes, 8 is assigned absolutely, 9 is reset to 0; 7 and all registers that are 0 at
+    # both ends (missing) pass through
+    assert modified(seg) == {0, 8, 9}
 
 
-def test_rewrite_checkpoint_drops_pass_through() -> None:
+def test_rewrite_checkpoint_keeps_only_modified() -> None:
     stmts = [
         "\\fastinc@ckpt{U1}{0=6,154=1,300=4,}",
         "\\@setckpt{ch1}{\n\\setcounter{page}{6}\n\\setcounter{maxextraname}{4}\n}",
     ]
     out = rewrite_checkpoint(
-        stmts, {0: 8, 154: 1, 300: 4}, {"page": 0, "maxextraname": 300}, frozenset({300})
+        stmts, {0: 8, 154: 1, 300: 4}, {"page": 0, "maxextraname": 300}, frozenset({0, 154})
     )
     assert out[0] == "\\fastinc@ckpt{U1}{0=8,154=1,}"
     assert "maxextraname" not in out[1] and "\\setcounter{page}{8}" in out[1]
