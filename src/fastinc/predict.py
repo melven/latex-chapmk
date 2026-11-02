@@ -116,7 +116,8 @@ def rewrite_checkpoint(
 ) -> list[str]:
     """Unit-aux statements with the checkpoint (``\\\\@setckpt`` counters and the complete
     ``\\\\fastinc@ckpt`` vector) set to the predicted ``exit``; ``registers`` maps counter
-    names to register numbers."""
+    names to register numbers. With ``keep``, only those registers are restored; the others
+    are removed (they pass through)."""
     out = []
     for stmt in stmts:
         if stmt.startswith("\\@setckpt{"):
