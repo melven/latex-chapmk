@@ -88,3 +88,16 @@ def test_picture_showing_a_reference(pictures: Path, capsys: pytest.CaptureFixtu
         if any(x.startswith("pictures exported") for x in rs)
     }
     assert "chapters/diagrams" in exported_in
+
+
+def test_page_shift_keeps_pictures(pictures: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """chapters/plots grows by pages: chapters/diagrams is recompiled (entry state) with its
+    pictures embedded from the cache, except the one that shows \\thepage."""
+    text = "\n\n".join(["Additional text to make the chapter longer. " * 40] * 8)
+    edit(pictures / "chapters" / "plots.tex", "See Figure~", text + "\n\nSee Figure~")
+    rep = checked(pictures, capsys)
+    diagrams = [x for r in rep["runs"] for x in r["reasons"].get("chapters/diagrams", [])]
+    assert any(x.startswith("entry state changed") for x in diagrams), diagrams
+    assert [x for x in diagrams if x.startswith("pictures exported")] == [
+        "pictures exported (1)"
+    ], diagrams
