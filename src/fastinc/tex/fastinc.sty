@@ -40,7 +40,7 @@
       \xdef\fastinc@kidx{\fastinc@kidx\fastinc@tmp,}\fi\fi}%
   \cl@@ckpt
   \let\@elt\relax
-  \edef\fastinc@tmp{Hy@abspage,BKM@id,\fastinc@denynames}%
+  \edef\fastinc@tmp{Hy@abspage,BKM@id,calc@Acount,calc@Bcount,\fastinc@denynames}%
   \@for\fastinc@name:=\fastinc@tmp\do{\ifx\fastinc@name\@empty\else
     \edef\fastinc@tmp{\fastinc@idx{\fastinc@name}}%
     \ifnum\fastinc@tmp>-1 \expandafter\global\expandafter\let

@@ -31,14 +31,18 @@ class FormatInfo:
 
 
 def format_stamp(analysis: Analysis, dist_version: str) -> str:
-    """Everything the format depends on (§6.3.1): the ``pre`` fingerprint (lines and inlined
-    inputs), the split line, the distribution version and fastinc-ini.sty."""
+    """Everything the format and the canonical state depend on (§6.3.1): the ``pre``
+    fingerprint (lines and inlined inputs), the split line, the distribution version,
+    fastinc-ini.sty and fastinc.sty."""
     ini = (TEX_DIR / "fastinc-ini.sty").read_bytes()
+    runtime = (TEX_DIR / "fastinc.sty").read_bytes()
     data = {
         "pre": analysis.fingerprints.pre,
         "split_line": analysis.split_line,
         "dist": dist_version,
         "ini": hashlib.sha256(ini).hexdigest(),
+        # not in the format, but its records are the canonical state's: a change means cold
+        "runtime": hashlib.sha256(runtime).hexdigest(),
     }
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
