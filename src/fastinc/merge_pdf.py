@@ -202,6 +202,7 @@ def merge_pdf(
         for name in missing:  # undefined everywhere: pdfTeX's dummy destination (S6)
             tree[name] = Dictionary(D=Array([merged.pages[0].obj, Name.Fit]))
 
+        _normalize_font_descriptors(merged)
         _write_outline(merged, outline)
         merged.Root.PageLabels = Dictionary(Nums=page_labels([(p.value, p.label) for p in pages]))
         cat = sources.get(catalog_from)
@@ -220,6 +221,66 @@ def merge_pdf(
     finally:
         merged.close()
         sources.close()
+
+
+def _font_name(desc: Any) -> str:
+    """FontName without the subset tag (``ABCDEF+``)."""
+    name = str(desc.get("/FontName", ""))[1:]
+    return name[7:] if len(name) > 7 and name[6] == "+" else name
+
+
+def _normalize_font_descriptors(pdf: pikepdf.Pdf) -> None:
+    """Font descriptor metrics as one pdfTeX run of the whole document writes them (M7).
+
+    pdfTeX writes one descriptor per font. For a font that also occurs in an included PDF
+    (an embedded figure, ``/PTEX.FileName``), its metrics come from the font file: Ascent and
+    CapHeight = FontBBox top, Descent = FontBBox bottom, no XHeight; otherwise from the TFM.
+    Runs see only some of the figures, so their copies differ; text extraction (§3.3 item 2)
+    uses these metrics.
+    """
+    descriptors: dict[str, list[Any]] = {}
+    in_figures: set[str] = set()
+    seen: set[tuple[int, int]] = set()
+
+    def walk(resources: Any, figure: bool) -> None:
+        if not isinstance(resources, Dictionary):
+            return
+        for font in resources.get("/Font", Dictionary()).values():
+            desc = font.get("/FontDescriptor")
+            if desc is None or desc.objgen in seen:
+                if desc is not None and figure:
+                    in_figures.add(_font_name(desc))
+                continue
+            seen.add(desc.objgen)
+            descriptors.setdefault(_font_name(desc), []).append(desc)
+            if figure:
+                in_figures.add(_font_name(desc))
+        for xobj in resources.get("/XObject", Dictionary()).values():
+            if xobj.get("/Subtype") != Name.Form or xobj.objgen in seen:
+                continue
+            seen.add(xobj.objgen)
+            walk(xobj.get("/Resources"), figure or "/PTEX.FileName" in xobj)
+
+    for page in pdf.pages:
+        walk(page.obj.get("/Resources"), False)
+    for name, descs in descriptors.items():
+        if name in in_figures:
+            for d in descs:
+                bbox = d.get("/FontBBox")
+                if bbox is None:
+                    continue
+                d.Ascent = bbox[3]
+                d.CapHeight = bbox[3]
+                d.Descent = bbox[1]
+                if "/XHeight" in d:
+                    del d["/XHeight"]
+        else:
+            tfm = next((d for d in descs if "/XHeight" in d), None)
+            if tfm is None:
+                continue
+            for d in descs:
+                for key in ("/Ascent", "/CapHeight", "/Descent", "/XHeight"):
+                    d[key] = tfm[key]
 
 
 def _write_outline(pdf: pikepdf.Pdf, entries: Sequence[OutlineEntry]) -> None:
