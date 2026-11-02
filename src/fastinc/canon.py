@@ -160,6 +160,9 @@ def commit_run(
                 normalized(exit_),
                 frozenset(recs.absolute.get(seg, ())),
             )
+    if recs.eqp_uses:  # Q records (fastinc.sty since M6)
+        for seg in taken:
+            state.eqp_tags[seg] = sorted(recs.eqp_uses.get(seg, ()))
     run_main = statements(read_lines(run_dir / f"{job}.aux"))
     aggregates = list(dict.fromkeys(s for s in run_main if classify(s) == AGGREGATE))
     for seg in taken:

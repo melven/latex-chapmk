@@ -49,7 +49,8 @@ class State:
     hash of the glue inputs the committed glue was compiled with. ``pending`` holds the dirty
     units with reasons and ``glue_pending`` why the glue is invalid, if the last build did not
     reach the fixpoint (e.g. a TeX error). ``vectors`` holds entry, exit and absolute set of
-    each segment from its committing run (prediction, §6.9.3).
+    each segment from its committing run (prediction, §6.9.3); ``eqp_tags`` the eqparbox tags
+    each segment used in its committing run (M6).
     """
 
     epoch: int
@@ -67,6 +68,7 @@ class State:
     pending: dict[str, list[str]] = field(default_factory=dict)
     glue_pending: str | None = None
     vectors: dict[str, SegmentVectors] = field(default_factory=dict)
+    eqp_tags: dict[str, list[str]] = field(default_factory=dict)
     version: int = STATE_VERSION
 
     def run_names(self) -> set[str]:
@@ -144,6 +146,7 @@ def load_state(canon_dir: Path) -> State | None:
                 )
                 for seg, v in data["vectors"].items()
             },
+            eqp_tags={k: list(v) for k, v in data.get("eqp_tags", {}).items()},
         )
     except (ValueError, KeyError, TypeError) as err:
         raise FastincError(f"{path}: corrupt state ({err}); run 'fastinc clean'") from err

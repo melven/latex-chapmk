@@ -354,8 +354,18 @@ def test_register_names(tmp_path: Path) -> None:
     from fastinc.records import register_names
 
     log = tmp_path / "x.log"
-    log.write_text("\\c@figure=\\count284\n\\Hy@linkcounter=\\count514\nother line\n")
+    log.write_text(
+        "\\c@figure=\\count284\n"
+        "(/usr/share/texmf/tex/latex/hyperref/hyperref.sty Package: hyperref (see notes)\n"
+        "\\Hy@linkcounter=\\count514\n"
+        "(/usr/share/texmf/tex/latex/hyperref/nameref.sty\n\\c@section@level=\\count515\n)\n"
+        "\\Hy@x=\\count516\n"
+        ")\nother line\n\\c@later=\\count517\n"
+    )
     assert register_names([log, tmp_path / "missing.log"]) == {
         284: "\\c@figure",
-        514: "\\Hy@linkcounter",
+        514: "\\Hy@linkcounter [hyperref]",
+        515: "\\c@section@level [nameref]",
+        516: "\\Hy@x [hyperref]",
+        517: "\\c@later",
     }

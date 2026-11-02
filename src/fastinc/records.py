@@ -35,14 +35,33 @@ def parse_vector(text: str) -> Vector:
 _ALLOC = re.compile(r"^\\([^\s=]+)=\\count(\d+)\s*$", re.MULTILINE)
 
 
+_LOG_PAREN = re.compile(r"\(([^\s()]*)|\)")
+_LOG_FILE = re.compile(r"[^\s()]+\.(sty|cls|def|cfg|clo|ldf|fd|tex)$")
+
+
 def register_names(logs: list[Path]) -> dict[int, str]:
-    """``\\count`` register numbers → control sequence names, from the allocation lines
-    (``\\c@figure=\\count284``) of the format and run logs (for messages)."""
+    """``\\count`` register numbers → names for messages, with the package that allocated
+    them (``\\c@instcount [biblatex]``): the allocation lines (``\\c@figure=\\count284``)
+    of the format and run logs, attributed to the innermost file open in the log there."""
     names: dict[int, str] = {}
     for log in logs:
-        if log.is_file():
-            for m in _ALLOC.finditer(log.read_text(errors="replace")):
-                names.setdefault(int(m.group(2)), "\\" + m.group(1))
+        if not log.is_file():
+            continue
+        stack: list[str | None] = []  # open files (None: other parentheses)
+        for line in log.read_text(errors="replace").splitlines():
+            m = _ALLOC.match(line)
+            if m:
+                package = next((f for f in reversed(stack) if f), None)
+                name = "\\" + m.group(1)
+                names.setdefault(int(m.group(2)), f"{name} [{package}]" if package else name)
+                continue
+            for p in _LOG_PAREN.finditer(line):
+                if p.group(0) == ")":
+                    if stack:
+                        stack.pop()
+                else:
+                    f = p.group(1)
+                    stack.append(Path(f).stem if _LOG_FILE.match(f) else None)
     return names
 
 
@@ -147,6 +166,8 @@ class RunRecords:
     #: elapsed TeX time in seconds at points of the run (``load``, ``begin``, segment ids,
     #: ``end``; M6 breakdown), in order
     times: list[tuple[str, float]] = field(default_factory=list)
+    #: eqparbox tags used per segment (``Q`` records; M6)
+    eqp_uses: dict[str, set[str]] = field(default_factory=dict)
     #: page layout flags (``twoside``, ``openright``: 0/1)
     layout: dict[str, int] = field(default_factory=dict)
 
@@ -208,6 +229,9 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
         if line.startswith("P "):
             index, seg, value, label = [*line[2:].split(" ", 3), ""][:4]
             recs.pages.append(PageRecord(int(index), seg, int(value), label))
+        elif line.startswith("Q "):
+            seg, _, tag = line[2:].partition(" ")
+            recs.eqp_uses.setdefault(seg, set()).add(tag.strip())
         elif line.startswith("T "):
             _, point, value = line.split(" ", 2)
             recs.times.append((point, int(value) / 65536))

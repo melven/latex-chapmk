@@ -146,7 +146,7 @@ def test_t9_new_figure(thesis: Path, capsys: pytest.CaptureFixture[str]) -> None
     sels = selections(rep)
     assert sels[0] == ["chapters/ch2"]
     assert run_with(rep, "chapters/ch3")["reasons"]["chapters/ch3"] == [
-        "entry state changed (\\Hy@linkcounter)"
+        "entry state changed (\\Hy@linkcounter [hyperref])"
     ]
     assert [] in sels[1:]  # list of figures
 

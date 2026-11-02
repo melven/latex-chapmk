@@ -250,6 +250,7 @@ class Fixpoint:
         self.last_entries: dict[str, Vector] = {}  # observed in the latest run
         self.mispredicted: dict[str, int] = {}  # consecutive mispredictions per unit
         self.state_before: dict[str, SegmentVectors] = {}
+        self.odd: frozenset[str] = frozenset()  # units starting on an odd page (prediction)
 
     # sources -------------------------------------------------------------------------------
 
@@ -348,7 +349,14 @@ class Fixpoint:
         eqp_pre, eqp_post = pre.eqp(), post.eqp()
         tags = sorted({_eqp_tag(k) for k, v in eqp_post.items() if eqp_pre.get(k) != v})
         if tags:
-            for seg in sorted(compiled):
+            # the units that use a changed tag (Q records); unknown owners: all compiled units
+            owners = {
+                seg for seg in self.units if set(tags) & set(self.state.eqp_tags.get(seg, ()))
+            }
+            known = {t for seg_tags in self.state.eqp_tags.values() for t in seg_tags}
+            if not set(tags) <= known:
+                owners |= compiled
+            for seg in sorted(owners, key=lambda x: int(x[1:])):
                 add(seg, f"eqparbox widths changed ({_short(tags)})")
         for seg in self.units:
             info = self.state.units.get(seg)
@@ -489,6 +497,7 @@ class Fixpoint:
                 for k, inc in enumerate(self.a.includes, start=1)
                 if inc.heading in chapter_level
             )
+        self.odd = odd
         pred = predict(segments(self.a), self.state.vectors, first, entry, odd)
         rewrites: dict[int, dict[str, tuple[Vector, frozenset[int]]]] = {}
         for j, group in enumerate(groups):
@@ -637,8 +646,9 @@ class Fixpoint:
         glue: str | None,
     ) -> tuple[dict[str, list[str]], str | None]:
         """§6.9.3 item 5: the exits of units whose predicted checkpoint later runs used must
-        equal the prediction; at the first mismatch every unit after its run's group is dirty
-        again (and the glue, whose pages come from the last run)."""
+        equal the prediction. At the first mismatch the glue is invalid (its pages come from
+        the last run) and the later units whose start entry changes under the corrected
+        prediction are dirty again, with all units after them."""
         dirty = {seg: list(r) for seg, r in dirty.items()}
         real = [g for g in groups if g is not None]
         for j, (group, recs) in enumerate(zip(real[:-1], all_recs[:-1], strict=True)):
@@ -666,8 +676,19 @@ class Fixpoint:
                 arg = self.a.includes[k - 1].arg
                 reason = f"misprediction: exit of {arg} ({_short(names)})"
                 self.ctx.say(reason)
-                for later in range(real[j][-1] + 1, len(self.units) + 1):
-                    dirty.setdefault(f"U{later}", []).append(reason)
+                # predict again from the actual exit: later runs were compiled with a wrong
+                # entry only if the corrected chain changes their start entries (a later
+                # absolute assignment, e.g. \\mainmatter for the page, absorbs the error);
+                # the glue pages (last run) are redone in any case
+                order = segments(self.a)
+                nxt = order[order.index(seg) + 1]
+                pred2 = predict(order, self.state_before, nxt, actual, self.odd)
+                for later_group in real[j + 1 :]:
+                    start = f"U{later_group[0]}"
+                    if pred2[start][0] != pred[start][0]:
+                        for later in range(later_group[0], len(self.units) + 1):
+                            dirty.setdefault(f"U{later}", []).append(reason)
+                        break
                 return dirty, reason
         return dirty, glue
 
