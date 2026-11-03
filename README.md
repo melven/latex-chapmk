@@ -1,6 +1,8 @@
 # latex-chapmk
 
 [![ci](https://github.com/melven/latex-chapmk/actions/workflows/ci.yml/badge.svg)](https://github.com/melven/latex-chapmk/actions/workflows/ci.yml)
+[![coverage](https://github.com/melven/latex-chapmk/raw/badges/coverage.svg)](https://github.com/melven/latex-chapmk/actions/workflows/ci.yml?query=branch%3Amain)
+[![license](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
 
 `chapmk`: latexmk for books. It rebuilds only the changed `\include`'d chapters of a pdfLaTeX
 document, in parallel, and merges them into one PDF and SyncTeX file that look like a plain
