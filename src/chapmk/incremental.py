@@ -3,7 +3,7 @@ fixpoint loop.
 
 Each iteration compiles the dirty compilation units (all units: a full run; none: a glue-only
 run) together with the glue in one run, commits the result into the canonical state
-(:mod:`fastinc.canon`) and recomputes the dirty set from the dependency model (§6.8):
+(:mod:`chapmk.canon`) and recomputes the dirty set from the dependency model (§6.8):
 
 - a unit is dirty if its sources changed, an imported label or citation value changed, its
   self data was unstable, its observed entry state changed or it follows such a unit (tail
@@ -31,24 +31,24 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from fastinc.analysis import UNIT_HEADINGS, Analysis
-from fastinc.aux import AGGREGATE, GLOBAL, command_name, read_lines, run_input_main_aux, statements
-from fastinc.canon import CanonView, commit_lists, commit_run, read_canon, run_tools, segments
-from fastinc.config import Config
-from fastinc.deps import TokenScan, changed_imports, imports, read_text, short_hash
-from fastinc.errors import FastincError, TexError
-from fastinc.fmt import FormatInfo, ensure_format, format_stamp
-from fastinc.fullbuild import full_build, read_inputs
-from fastinc.layout import Layout
-from fastinc.lint import LintHit, glue_hints, lint_files
-from fastinc.outputs import (
+from chapmk.analysis import UNIT_HEADINGS, Analysis
+from chapmk.aux import AGGREGATE, GLOBAL, command_name, read_lines, run_input_main_aux, statements
+from chapmk.canon import CanonView, commit_lists, commit_run, read_canon, run_tools, segments
+from chapmk.config import Config
+from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
+from chapmk.errors import ChapmkError, TexError
+from chapmk.fmt import FormatInfo, ensure_format, format_stamp
+from chapmk.fullbuild import full_build, read_inputs
+from chapmk.layout import Layout
+from chapmk.lint import LintHit, glue_hints, lint_files
+from chapmk.outputs import (
     MergeFailedError,
     failed_run,
     is_published,
     mark_published,
     publish_state,
 )
-from fastinc.pictures import (
+from chapmk.pictures import (
     PICS_FILE,
     collect_garbage,
     driver_file,
@@ -58,7 +58,7 @@ from fastinc.pictures import (
     stale_figures,
     store_references,
 )
-from fastinc.predict import (
+from chapmk.predict import (
     SegmentVectors,
     Vector,
     modified,
@@ -67,7 +67,7 @@ from fastinc.predict import (
     predict,
     rewrite_checkpoint,
 )
-from fastinc.records import (
+from chapmk.records import (
     RecordError,
     RunRecords,
     glue_times,
@@ -76,11 +76,11 @@ from fastinc.records import (
     register_names,
     tex_phases,
 )
-from fastinc.runner import DERIVED_SUFFIXES, RunSpec, prepare_run_dir, run_batch
-from fastinc.state import State, UnitInputs, load_state, save_state
-from fastinc.texdist import TexDistribution
-from fastinc.timing import Timings
-from fastinc.tools import ToolInputError
+from chapmk.runner import DERIVED_SUFFIXES, RunSpec, prepare_run_dir, run_batch
+from chapmk.state import State, UnitInputs, load_state, save_state
+from chapmk.texdist import TexDistribution
+from chapmk.timing import Timings
+from chapmk.tools import ToolInputError
 
 MAX_ITERATIONS = 8
 #: Packages that force full mode when loaded at all (also by the class; seen in the .fls).
@@ -94,7 +94,7 @@ RUNTIME_UNSUPPORTED = (
 FULL_ONLY_FILE = "full-only.json"
 
 
-class FallbackError(FastincError):
+class FallbackError(ChapmkError):
     """The incremental machinery cannot handle this build; use full mode (§6.14).
     ``persistent``: the reason holds until the main file changes (skip the attempt next time)."""
 
@@ -105,7 +105,7 @@ class FallbackError(FastincError):
 
 @dataclass
 class BuildReport:
-    """What a build did (``fastinc build --report``): mode, reason, runs (with selection and
+    """What a build did (``chapmk build --report``): mode, reason, runs (with selection and
     dirty reasons), compiled includes, lint warnings."""
 
     mode: str  # "full", "cold", "incremental" or "noop"

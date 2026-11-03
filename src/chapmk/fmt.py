@@ -9,13 +9,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from fastinc.analysis import Analysis
-from fastinc.errors import TexError
-from fastinc.gensrc import format_source, write_if_changed
-from fastinc.layout import Layout
-from fastinc.logs import first_error, map_paths
-from fastinc.proc import run
-from fastinc.texdist import TEX_DIR, TexDistribution
+from chapmk.analysis import Analysis
+from chapmk.errors import TexError
+from chapmk.gensrc import format_source, write_if_changed
+from chapmk.layout import Layout
+from chapmk.logs import first_error, map_paths
+from chapmk.proc import run
+from chapmk.texdist import TEX_DIR, TexDistribution
 
 FORMAT_NAME = "pre"
 STAMP_FILE = "stamp.json"
@@ -33,9 +33,9 @@ class FormatInfo:
 def format_stamp(analysis: Analysis, dist_version: str) -> str:
     """Everything the format and the canonical state depend on (§6.3.1): the ``pre``
     fingerprint (lines and inlined inputs), the split line, the distribution version,
-    fastinc-ini.sty and fastinc.sty."""
-    ini = (TEX_DIR / "fastinc-ini.sty").read_bytes()
-    runtime = (TEX_DIR / "fastinc.sty").read_bytes()
+    chapmk-ini.sty and chapmk.sty."""
+    ini = (TEX_DIR / "chapmk-ini.sty").read_bytes()
+    runtime = (TEX_DIR / "chapmk.sty").read_bytes()
     data = {
         "pre": analysis.fingerprints.pre,
         "split_line": analysis.split_line,
@@ -78,7 +78,7 @@ def ensure_format(
         log = log_file.read_text(errors="replace") if log_file.is_file() else result.output
         err = first_error(map_paths(log, layout.path_map()))
         raise TexError("format build failed", log=log_file, first_error=err)
-    m = re.search(r"fastinc-pdf-objects:(\d+),(\d+),(\d+)", log_file.read_text(errors="replace"))
+    m = re.search(r"chapmk-pdf-objects:(\d+),(\d+),(\d+)", log_file.read_text(errors="replace"))
     if m and (int(m.group(2)) or int(m.group(3))):  # objects are dumped fine, xforms/images not
         fmt_file.unlink(missing_ok=True)
         raise TexError(
@@ -87,7 +87,7 @@ def ensure_format(
             first_error=(
                 f"the preamble before line {analysis.split_line} creates PDF form xobjects or "
                 f"images ({m.group(2)}/{m.group(3)}), which a format cannot hold; "
-                "move that code after the split point (fastinc.toml: split.before)"
+                "move that code after the split point (chapmk.toml: split.before)"
             ),
         )
     stamp_file.write_text(stamp)

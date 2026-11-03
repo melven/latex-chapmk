@@ -1,4 +1,4 @@
-"""``fastinc graph`` (PLAN §6.15, S7): compilation units and their dependencies, from the
+"""``chapmk graph`` (PLAN §6.15, S7): compilation units and their dependencies, from the
 canonical state of the last build."""
 
 from __future__ import annotations
@@ -6,13 +6,13 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 
-from fastinc.analysis import Analysis
-from fastinc.canon import read_canon
-from fastinc.config import Config
-from fastinc.deps import defined_labels
-from fastinc.layout import Layout
-from fastinc.lint import lint_files
-from fastinc.state import load_state
+from chapmk.analysis import Analysis
+from chapmk.canon import read_canon
+from chapmk.config import Config
+from chapmk.deps import defined_labels
+from chapmk.layout import Layout
+from chapmk.lint import lint_files
+from chapmk.state import load_state
 
 GLUE = "glue"
 BIBLIOGRAPHY = "bibliography"
@@ -45,7 +45,7 @@ def dependency_graph(analysis: Analysis, layout: Layout, config: Config | None =
     lint = (cfg.lint_allow, cfg.lint_verbatim, cfg.lint_shortverb)
     state = load_state(layout.canon_dir)
     if state is None:
-        raise FileNotFoundError("no build state: run 'fastinc build' first")
+        raise FileNotFoundError("no build state: run 'chapmk build' first")
     view = read_canon(analysis, layout.canon_dir)
     owner = dict.fromkeys(defined_labels(view.main), GLUE)
     for k, inc in enumerate(analysis.includes, start=1):
@@ -108,7 +108,7 @@ def to_dot(g: Graph) -> str:
     def q(name: str) -> str:
         return '"' + name.replace('"', '\\"') + '"'
 
-    out = ["digraph fastinc {", "  rankdir=LR;", "  node [shape=box];"]
+    out = ["digraph chapmk {", "  rankdir=LR;", "  node [shape=box];"]
     by_unit: dict[int, list[IncludeNode]] = {}
     for node in g.includes:
         by_unit.setdefault(node.unit, []).append(node)

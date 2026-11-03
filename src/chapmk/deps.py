@@ -13,7 +13,7 @@ import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from fastinc.aux import normalize_statement, statements
+from chapmk.aux import normalize_statement, statements
 
 UNDEFINED = "-"
 _NEWLABEL = re.compile(r"^\\newlabel\{(.+?)\}\{(.*)\}\s*$", re.DOTALL)

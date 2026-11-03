@@ -20,10 +20,10 @@ def publish(
     """Write via ``write(tmp)`` next to ``target`` and rename it atomically onto ``target``.
 
     A viewer may lock ``target`` on Windows: the rename is retried for ``retry_seconds``, then
-    the file is published as ``<stem>.fastinc<suffixes>`` instead. Returns the path written.
+    the file is published as ``<stem>.chapmk<suffixes>`` instead. Returns the path written.
     """
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_name(f".{target.name}.fastinc-tmp")
+    tmp = target.with_name(f".{target.name}.chapmk-tmp")
     write(tmp)
     deadline = time.monotonic() + retry_seconds
     while True:
@@ -35,7 +35,7 @@ def publish(
                 break
             time.sleep(0.1)
     stem, _, suffixes = target.name.partition(".")
-    fallback = target.with_name(f"{stem}.fastinc.{suffixes}" if suffixes else f"{stem}.fastinc")
+    fallback = target.with_name(f"{stem}.chapmk.{suffixes}" if suffixes else f"{stem}.chapmk")
     replace(tmp, fallback)
     return fallback
 

@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from fastinc.analysis import Analysis
-from fastinc.config import Config
+from chapmk.analysis import Analysis
+from chapmk.config import Config
 
-DEFAULT_BUILD_DIR = ".fastinc"
+DEFAULT_BUILD_DIR = ".chapmk"
 
 
 @dataclass(frozen=True)

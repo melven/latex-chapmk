@@ -1,4 +1,4 @@
-"""Configuration: ``fastinc.toml`` merged with command-line overrides (PLAN §6.15)."""
+"""Configuration: ``chapmk.toml`` merged with command-line overrides (PLAN §6.15)."""
 
 from __future__ import annotations
 
@@ -9,14 +9,14 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from fastinc.errors import ConfigError
+from chapmk.errors import ConfigError
 
 if sys.version_info >= (3, 11):
     import tomllib
 else:  # pragma: no cover
     import tomli as tomllib
 
-CONFIG_NAME = "fastinc.toml"
+CONFIG_NAME = "chapmk.toml"
 
 
 @dataclass(frozen=True)
@@ -100,7 +100,7 @@ def _convert(key: str, kind: str, value: Any, base: Path) -> Any:
 
 
 def parse_config_file(path: Path) -> Config:
-    """Parse ``fastinc.toml``; relative paths are resolved against its directory."""
+    """Parse ``chapmk.toml``; relative paths are resolved against its directory."""
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as err:
@@ -115,7 +115,7 @@ def parse_config_file(path: Path) -> Config:
 
 
 def find_config_file(start: Path) -> Path | None:
-    """``fastinc.toml`` in ``start`` (a directory), if present."""
+    """``chapmk.toml`` in ``start`` (a directory), if present."""
     candidate = start / CONFIG_NAME
     return candidate if candidate.is_file() else None
 

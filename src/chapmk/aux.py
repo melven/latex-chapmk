@@ -13,8 +13,8 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-_SEG_START = re.compile(r"^\\fastinc@entry\{([UG]\d+)\}")
-_SEG_END = re.compile(r"^\\fastinc@(entry|gexit|unit)\{")
+_SEG_START = re.compile(r"^\\chapmk@entry\{([UG]\d+)\}")
+_SEG_END = re.compile(r"^\\chapmk@(entry|gexit|unit)\{")
 _BKM = re.compile(r"^\\BKM@entry\{(.*)\}\{([0-9A-Fa-f]*)\}\s*$")
 
 
@@ -25,8 +25,8 @@ def read_lines(path: Path) -> list[str]:
 def segment_slices(main_aux_lines: list[str]) -> dict[str, list[str]]:
     """Lines written to the main aux while each segment was current (S5, S8).
 
-    A slice starts with the segment's ``\\fastinc@entry`` record and ends before the next
-    ``\\fastinc@entry``/``\\fastinc@gexit``/``\\fastinc@unit`` record (all written immediately).
+    A slice starts with the segment's ``\\chapmk@entry`` record and ends before the next
+    ``\\chapmk@entry``/``\\chapmk@gexit``/``\\chapmk@unit`` record (all written immediately).
     """
     slices: dict[str, list[str]] = {}
     current: list[str] | None = None
@@ -77,7 +77,7 @@ def _brace_balance(line: str) -> int:
 
 
 # Statement classes (§6.7.2)
-RECORD = "record"  # fastinc records
+RECORD = "record"  # chapmk records
 STRUCTURAL = "structural"  # constant per document or bookkeeping
 LABEL = "label"  # \newlabel: export
 LIST = "list"  # \@writefile: list contribution
@@ -94,7 +94,7 @@ ABSPAGE = "abspage"  # \@abspage@last: rewritten to the merged page count
 GLOBAL = "global"  # unknown: a change dirties everything
 
 _CLASSES: list[tuple[str, re.Pattern[str]]] = [
-    (RECORD, re.compile(r"^\\fastinc@")),
+    (RECORD, re.compile(r"^\\chapmk@")),
     (
         STRUCTURAL,
         re.compile(
@@ -174,7 +174,7 @@ def run_input_main_aux(stmts: Sequence[str], excluded: set[str]) -> list[str]:
 
 def segment_of_statements(stmts: Sequence[str]) -> list[str | None]:
     """The segment each statement was written in (None outside slices), as in
-    :func:`segment_slices`; the ``\\fastinc@entry`` statement itself belongs to its slice."""
+    :func:`segment_slices`; the ``\\chapmk@entry`` statement itself belongs to its slice."""
     out: list[str | None] = []
     current: str | None = None
     for stmt in stmts:
@@ -288,10 +288,10 @@ def parse_bookmark(line: str) -> Bookmark | None:
 
 
 def bookmark_levels(main_aux_lines: list[str]) -> dict[int, int]:
-    """``\\fastinc@bkmlevels{id=level,...}`` of a run's main aux (S6)."""
+    """``\\chapmk@bkmlevels{id=level,...}`` of a run's main aux (S6)."""
     levels: dict[int, int] = {}
     for line in main_aux_lines:
-        m = re.match(r"^\\fastinc@bkmlevels\{(.*)\}\s*$", line)
+        m = re.match(r"^\\chapmk@bkmlevels\{(.*)\}\s*$", line)
         if m:
             for item in m.group(1).split(","):
                 if "=" in item:

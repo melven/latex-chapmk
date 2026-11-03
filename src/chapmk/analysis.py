@@ -11,9 +11,9 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
-from fastinc.config import Config
-from fastinc.errors import AnalysisError
-from fastinc.texsource import (
+from chapmk.config import Config
+from chapmk.errors import AnalysisError
+from chapmk.texsource import (
     LineIndex,
     depth_at_line_starts,
     find_macros,

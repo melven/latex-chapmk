@@ -1,13 +1,13 @@
-"""Picture cache (PLAN §6.17, S12): the user's TikZ externalize, redirected by fastinc-ini.sty.
+"""Picture cache (PLAN §6.17, S12): the user's TikZ externalize, redirected by chapmk-ini.sty.
 
 TeX looks a figure up by its key in the picture directory. A missing figure is typeset inline
 and a copy of its box is shipped as an extra page of the run's PDF; the driver splits these
 pages into ``<key>.pdf`` plus ``<key>.dpth`` (depth, read by TikZ external's embedding) and
-reruns the segment. Records (log lines, written by ``\\fastinc@picrec``)::
+reruns the segment. Records (log lines, written by ``\\chapmk@picrec``)::
 
-    fastinc-picture: x <key> <0-based PDF page> <depth> <segment>   exported
-    fastinc-picture: u <key> <segment>                              figure used
-    fastinc-picture: s <key> <picture code>                         code of an exported one
+    chapmk-picture: x <key> <0-based PDF page> <depth> <segment>   exported
+    chapmk-picture: u <key> <segment>                              figure used
+    chapmk-picture: s <key> <picture code>                         code of an exported one
 
 The key covers the code and the state at the picture. References inside the code (labels,
 citations) are checked by the driver: an exported figure stores its code (``<key>.src``) and
@@ -24,17 +24,17 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from fastinc.deps import TokenScan, changed_imports, imports
-from fastinc.texdist import tex_path
+from chapmk.deps import TokenScan, changed_imports, imports
+from chapmk.texdist import tex_path
 
-#: driver parameters, read by fastinc-ini.sty at ``\begin{document}`` (run or output directory)
-PICS_FILE = "fastinc-pics.tex"
+#: driver parameters, read by chapmk-ini.sty at ``\begin{document}`` (run or output directory)
+PICS_FILE = "chapmk-pics.tex"
 _RECORD = re.compile(
-    r"^fastinc-picture: (?:x (?P<xkey>[0-9A-F]{32}) (?P<page>\d+) (?P<depth>\S+) (?P<xseg>\S+)"
+    r"^chapmk-picture: (?:x (?P<xkey>[0-9A-F]{32}) (?P<page>\d+) (?P<depth>\S+) (?P<xseg>\S+)"
     r"|u (?P<ukey>[0-9A-F]{32}) (?P<useg>\S+))\s*$",
     re.MULTILINE,
 )
-_SOURCE = "fastinc-picture: s "
+_SOURCE = "chapmk-picture: s "
 #: TeX breaks log lines at ``max_print_line`` (texdist.deterministic_env)
 _MAX_PRINT_LINE = 10000
 
@@ -114,9 +114,9 @@ def driver_file(fig_dir: Path | None, cwd: Path, stamp: str, refs: Mapping[str, 
         return f"\\expandafter\\def\\csname {name}\\endcsname{{{value}}}%\n"
 
     picdir = "" if fig_dir is None else tex_path(Path(os.path.relpath(fig_dir, cwd))) + "/"
-    text = define("fastinc@picdir", picdir) + define("fastinc@picstamp", stamp)
+    text = define("chapmk@picdir", picdir) + define("chapmk@picstamp", stamp)
     for seg, digest in sorted(refs.items()):
-        text += define(f"fastinc@picrefs@{seg}", digest)
+        text += define(f"chapmk@picrefs@{seg}", digest)
     return text
 
 

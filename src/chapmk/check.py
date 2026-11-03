@@ -1,6 +1,6 @@
 """Acceptance comparison of two builds (PLAN §3.3): rasters, text, labels, outline, links, SyncTeX.
 
-Library used by the acceptance tests and by ``fastinc check`` (M3). Needs poppler
+Library used by the acceptance tests and by ``chapmk check`` (M3). Needs poppler
 (``pdftoppm``, ``pdftotext``) and the ``synctex`` command-line tool.
 """
 
@@ -17,8 +17,8 @@ from typing import Any
 
 import pikepdf
 
-from fastinc.errors import ToolError
-from fastinc.proc import run
+from chapmk.errors import ToolError
+from chapmk.proc import run
 
 DPI = 150
 SYNCTEX_SAMPLES = 8

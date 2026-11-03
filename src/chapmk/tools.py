@@ -5,15 +5,15 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 
-from fastinc.aux import segment_slices
-from fastinc.errors import FastincError
-from fastinc.records import NLO_MARKER
+from chapmk.aux import segment_slices
+from chapmk.errors import ChapmkError
+from chapmk.records import NLO_MARKER
 
 _CITEKEY = re.compile(r'^(\s*)<bcf:citekey order="(\d+)"( intorder="\d+")?(.*)$')
 _SECTION = re.compile(r'<bcf:section number="(\d+)">')
 
 
-class ToolInputError(FastincError):
+class ToolInputError(ChapmkError):
     """The tool inputs cannot be assembled (e.g. several refsections with citations)."""
 
 

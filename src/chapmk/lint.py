@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from fastinc.texsource import LineIndex, strip_comments
+from chapmk.texsource import LineIndex, strip_comments
 
 #: hits only outside an explicit group
 LOCAL_COMMANDS = frozenset(
@@ -335,7 +335,7 @@ def glue_hints(
             reason = "a group or environment is open across its ends"
         else:
             keep = f" (lines {start}-{first_line - 1} stay)" if before.strip() else ""
-            config = "" if name in headings else f' and fastinc.toml [units] heading = ["{name}"]'
+            config = "" if name in headings else f' and chapmk.toml [units] heading = ["{name}"]'
             hints.append(
                 f"{where} takes {seconds:.1f} s in every run; lines {first_line}-{end} "
                 f"(from \\{name}) moved into an \\include'd file{config}{keep} are compiled "

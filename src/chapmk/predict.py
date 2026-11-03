@@ -105,7 +105,7 @@ def partition(weights: Sequence[float], parts: int) -> list[list[int]]:
 
 
 _SETCOUNTER = re.compile(r"\\setcounter\s*\{([^{}]+)\}\s*\{(-?\d+)\}")
-_CKPT = re.compile(r"^(\\fastinc@ckpt\{[^{}]*\}\{)([^{}]*)(\}\s*)$")
+_CKPT = re.compile(r"^(\\chapmk@ckpt\{[^{}]*\}\{)([^{}]*)(\}\s*)$")
 
 
 def rewrite_checkpoint(
@@ -115,7 +115,7 @@ def rewrite_checkpoint(
     keep: frozenset[int] | None = None,
 ) -> list[str]:
     """Unit-aux statements with the checkpoint (``\\\\@setckpt`` counters and the complete
-    ``\\\\fastinc@ckpt`` vector) set to the predicted ``exit``; ``registers`` maps counter
+    ``\\\\chapmk@ckpt`` vector) set to the predicted ``exit``; ``registers`` maps counter
     names to register numbers. With ``keep``, only those registers are restored; the others
     are removed (they pass through)."""
     out = []

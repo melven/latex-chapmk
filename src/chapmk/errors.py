@@ -1,29 +1,29 @@
-"""Exception hierarchy. Every error shown to the user derives from :class:`FastincError`."""
+"""Exception hierarchy. Every error shown to the user derives from :class:`ChapmkError`."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 
-class FastincError(Exception):
+class ChapmkError(Exception):
     """Base class; ``str(err)`` is the message printed by the CLI."""
 
     exit_code = 2
 
 
-class ConfigError(FastincError):
-    """Invalid command line or ``fastinc.toml``."""
+class ConfigError(ChapmkError):
+    """Invalid command line or ``chapmk.toml``."""
 
 
-class AnalysisError(FastincError):
+class AnalysisError(ChapmkError):
     """The document violates an assumption the driver cannot work around (PLAN §2)."""
 
 
-class ToolError(FastincError):
+class ToolError(ChapmkError):
     """An external tool is missing or failed outside a TeX run (biber, makeindex, ...)."""
 
 
-class TexError(FastincError):
+class TexError(ChapmkError):
     """A TeX run failed. ``log`` is the run's log file, ``first_error`` its first error line."""
 
     exit_code = 1

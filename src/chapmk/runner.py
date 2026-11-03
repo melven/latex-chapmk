@@ -9,17 +9,17 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
-from fastinc.analysis import Analysis
-from fastinc.gensrc import run_main, write_if_changed
-from fastinc.layout import Layout
-from fastinc.logs import first_error, map_paths
-from fastinc.proc import run
-from fastinc.texdist import TexDistribution
+from chapmk.analysis import Analysis
+from chapmk.gensrc import run_main, write_if_changed
+from chapmk.layout import Layout
+from chapmk.logs import first_error, map_paths
+from chapmk.proc import run
+from chapmk.texdist import TexDistribution
 
 #: File name of the generated run main. TeX reads the command line with the catcodes of the
 #: format, where e.g. the ``underscore`` package makes ``_`` active; so the command line holds
 #: only this fixed name and the file is found via ``TEXINPUTS`` (run directory first).
-RUN_MAIN = "fastinc-run.tex"
+RUN_MAIN = "chapmk-run.tex"
 
 #: Derived files copied from the canonical state into a run directory (read by the glue).
 DERIVED_SUFFIXES = (".toc", ".lof", ".lot", ".loalg", ".lol", ".tdo", ".bbl", ".nls")

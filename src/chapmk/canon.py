@@ -12,8 +12,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from fastinc.analysis import Analysis
-from fastinc.aux import (
+from chapmk.analysis import Analysis
+from chapmk.aux import (
     AGGREGATE,
     BACKREF,
     EQP,
@@ -27,17 +27,17 @@ from fastinc.aux import (
     statement_key,
     statements,
 )
-from fastinc.deps import cite_values, label_values, short_hash
-from fastinc.errors import ToolError
-from fastinc.fullbuild import NOMENCL_STYLE
-from fastinc.layout import Layout
-from fastinc.predict import SegmentVectors, normalized
-from fastinc.proc import run
-from fastinc.records import RunRecords, read_nomenclature
-from fastinc.runner import DERIVED_SUFFIXES
-from fastinc.state import SegmentArtifact, State
-from fastinc.texdist import TexDistribution
-from fastinc.tools import (
+from chapmk.deps import cite_values, label_values, short_hash
+from chapmk.errors import ToolError
+from chapmk.fullbuild import NOMENCL_STYLE
+from chapmk.layout import Layout
+from chapmk.predict import SegmentVectors, normalized
+from chapmk.proc import run
+from chapmk.records import RunRecords, read_nomenclature
+from chapmk.runner import DERIVED_SUFFIXES
+from chapmk.state import SegmentArtifact, State
+from chapmk.texdist import TexDistribution
+from chapmk.tools import (
     citations_by_segment,
     datalists,
     nomenclature_file,
@@ -178,7 +178,7 @@ def commit_run(
                 normalized(exit_),
                 frozenset(recs.absolute.get(seg, ())),
             )
-    if recs.eqp_uses:  # Q records (fastinc.sty since M6)
+    if recs.eqp_uses:  # Q records (chapmk.sty since M6)
         for seg in taken:
             state.eqp_tags[seg] = sorted(recs.eqp_uses.get(seg, ()))
     run_main = statements(read_lines(run_dir / f"{job}.aux"))
@@ -215,11 +215,11 @@ def commit_run(
 _NLO_CHANGED = ".nlo-changed"
 
 
-_LMARK = re.compile(r"^\\fastinc@lmark\s*\{(/?)([UG]\d+)\}\s*$")
+_LMARK = re.compile(r"^\\chapmk@lmark\s*\{(/?)([UG]\d+)\}\s*$")
 
 
 def unit_sections(text: str) -> dict[str, list[str]]:
-    """Lines between the ``\\fastinc@lmark{U<k>}`` and ``{/U<k>}`` markers of a list file
+    """Lines between the ``\\chapmk@lmark{U<k>}`` and ``{/U<k>}`` markers of a list file
     (the contributions of unit ``U<k>``, written while its aux file was read)."""
     out: dict[str, list[str]] = {}
     current: str | None = None

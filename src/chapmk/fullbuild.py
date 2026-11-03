@@ -1,7 +1,7 @@
 """Full-mode build (PLAN §6.14, F9): plain sequential full runs to a fixpoint, like latexmk.
 
 Used for ``--full``, as the fallback of the incremental driver and as the reference of
-``fastinc check``. Tests cache these references by source hash in ``.test-cache/``: after
+``chapmk check``. Tests cache these references by source hash in ``.test-cache/``: after
 an intended change of the output, ``rm -rf .test-cache``. Runs work in the shadow tree and
 write into ``<build>/full``; only the final PDF, SyncTeX file and log are published
 (path-mapped) to the output directory.
@@ -15,24 +15,24 @@ from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from fastinc.analysis import Analysis
-from fastinc.aux import read_lines
-from fastinc.deps import cite_values, label_values, short_hash
-from fastinc.errors import TexError, ToolError
-from fastinc.gensrc import full_mode_input
-from fastinc.layout import Layout
-from fastinc.logs import first_error, map_paths
-from fastinc.pictures import (
+from chapmk.analysis import Analysis
+from chapmk.aux import read_lines
+from chapmk.deps import cite_values, label_values, short_hash
+from chapmk.errors import TexError, ToolError
+from chapmk.gensrc import full_mode_input
+from chapmk.layout import Layout
+from chapmk.logs import first_error, map_paths
+from chapmk.pictures import (
     PICS_FILE,
     collect_garbage,
     driver_file,
     export_figures,
     read_pictures,
 )
-from fastinc.proc import run
-from fastinc.publish import copy_bytes, publish
-from fastinc.synctex import rewrite_paths
-from fastinc.texdist import TexDistribution
+from chapmk.proc import run
+from chapmk.publish import copy_bytes, publish
+from chapmk.synctex import rewrite_paths
+from chapmk.texdist import TexDistribution
 
 MAX_PASSES = 8
 NOMENCL_STYLE = "nomencl.ist"
@@ -202,7 +202,7 @@ def full_build(
     max_passes: int = MAX_PASSES,
     picture_cache: bool = True,
 ) -> FullBuildResult:
-    """Full mode: pdflatex on the unmodified sources (with fastinc-ini) to a fixpoint, then
+    """Full mode: pdflatex on the unmodified sources (with chapmk-ini) to a fixpoint, then
     publish the results.
 
     With the user's TikZ externalize, pictures are exported into ``layout.full_fig_dir`` and

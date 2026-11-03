@@ -13,7 +13,7 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-from fastinc.analysis import Analysis
+from chapmk.analysis import Analysis
 
 ALWAYS_SKIPPED_DIRS = frozenset({".git", ".hg", ".svn"})
 

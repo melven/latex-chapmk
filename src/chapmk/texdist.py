@@ -14,10 +14,10 @@ from functools import cached_property
 from pathlib import Path
 from typing import Protocol
 
-from fastinc.errors import ToolError
-from fastinc.proc import run
+from chapmk.errors import ToolError
+from chapmk.proc import run
 
-#: Directory with fastinc-ini.sty and fastinc.sty; prepended to TEXINPUTS.
+#: Directory with chapmk-ini.sty and chapmk.sty; prepended to TEXINPUTS.
 TEX_DIR = Path(__file__).resolve().parent / "tex"
 
 REQUIRED_TOOLS = ("pdflatex", "biber", "makeindex", "kpsewhich")
@@ -81,7 +81,7 @@ class TeXLive:
     def environment(
         self, epoch: int, base: Mapping[str, str], formats_dir: Path | None = None
     ) -> dict[str, str]:
-        """Environment for TeX runs: ``base`` plus N4 variables, fastinc's TeX directory in
+        """Environment for TeX runs: ``base`` plus N4 variables, chapmk's TeX directory in
         ``TEXINPUTS`` and, for format runs, ``formats_dir`` in ``TEXFORMATS``. A trailing
         path separator keeps kpathsea's default path."""
         env = dict(base)

@@ -8,28 +8,28 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from fastinc.analysis import Analysis
-from fastinc.aux import parse_bookmark, read_lines, segment_slices
-from fastinc.canon import segments
-from fastinc.errors import FastincError, TexError
-from fastinc.layout import Layout
-from fastinc.logs import map_paths
-from fastinc.publish import publish, text_writer
-from fastinc.records import RunRecords, read_run_records
-from fastinc.runner import RUN_MAIN
-from fastinc.state import State
-from fastinc.synctex import SyncTexError
-from fastinc.synctex import merge as merge_synctex
-from fastinc.timing import Timings
+from chapmk.analysis import Analysis
+from chapmk.aux import parse_bookmark, read_lines, segment_slices
+from chapmk.canon import segments
+from chapmk.errors import ChapmkError, TexError
+from chapmk.layout import Layout
+from chapmk.logs import map_paths
+from chapmk.publish import publish, text_writer
+from chapmk.records import RunRecords, read_run_records
+from chapmk.runner import RUN_MAIN
+from chapmk.state import State
+from chapmk.synctex import SyncTexError
+from chapmk.synctex import merge as merge_synctex
+from chapmk.timing import Timings
 
 if TYPE_CHECKING:
-    from fastinc.merge_pdf import OutlineEntry, PageSource
+    from chapmk.merge_pdf import OutlineEntry, PageSource
 
 PUBLISHED_FILE = "published.json"
 _OUTPUTS = (".pdf", ".synctex.gz", ".log")
 
 
-class MergeFailedError(FastincError):
+class MergeFailedError(ChapmkError):
     """The PDF or SyncTeX merge failed (falls back to full mode, §6.14)."""
 
 
@@ -57,7 +57,7 @@ def publish_state(
     analysis: Analysis, layout: Layout, state: State, timings: Timings | None = None
 ) -> Path:
     """Merge the canonical segments into the published PDF, SyncTeX file and log."""
-    from fastinc.merge_pdf import MergeError, OutlineEntry, PageSource, merge_pdf  # pikepdf
+    from chapmk.merge_pdf import MergeError, OutlineEntry, PageSource, merge_pdf  # pikepdf
 
     t = timings or Timings()
     job = analysis.jobname
@@ -120,7 +120,7 @@ def publish_state(
     for run in sorted(state.run_names(), key=lambda r: int(r[1:])):
         log = layout.runs_dir / run / f"{job}.log"
         texts.append(
-            f"%%% fastinc: log of run {run}\n"
+            f"%%% chapmk: log of run {run}\n"
             + map_run_paths(analysis, layout, log.parent, log.read_text(errors="replace"))
         )
     publish(text_writer("\n".join(texts)), layout.output(".log"))

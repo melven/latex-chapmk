@@ -8,7 +8,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from fastinc.errors import FastincError
+from chapmk.errors import ChapmkError
 
 ENCODING = ("utf-8", "surrogateescape")
 
@@ -76,7 +76,7 @@ _SHEET_OPEN = re.compile(r"^\{(\d+)$")
 _SHEET_CLOSE = re.compile(r"^\}(\d+)$")
 
 
-class SyncTexError(FastincError):
+class SyncTexError(ChapmkError):
     """SyncTeX files cannot be merged (inconsistent headers, missing sheets)."""
 
 

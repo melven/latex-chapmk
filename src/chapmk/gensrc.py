@@ -8,10 +8,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
-from fastinc.analysis import Analysis, encode_source
+from chapmk.analysis import Analysis, encode_source
 
-INI_PACKAGE = "fastinc-ini"
-RUNTIME_PACKAGE = "fastinc"
+INI_PACKAGE = "chapmk-ini"
+RUNTIME_PACKAGE = "chapmk"
 
 
 def _ending(line: str) -> str:
@@ -19,9 +19,9 @@ def _ending(line: str) -> str:
 
 
 def format_source(analysis: Analysis) -> str:
-    """Format source ``pre.tex``: ``\\RequirePackage{fastinc-ini}`` prepended to line 1,
+    """Format source ``pre.tex``: ``\\RequirePackage{chapmk-ini}`` prepended to line 1,
     lines ``1..s-1`` verbatim, then the PDF object counters (objects cannot be dumped; checked
-    by :func:`fastinc.fmt.ensure_format`) and ``\\endofdump`` (mylatexformat)."""
+    by :func:`chapmk.fmt.ensure_format`) and ``\\endofdump`` (mylatexformat)."""
     nl = analysis.newline
     lines = list(analysis.lines[: analysis.split_line - 1])
     if not lines:
@@ -30,7 +30,7 @@ def format_source(analysis: Analysis) -> str:
     if not lines[-1].endswith("\n"):
         lines[-1] += nl
     check = (
-        "\\ifdefined\\pdflastobj\\typeout{fastinc-pdf-objects:\\the\\pdflastobj,"
+        "\\ifdefined\\pdflastobj\\typeout{chapmk-pdf-objects:\\the\\pdflastobj,"
         "\\the\\pdflastxform,\\the\\pdflastximage}\\fi"
     )
     return "".join(lines) + check + "\\endofdump" + nl
@@ -42,8 +42,8 @@ def run_main(
     """Per-run main file for a run with the format.
 
     Lines ``1..s-1`` become empty lines (they are in the format). Line ``s-1`` gets
-    ``\\csname endofdump\\endcsname``, the driver parameters for fastinc.sty (extra run-local
-    register names ``deny_names``, config ``[state] ignore``), ``\\usepackage{fastinc}`` and, if
+    ``\\csname endofdump\\endcsname``, the driver parameters for chapmk.sty (extra run-local
+    register names ``deny_names``, config ``[state] ignore``), ``\\usepackage{chapmk}`` and, if
     ``selection`` is not ``None``, ``\\includeonly{...}`` (an empty selection gives a glue-only
     run). The rest is verbatim, so line numbers equal the user's main file.
     """
@@ -52,7 +52,7 @@ def run_main(
     prefix = "\\csname endofdump\\endcsname"
     if deny_names:
         names = ",".join(deny_names)
-        prefix += f"\\expandafter\\def\\csname fastinc@denynames\\endcsname{{{names}}}"
+        prefix += f"\\expandafter\\def\\csname chapmk@denynames\\endcsname{{{names}}}"
     prefix += f"\\usepackage{{{RUNTIME_PACKAGE}}}"
     if selection is not None:
         prefix += "\\includeonly{" + ",".join(selection) + "}"
@@ -67,12 +67,12 @@ def run_main(
 
 def full_mode_input(analysis: Analysis) -> str:
     """TeX command-line input for full-mode and reference runs: the unmodified main file with
-    ``fastinc-ini`` loaded before ``\\documentclass`` (externalize neutralisation, §6.4.1)."""
+    ``chapmk-ini`` loaded before ``\\documentclass`` (externalize neutralisation, §6.4.1)."""
     return f"\\RequirePackage{{{INI_PACKAGE}}}\\input{{{analysis.main.name}}}"
 
 
 def write_if_changed(path: Path, text: str) -> bool:
-    """Write ``text`` (exact bytes, see :func:`fastinc.analysis.encode_source`) unless the file
+    """Write ``text`` (exact bytes, see :func:`chapmk.analysis.encode_source`) unless the file
     already has this content. Returns whether the file was written."""
     data = encode_source(text)
     if path.is_file() and path.read_bytes() == data:

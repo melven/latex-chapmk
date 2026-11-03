@@ -1,4 +1,4 @@
-"""Parsing of the records written by fastinc.sty (PLAN §6.4.2, Appendix B)."""
+"""Parsing of the records written by chapmk.sty (PLAN §6.4.2, Appendix B)."""
 
 from __future__ import annotations
 
@@ -7,18 +7,18 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from fastinc.analysis import Analysis
-from fastinc.errors import FastincError
+from chapmk.analysis import Analysis
+from chapmk.errors import ChapmkError
 
 Vector = dict[int, int]
 
 _REC = re.compile(
-    r"^\\fastinc@(base|entry|gexit|abs|unit|ckpt|bkmlevels|counters|layout)\{(.*)\}\s*$"
+    r"^\\chapmk@(base|entry|gexit|abs|unit|ckpt|bkmlevels|counters|layout)\{(.*)\}\s*$"
 )
-NLO_MARKER = "%fastinc-seg "
+NLO_MARKER = "%chapmk-seg "
 
 
-class RecordError(FastincError):
+class RecordError(ChapmkError):
     """Records are missing or inconsistent (falls back to a full build)."""
 
 
@@ -80,7 +80,7 @@ def parse_counters(text: str) -> dict[str, tuple[int, tuple[str, ...]]]:
 
 def tex_phases(recs: RunRecords, total: float) -> dict[str, float]:
     """Breakdown of a run's TeX time (``total``: process wall time): ``format`` (start until
-    fastinc.sty loads: format and preamble before the split), ``preamble`` (rest until the
+    chapmk.sty loads: format and preamble before the split), ``preamble`` (rest until the
     end of ``\\begin{document}``), ``glue``, ``units`` (compiled and excluded), ``end``
     (``\\end{document}`` to process exit: aux re-read, list files, PDF finalisation), and
     ``pictures``: time inside top-level pgf/TikZ pictures (part of glue and units)."""
@@ -257,7 +257,7 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
 
 
 def read_nomenclature(path: Path) -> dict[str, list[str]]:
-    """``.nlo`` entries per segment, split at the ``%fastinc-seg`` markers (§6.4.2 item 5)."""
+    """``.nlo`` entries per segment, split at the ``%chapmk-seg`` markers (§6.4.2 item 5)."""
     entries: dict[str, list[str]] = {}
     seg: str | None = None
     for line in path.read_text(errors="replace").splitlines():
@@ -295,7 +295,7 @@ def read_run_records(run_dir: Path, analysis: Analysis) -> RunRecords:
     if nlo.is_file():
         recs.nomenclature = read_nomenclature(nlo)
     if "G0" not in recs.entries:
-        raise RecordError(f"{main_aux}: no baseline/entry records (fastinc.sty not loaded?)")
+        raise RecordError(f"{main_aux}: no baseline/entry records (chapmk.sty not loaded?)")
     for k, inc in enumerate(analysis.includes, start=1):
         name = recs.units.get(f"U{k}")
         if name is None:

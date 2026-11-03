@@ -11,30 +11,30 @@ from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 
-import fastinc
-from fastinc.analysis import Analysis, analyse
-from fastinc.config import Config, load_config
-from fastinc.errors import ConfigError, FastincError, TexError
-from fastinc.fullbuild import full_build
-from fastinc.incremental import Context, build, load_epoch
-from fastinc.layout import Layout, make_layout
-from fastinc.shadow import sync_project_shadow
-from fastinc.texdist import TexDistribution, detect
-from fastinc.timing import Timings
+import chapmk
+from chapmk.analysis import Analysis, analyse
+from chapmk.config import Config, load_config
+from chapmk.errors import ChapmkError, ConfigError, TexError
+from chapmk.fullbuild import full_build
+from chapmk.incremental import Context, build, load_epoch
+from chapmk.layout import Layout, make_layout
+from chapmk.shadow import sync_project_shadow
+from chapmk.texdist import TexDistribution, detect
+from chapmk.timing import Timings
 
-#: Marker file proving that a directory is a fastinc build directory (``clean`` safety).
-BUILD_DIR_MARKER = ".fastinc-build-dir"
+#: Marker file proving that a directory is a chapmk build directory (``clean`` safety).
+BUILD_DIR_MARKER = ".chapmk-build-dir"
 
 
 def _parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="fastinc", description=fastinc.__doc__)
-    p.add_argument("--version", action="version", version=f"fastinc {fastinc.__version__}")
+    p = argparse.ArgumentParser(prog="chapmk", description=chapmk.__doc__)
+    p.add_argument("--version", action="version", version=f"chapmk {chapmk.__version__}")
     sub = p.add_subparsers(dest="command", required=True)
     b = sub.add_parser("build", help="build the PDF")
-    b.add_argument("main", nargs="?", type=Path, help="main .tex file (or 'main' in fastinc.toml)")
+    b.add_argument("main", nargs="?", type=Path, help="main .tex file (or 'main' in chapmk.toml)")
     b.add_argument("--full", action="store_true", help="plain full build (reference mode)")
     b.add_argument("-j", "--jobs", type=int, help="parallel pdflatex processes (0 = CPU count)")
-    b.add_argument("--build-dir", type=Path, help="build directory (default: .fastinc)")
+    b.add_argument("--build-dir", type=Path, help="build directory (default: .chapmk)")
     b.add_argument("--out-dir", type=Path, help="output directory (default: next to MAIN)")
     b.add_argument("--keep-runs", action="store_true", help="keep run directories")
     b.add_argument(
@@ -60,7 +60,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _say(msg: str) -> None:
-    print(f"fastinc: {msg}", file=sys.stderr)
+    print(f"chapmk: {msg}", file=sys.stderr)
 
 
 def _prepare(config: Config) -> tuple[Analysis, Layout]:
@@ -116,7 +116,7 @@ def _check(
     ctx: Context, analysis: Analysis, layout: Layout, dist: TexDistribution, epoch: int
 ) -> int:
     """Compare the published build with a --full build into <build>/check (same epoch)."""
-    from fastinc.check import compare_pdfs, compare_synctex  # pikepdf: only when checking
+    from chapmk.check import compare_pdfs, compare_synctex  # pikepdf: only when checking
 
     ref_layout = replace(layout, out_dir=layout.build_dir / "check")
     ref_epoch = load_epoch(layout.canon_dir, epoch)
@@ -143,14 +143,14 @@ def cmd_clean(args: argparse.Namespace, cwd: Path) -> int:
     if not layout.build_dir.exists():
         return 0
     if not (layout.build_dir / BUILD_DIR_MARKER).is_file():
-        raise ConfigError(f"refusing to delete {layout.build_dir}: not a fastinc build directory")
+        raise ConfigError(f"refusing to delete {layout.build_dir}: not a chapmk build directory")
     shutil.rmtree(layout.build_dir)
     _say(f"removed {layout.build_dir}")
     return 0
 
 
 def cmd_graph(args: argparse.Namespace, cwd: Path) -> int:
-    from fastinc.graph import dependency_graph, to_dot, to_json, to_text
+    from chapmk.graph import dependency_graph, to_dot, to_json, to_text
 
     config = load_config(args.main, cwd, build_dir=args.build_dir)
     analysis = analyse(config)
@@ -174,7 +174,7 @@ def main(argv: Sequence[str] | None = None, cwd: Path | None = None) -> int:
         if args.command == "graph":
             return cmd_graph(args, workdir)
         return cmd_clean(args, workdir)
-    except FastincError as err:
+    except ChapmkError as err:
         _say(f"error: {err}")
         if isinstance(err, TexError) and err.first_error:
             print(err.first_error, file=sys.stderr)

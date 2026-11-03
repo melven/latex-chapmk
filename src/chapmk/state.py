@@ -7,8 +7,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from fastinc.errors import FastincError
-from fastinc.predict import SegmentVectors
+from chapmk.errors import ChapmkError
+from chapmk.predict import SegmentVectors
 
 STATE_VERSION = 3
 STATE_FILE = "state.json"
@@ -153,4 +153,4 @@ def load_state(canon_dir: Path) -> State | None:
             openright={k: bool(v) for k, v in data.get("openright", {}).items()},
         )
     except (ValueError, KeyError, TypeError) as err:
-        raise FastincError(f"{path}: corrupt state ({err}); run 'fastinc clean'") from err
+        raise ChapmkError(f"{path}: corrupt state ({err}); run 'chapmk clean'") from err
