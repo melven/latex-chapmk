@@ -8,7 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -246,3 +246,76 @@ def _pop(stack: list[str], kind: str | None) -> None:
         if (kind is None and stack[i] in ("arg", "brace")) or stack[i] == kind:
             del stack[i:]
             return
+
+
+#: glue commands that typeset a list starting with a chapter-level heading (book classes)
+_PAGE_STARTERS = frozenset(
+    {
+        "printbibliography",
+        "printnomenclature",
+        "tableofcontents",
+        "listoffigures",
+        "listoftables",
+        "printindex",
+    }
+)
+_FIRST_CS = re.compile(r"\s*\\([A-Za-z@]+\*?)")
+
+
+def glue_hints(
+    main_name: str,
+    lines: Sequence[str],
+    begin_line: int,
+    include_lines: list[int],
+    glue_times: dict[str, float],
+    headings: Iterable[str],
+    threshold: float = 0.5,
+) -> list[str]:
+    """Advice for glue segments that take at least ``threshold`` seconds in every run
+    (``glue_times``: seconds per ``G<k>``): such a block can move into an ``\\include``'d
+    file without changing the output if it starts with a chapter-level heading (or a list
+    command that typesets one), changes no state for later parts (A1 lint) and is a closed
+    block (no group or environment open across its ends); it then is excluded from runs
+    that do not need it. ``lines`` are the main file's lines, ``include_lines`` the line
+    numbers of its ``\\include`` commands."""
+    headings = set(headings)
+    hints = []
+    for seg, seconds in sorted(glue_times.items(), key=lambda x: int(x[0][1:])):
+        if seconds < threshold:
+            continue
+        k = int(seg[1:])
+        start = begin_line + 1 if k == 0 else include_lines[k - 1] + 1
+        if k < len(include_lines):
+            end = include_lines[k] - 1
+        else:
+            end = (
+                next(
+                    (i for i in range(start, len(lines) + 1) if "\\end{document}" in lines[i - 1]),
+                    len(lines) + 1,
+                )
+                - 1
+            )
+        text = strip_comments("".join(lines[start - 1 : end]))
+        m = _FIRST_CS.match(text)
+        first = m.group(1) if m else None
+        where = f"{main_name}:{start}-{end}: glue" + (f" (\\{first})" if first else "")
+        hits = lint_text(text, main_name)
+        opened = len(re.findall(r"\\(begingroup|bgroup)(?![A-Za-z@])", text)) - len(
+            re.findall(r"\\(endgroup|egroup)(?![A-Za-z@])", text)
+        )
+        envs = len(re.findall(r"\\begin\s*\{", text)) - len(re.findall(r"\\end\s*\{", text))
+        if first is None or (first not in headings and first not in _PAGE_STARTERS):
+            reason = "it does not start with a chapter-level heading"
+        elif hits:
+            reason = f"it contains {hits[0].command}"
+        elif opened or envs:
+            reason = "a group or environment is open across its ends"
+        else:
+            config = "" if first in headings else f' and fastinc.toml [units] heading = ["{first}"]'
+            hints.append(
+                f"{where} takes {seconds:.1f} s in every run; moved into an \\include'd file"
+                f"{config}, it is compiled only when needed (output unchanged)"
+            )
+            continue
+        hints.append(f"{where} takes {seconds:.1f} s in every run; {reason}, so it stays glue")
+    return hints

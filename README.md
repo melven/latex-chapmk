@@ -34,6 +34,9 @@ fastinc clean [MAIN]
 package. Documents using `glossaries`, `imakeidx`/`makeidx`, `minted` or `cleveref` are built
 in full mode (like latexmk), with the reason printed.
 
+**Slow glue:** fastinc reports parts of the main file outside `\include`s that cost time in every
+run (e.g. a long bibliography) and whether they can move into an `\include`'d file.
+
 **TikZ externalize:** if the document calls `\tikzexternalize`, fastinc keeps it but makes the
 figures itself (no shell escape, figures in the build directory; the prefix and system call
 are ignored). Unchanged pictures are reused; the result equals a latexmk build with

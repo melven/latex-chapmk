@@ -31,7 +31,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from fastinc.analysis import Analysis
+from fastinc.analysis import UNIT_HEADINGS, Analysis
 from fastinc.aux import AGGREGATE, GLOBAL, command_name, read_lines, run_input_main_aux, statements
 from fastinc.canon import CanonView, commit_lists, commit_run, read_canon, run_tools, segments
 from fastinc.config import Config
@@ -40,7 +40,7 @@ from fastinc.errors import FastincError, TexError
 from fastinc.fmt import FormatInfo, ensure_format, format_stamp
 from fastinc.fullbuild import full_build, read_inputs
 from fastinc.layout import Layout
-from fastinc.lint import LintHit, lint_files
+from fastinc.lint import LintHit, glue_hints, lint_files
 from fastinc.outputs import (
     MergeFailedError,
     failed_run,
@@ -945,6 +945,19 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
             dirty, glue = loop.initial()
         ctx.timings.lap("format")
         runs = loop.converge(dirty, glue)
+        slow_glue: dict[str, float] = {}
+        for r in runs:
+            for seg, seconds in r.get("glue_segments", {}).items():
+                slow_glue[seg] = max(slow_glue.get(seg, 0.0), seconds)
+        for hint in glue_hints(
+            ctx.analysis.main.name,
+            ctx.analysis.lines,
+            ctx.analysis.begin_line,
+            [inc.line for inc in ctx.analysis.includes],
+            slow_glue,
+            [*UNIT_HEADINGS, *ctx.config.unit_headings],
+        ):
+            loop._warn(hint)
         if runs:  # a no-op build lints nothing
             (canon / LINT_CACHE).write_text(json.dumps(dict(loop.lint_cache)))
         if runs or not is_published(ctx.layout):

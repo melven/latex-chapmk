@@ -437,3 +437,38 @@ def test_list_reads() -> None:
     assert TokenScan(["\\makeatletter\\@starttoc{lol}"]).list_reads() == {".lol"}
     assert TokenScan(["\\listofexamples"]).list_reads() is None
     assert TokenScan(["\\section{A} text"]).list_reads() == set()
+
+
+def test_glue_hints() -> None:
+    """Slow glue blocks: movable ones get advice (with a units.heading entry for list
+    commands), others the reason; fast ones nothing."""
+    from fastinc.lint import glue_hints
+
+    lines = [
+        "\\documentclass{book}\n",  # 1
+        "\\begin{document}\n",  # 2
+        "\\tableofcontents\n",  # 3   G0
+        "\\include{a}\n",  # 4
+        "\\appendix\n",  # 5          G1: state change
+        "\\chapter{Extra}\n",  # 6
+        "\\include{b}\n",  # 7
+        "% comment\n\\printbibliography\n",  # 8-9 G2
+        "\\end{document}\n",
+    ]
+    lines = [x for line in lines for x in line.splitlines(keepends=True)]
+    hints = glue_hints("main.tex", lines, 2, [4, 7], {"G0": 0.1, "G1": 0.7, "G2": 1.8}, ["chapter"])
+    assert len(hints) == 2
+    assert (
+        hints[0].startswith("main.tex:5-6: glue (\\appendix) takes 0.7 s")
+        and "stays glue" in hints[0]
+    )
+    assert hints[1].startswith("main.tex:8-9: glue (\\printbibliography) takes 1.8 s")
+    assert '[units] heading = ["printbibliography"]' in hints[1]
+    grouped = [
+        "\\begin{document}\n",
+        "\\chapter{X}\\begingroup\n",
+        "\\include{a}\n",
+        "\\endgroup\n",
+    ]
+    [hint] = glue_hints("m.tex", grouped, 1, [3], {"G0": 1.0}, ["chapter"])
+    assert "group or environment is open" in hint
