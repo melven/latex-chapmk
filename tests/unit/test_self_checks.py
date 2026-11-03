@@ -30,7 +30,10 @@ def test_bcf_check(tmp_path: Path) -> None:
 
 def test_kept_list_sections() -> None:
     """(b) a unit no run of the batch compiled keeps its list entries."""
-    old = "\\chapmk@lmark {U1}\na\n\\chapmk@lmark {/U1}\n\\chapmk@lmark {U2}\nb\n\\chapmk@lmark {/U2}\n"
+    old = (
+        "\\chapmk@lmark {U1}\na\n\\chapmk@lmark {/U1}\n"
+        "\\chapmk@lmark {U2}\nb\n\\chapmk@lmark {/U2}\n"
+    )
     new = old.replace("\na\n", "\nA\n")
     _check_kept_sections(new, old, {"U2"}, "main.toc")  # U1 was compiled: may change
     _check_kept_sections(new, "", {"U1"}, "main.toc")  # no previous section: nothing to check
