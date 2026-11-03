@@ -127,8 +127,6 @@ def _build_locked(
             _say(f"hint: {hint}")
     if config.verbose:
         pass  # the builder reported mode and reasons already
-    elif result.mode == "full" and result.reason and result.reason != "--full":
-        _say(f"full build: {result.reason}")
     elif result.mode == "cold" and result.reason:
         _say(f"cold build: {result.reason}")
     compiled = f", compiled: {', '.join(result.compiled)}" if result.mode == "incremental" else ""

@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from chapmk.analysis import Analysis
+from chapmk.facts import DEFAULT_LIST_SUFFIXES, TOOL_SUFFIXES
 from chapmk.layout import DEFAULT_BUILD_DIR
 
 ALWAYS_SKIPPED_DIRS = frozenset({".git", ".hg", ".svn"})
@@ -24,12 +25,8 @@ ALWAYS_SKIPPED_DIRS = frozenset({".git", ".hg", ".svn"})
 BUILD_OUTPUT_SUFFIXES = frozenset(
     {
         ".aux",
-        ".toc",
-        ".lof",
-        ".lot",
-        ".loalg",
-        ".lol",
-        ".tdo",
+        *DEFAULT_LIST_SUFFIXES,
+        *TOOL_SUFFIXES,
         ".out",
         ".log",
         ".fls",

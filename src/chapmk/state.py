@@ -8,9 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from chapmk.errors import ChapmkError
+from chapmk.facts import DEFAULT_LIST_SUFFIXES
 from chapmk.files import write_atomic
 from chapmk.predict import SegmentVectors
-from chapmk.runner import DEFAULT_LIST_SUFFIXES
 
 STATE_VERSION = 4
 STATE_FILE = "state.json"

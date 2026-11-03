@@ -31,12 +31,13 @@ from pathlib import Path
 from typing import Any
 
 import chapmk
-from chapmk.analysis import UNIT_HEADINGS, Analysis
+from chapmk.analysis import Analysis
 from chapmk.aux import AGGREGATE, GLOBAL, command_name, read_lines, run_input_main_aux, statements
 from chapmk.canon import CanonView, commit_lists, commit_run, read_canon, run_tools, segments
 from chapmk.config import Config
 from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
 from chapmk.errors import FallbackError, TexError
+from chapmk.facts import UNIT_HEADINGS, UNSUPPORTED_PACKAGES, derived_suffixes
 from chapmk.files import digest, write_atomic
 from chapmk.fmt import (
     FormatInfo,
@@ -84,21 +85,13 @@ from chapmk.records import (
     register_names,
     tex_phases,
 )
-from chapmk.runner import RunSpec, derived_suffixes, prepare_run_dir, run_batch
+from chapmk.runner import RunSpec, prepare_run_dir, run_batch
 from chapmk.shadow import changed_signatures, external_inputs, read_inputs, stat_signatures
 from chapmk.state import State, UnitInputs, load_state, save_state
 from chapmk.texdist import TexDistribution
 from chapmk.timing import Timings
 
 MAX_ITERATIONS = 8
-#: Packages that force full mode when loaded at all (also by the class; seen in the .fls).
-RUNTIME_UNSUPPORTED = (
-    "imakeidx.sty",
-    "makeidx.sty",
-    "glossaries.sty",
-    "cleveref.sty",
-    "minted.sty",
-)
 FULL_ONLY_FILE = "full-only.json"
 #: present in ``canon/`` while a batch commits (C7)
 JOURNAL_FILE = ".in-progress"
@@ -205,9 +198,9 @@ def _check_runtime_support(ctx: Context, run_dir: Path, fmt: FormatInfo) -> None
         if fls.is_file():
             lines = fls.read_text(errors="replace").splitlines()
             loaded |= {Path(line[6:]).name for line in lines if line.startswith("INPUT ")}
-    for pkg in RUNTIME_UNSUPPORTED:
-        if pkg in loaded:
-            raise FallbackError(f"package {pkg[:-4]!r} is not supported (loaded at runtime)", True)
+    for pkg in sorted(UNSUPPORTED_PACKAGES):
+        if f"{pkg}.sty" in loaded:
+            raise FallbackError(f"package {pkg!r} is not supported (loaded at runtime)", True)
     if "hyperref.sty" in loaded and "bookmark.sty" not in loaded:
         raise FallbackError(
             "hyperref without the bookmark package (outline via .out is phase 2)", True
@@ -881,11 +874,7 @@ def _gc(ctx: Context, state: State) -> None:
             shutil.rmtree(d)
 
 
-def _full(
-    ctx: Context, epoch: int, reason: str, start: float, *, warn: bool = False
-) -> BuildReport:
-    """Full mode; ``warn``: the reason is a limitation the user should see (a persistent
-    fallback), also reported as a warning."""
+def _full(ctx: Context, epoch: int, reason: str, start: float) -> BuildReport:
     ctx.say(f"full build: {reason}")
     result = full_build(
         ctx.analysis,
@@ -903,7 +892,8 @@ def _full(
         [inc.arg for inc in ctx.analysis.includes],
         time.monotonic() - start,
         str(result.pdf),
-        warnings=[f"full build: {reason}"] if warn else [],
+        # a fallback is reported as a warning (§6.14), --full is not
+        warnings=[] if reason == "--full" else [f"full build: {reason}"],
         timings=ctx.timings.as_dict(),
     )
 
@@ -949,7 +939,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         and "reason" in data
         and all(data.get(k) == v for k, v in stamp_data.items())
     ):
-        return _full(ctx, epoch, data["reason"], start, warn=True)
+        return _full(ctx, epoch, data["reason"], start)
     try:
         state = load_state(canon)
         stamp = format_stamp(ctx.analysis, ctx.dist.version)
@@ -1026,11 +1016,10 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
             hints,
         )
     except FallbackError as fb:
-        persistent = fb.persistent
-        if persistent:
+        if fb.persistent:
             canon.mkdir(parents=True, exist_ok=True)
             write_atomic(marker, json.dumps({**stamp_data, "reason": str(fb)}))
-        return _full(ctx, epoch, str(fb), start, warn=persistent)
+        return _full(ctx, epoch, str(fb), start)
 
 
 def load_epoch(canon_dir: Path, default: int) -> int:

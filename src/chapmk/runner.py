@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from chapmk.analysis import Analysis
+from chapmk.facts import DEFAULT_LIST_SUFFIXES, derived_suffixes
 from chapmk.files import write_if_changed
 from chapmk.gensrc import run_main
 from chapmk.layout import Layout
@@ -21,20 +22,6 @@ from chapmk.texdist import TexDistribution
 #: format, where e.g. the ``underscore`` package makes ``_`` active; so the command line holds
 #: only this fixed name and the file is found via ``TEXINPUTS`` (run directory first).
 RUN_MAIN = "chapmk-run.tex"
-
-#: List files LaTeX writes for the usual lists; further ones are recorded at runtime (``L``
-#: records of ``\\@starttoc``) and kept in the state.
-DEFAULT_LIST_SUFFIXES = (".toc", ".lof", ".lot", ".loalg", ".lol", ".tdo")
-#: Derived files written by the tools (biber, makeindex for nomencl).
-TOOL_SUFFIXES = (".bbl", ".nls")
-#: Derived files of a document with the default lists.
-DERIVED_SUFFIXES = (*DEFAULT_LIST_SUFFIXES, *TOOL_SUFFIXES)
-
-
-def derived_suffixes(list_suffixes: Sequence[str]) -> tuple[str, ...]:
-    """Derived files copied from the canonical state into a run directory (read by the glue):
-    the list files plus the tool outputs."""
-    return (*list_suffixes, *TOOL_SUFFIXES)
 
 
 @dataclass(frozen=True)

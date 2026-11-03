@@ -28,13 +28,13 @@ from chapmk.aux import (
 )
 from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import ToolError
+from chapmk.facts import DEFAULT_LIST_SUFFIXES, derived_suffixes
 from chapmk.files import copy_atomic, digest, write_if_changed
 from chapmk.fullbuild import NOMENCL_STYLE
 from chapmk.layout import Layout
 from chapmk.predict import SegmentVectors, normalized
 from chapmk.proc import run
 from chapmk.records import RunRecords, read_nomenclature
-from chapmk.runner import DEFAULT_LIST_SUFFIXES, derived_suffixes
 from chapmk.state import SegmentArtifact, State
 from chapmk.texdist import TexDistribution
 from chapmk.tools import (
@@ -46,7 +46,6 @@ from chapmk.tools import (
 )
 
 #: list files written by every run (glue typesets them); .bbl and .nls come from the tools
-LIST_SUFFIXES = DEFAULT_LIST_SUFFIXES  # the defaults; a document's are in State.list_suffixes
 
 
 def segments(analysis: Analysis) -> list[str]:
