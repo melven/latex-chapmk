@@ -18,7 +18,7 @@ from chapmk.check import compare_pdfs, compare_synctex
 from chapmk.cli import main
 from chapmk.config import Config
 from chapmk.proc import run
-from chapmk.texdist import TeXLive
+from chapmk.texdist import detect
 
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
 
@@ -59,7 +59,7 @@ def _latexmk(src: Path, main_name: str, rc_dir: Path) -> None:
         f"-jobname={Path(main_name).stem}",
         main_name,
     ]
-    env = TeXLive().environment(EPOCH, os.environ)
+    env = detect().environment(EPOCH, os.environ)
     r = run(argv, cwd=src, env=env)
     assert r.ok, r.output[-3000:]
 
@@ -86,7 +86,8 @@ def test_full_build_matches_latexmk(
     ref = latexmk(src, "main.tex", tmp_path)
     ours = tmp_path / "fi" / "main.pdf"
     report = compare_pdfs(ref, ours)
-    sources = ["main.tex"] + [f"{inc.arg}.tex" for inc in analyse(Config(main=main_tex)).includes]
+    names = ["main.tex"] + [f"{inc.arg}.tex" for inc in analyse(Config(main=main_tex)).includes]
+    sources = [detect().synctex_query(src, name) for name in names]  # MiKTeX: absolute (S11)
     compare_synctex(ref, ours, sources, src, report=report)
     print(report.summary())
     assert report.ok, report.summary()
