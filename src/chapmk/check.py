@@ -6,6 +6,7 @@ Library used by the acceptance tests and by ``chapmk check`` (M3). Needs poppler
 
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import shutil
@@ -200,7 +201,41 @@ def compare_pdfs(ref: Path, got: Path, *, dpi: int = DPI, report: Report | None 
     report.compare("page labels", rl, gl)
     report.compare("outline items", ro, go)
     report.compare("links", rk, gk)
+    (ri, rc), (gi, gc) = _document(ref), _document(got)
+    report.compare("document info", ri, gi)
+    report.compare("catalog entries", rc, gc)
     return report
+
+
+#: catalog entries compared elsewhere (pages, outline, labels, destinations) or not merged
+_CATALOG_SKIP = {"/Type", "/Pages", "/Outlines", "/PageLabels", "/Names", "/Dests"}
+
+
+def _plain(obj: Any, pages: dict[Any, int], depth: int = 0) -> Any:
+    """A comparable form of a PDF object: page references as page indices, streams as
+    digests of their data."""
+    if depth > 20:
+        return "..."
+    if isinstance(obj, pikepdf.Dictionary) and obj.is_indirect and obj.objgen in pages:
+        return ("page", pages[obj.objgen])
+    if isinstance(obj, pikepdf.Stream):
+        return ("stream", hashlib.sha256(obj.read_bytes()).hexdigest())
+    if isinstance(obj, pikepdf.Dictionary):
+        return tuple(sorted((str(k), _plain(v, pages, depth + 1)) for k, v in obj.items()))
+    if isinstance(obj, pikepdf.Array):
+        return tuple(_plain(v, pages, depth + 1) for v in obj)
+    return str(obj)
+
+
+def _document(path: Path) -> tuple[list[Any], list[Any]]:
+    """Document info and catalog entries (§3.3 item 3; S13: \\pdfinfo and \\pdfcatalog)."""
+    with pikepdf.open(path) as pdf:
+        pages = {p.objgen: i for i, p in enumerate(pdf.pages)}
+        info = sorted((str(k), _plain(v, pages)) for k, v in pdf.docinfo.items())
+        catalog = sorted(
+            (str(k), _plain(v, pages)) for k, v in pdf.Root.items() if str(k) not in _CATALOG_SKIP
+        )
+    return info, catalog
 
 
 # --- SyncTeX -----------------------------------------------------------------------------------
