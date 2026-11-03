@@ -19,6 +19,13 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: pytest -n auto tests/unit
 
+  # licence and copyright information of every file (R9)
+  reuse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: fsfe/reuse-action@v5
+
   linux-texlive:
     runs-on: ubuntu-latest
     steps:
