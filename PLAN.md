@@ -362,7 +362,7 @@ Aux files are parsed as brace-balanced statements, not lines: `\@setckpt` and `\
 | `\abx@aux@read@bbl@mdfivesum`, `\abx@aux@read@bblrerun` | main, end | ignored (bookkeeping) |
 | `\gdef\LT@<roman>{\LT@entry…}` (longtable) | unit | *self* |
 | `\pgfsyspdfmark{pgfidN}{x}{y}` (pgf `remember picture`, todonotes) | main, unit slice | *self*, keyed by `pgfidN` |
-| `\expandafter\gdef\csname eqp@(this\|next\|minwd\|maxwd)@<tag>\endcsname{…}` (eqparbox) | main, end of document | *self* per tag. Written only for tags typeset in the run, so they are merged per tag from the latest run that wrote the tag. Owners = the segments that use the tag (`Q` records, M6; without records: the units of that run). A tag shared by several units is computed in a partial run from the included owners only (known limitation; `check` detects it). |
+| `\expandafter\gdef\csname eqp@(this\|next\|minwd\|maxwd)@<tag>\endcsname{…}` (eqparbox) | main, end of document | *self* per tag. Written only for tags typeset in the run, so they are merged per tag from the latest run that wrote the tag. Owners = the segments that use the tag (`Q` records, M6; without records: the units of that run). A tag shared by several units is computed in a partial run from the included owners only: if the width of such a tag changes while its owners were last compiled in different runs, the build falls back to full mode with the reason (C13). |
 | `\global\csname @altsecnumformattrue\endcsname` (KOMA autodot) | main, end of document | OR-aggregate over the typeset segments; attributed to the run's included units; *global* |
 | `\BKM@entry{...}{...}` (bookmark) | main, unit slice | outline record: merge only (§6.11); a change dirties nothing |
 | `\chapmk@bkmlevels{id=level,...}` | main, end | outline levels (§6.4.2); merge only |
@@ -619,6 +619,7 @@ Full mode means plain sequential full runs to a fixpoint inside the build direct
 - unsupported packages (§1 non-goals): detected statically in the preamble, and at runtime from the `.fls` of the format build **and** the run. Packages dumped into the format are not in the run's `.fls`, and classes may load packages, e.g. `bookmark` only at `\begin{document}`.
   - `hyperref` loaded without `bookmark` also counts.
   - Runtime reasons are persistent: the next builds go straight to full mode until the main file changes (`canon/full-only.json`);
+- an eqparbox tag used in several segments whose width changed while they were last compiled in different runs (C13; the warning suggests one tag per chapter);
 - biblatex refsections (option `refsection=` other than `none`, `\begin{refsection}`, `\newrefsection` in the main file or a unit; C10): detected statically, so no build attempt is wasted; citations in a refsection other than 0 found at runtime also fall back;
 - `\documentclass` not before the split line (e.g. on the `\begin{document}` line);
 - format build failure;
