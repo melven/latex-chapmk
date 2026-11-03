@@ -2,7 +2,8 @@ name: miktex
 
 # MiKTeX backend (M9): manual trigger only (Windows minutes count double on private
 # repositories). Linux uses Dockerfile.miktex (complete MiKTeX); Windows installs MiKTeX with
-# Chocolatey and runs the unit tests plus smoke checks of the tools chapmk needs (spike S11).
+# Chocolatey (packages installed on the fly, after a sequential warm-up) and runs the whole
+# suite. workflow_dispatch needs this file on the default branch.
 on:
   workflow_dispatch:
     inputs:
@@ -63,6 +64,7 @@ jobs:
   windows-miktex:
     if: ${{ inputs.windows }}
     runs-on: windows-latest
+    timeout-minutes: 150
     defaults:
       run:
         shell: pwsh
@@ -80,20 +82,44 @@ jobs:
           mpm --admin --set-repository="$env:MIKTEX_REPOSITORY"
           miktex --admin packages update-package-database
           miktex --admin packages update
-          # packages chapmk and the corpora need beyond the basic installation are installed
-          # on the fly (the normal Windows setup); chapmk's own requirements explicitly
           miktex --admin packages install mylatexformat nomencl biblatex latexmk
+          # on-the-fly installation "always" (the normal Windows setup; chapmk refuses "ask")
           initexmf --admin --set-config-value "[MPM]AutoInstall=1"
+          initexmf --set-config-value "[MPM]AutoInstall=1"
           initexmf --admin --update-fndb
+      - name: poppler (pdftoppm, pdftotext, pdfinfo for the §3.3 comparison)
+        run: |
+          & "$env:CONDA\Scripts\conda.exe" install -y -q -c conda-forge poppler
+          Add-Content $env:GITHUB_PATH "$env:CONDA\Library\bin"
       - name: Install Python package
         run: |
           python -m pip install --upgrade pip
-          pip install -e . -r requirements-dev.txt
+          pip install -e ".[dev]"
       - name: Unit tests (no TeX)
         run: pytest -m "not slow"
-      - name: Tool versions and files
+      - name: Warm-up (install the packages of the corpora once, sequentially)
+        # on-the-fly installation by parallel test runs could block or collide (PLAN §6.16)
         run: |
-          pdflatex --version | Select-Object -First 1
-          biber --version
-          Get-Command pdflatex, biber, makeindex, synctex, kpsewhich, latexmk | Format-Table Name, Source
-          kpsewhich mylatexformat.ltx nomencl.sty biblatex.sty
+          $work = Join-Path $env:RUNNER_TEMP "warmup"
+          New-Item -ItemType Directory -Force $work | Out-Null
+          foreach ($c in "thesis", "hgb", "pictures") {
+            Copy-Item -Recurse "tests/corpus/$c" (Join-Path $work $c)
+            $dir = Join-Path $work $c
+            Get-ChildItem "$dir/fig/*.tex" -ErrorAction SilentlyContinue | ForEach-Object {
+              pdflatex -interaction=nonstopmode -output-directory="$dir/fig" $_.FullName | Out-Null
+            }
+            New-Item -ItemType Directory -Force (Join-Path $dir "fig_tmp") | Out-Null
+            Push-Location $dir
+            latexmk -pdf -shell-escape -interaction=nonstopmode main.tex | Out-Null
+            "$c : exit $LASTEXITCODE"
+            Pop-Location
+          }
+          Get-Command pdflatex, biber, makeindex, synctex, kpsewhich, latexmk, pdftoppm | Format-Table Name, Source
+      - name: All tests (slow, scenario, acceptance)
+        run: pytest -n auto --dist worksteal -rfE --junitxml=pytest-windows.xml
+      - name: Test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-windows-miktex
+          path: pytest-windows.xml
