@@ -1,7 +1,8 @@
 # Dev and CI image for chapmk: TeX Live (full scheme) + Python tooling.
-# For reproducibility, pin the base image by digest once M1 is green, e.g.
-#   FROM texlive/texlive:latest@sha256:<digest>
-FROM texlive/texlive:latest
+# The base image is pinned by digest (R12): TeX Live 2026 as used by CI on 2026-11-03.
+# To update: build with texlive/texlive:latest, take the digest from the build log, run the
+# full suite, then rm -rf .test-cache (references depend on the TeX version).
+FROM texlive/texlive:latest@sha256:07e8062637249c4f780ca59f42cc2ed592bc2dc1db4320769406aee3f98aa70e
 
 ARG USERNAME=dev
 ARG UID=1000
