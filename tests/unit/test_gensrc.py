@@ -28,11 +28,18 @@ def project(tmp_path: Path, newline: str = "\n") -> Config:
 def test_format_source(tmp_path: Path) -> None:
     a = analyse(project(tmp_path))
     assert a.split_line == 3
-    assert format_source(a) == (
-        "\\RequirePackage{chapmk-ini}\\documentclass{book}\n\\usepackage{tikz}\n"
-        "\\ifdefined\\pdflastobj\\typeout{chapmk-pdf-objects:\\the\\pdflastobj,"
-        "\\the\\pdflastxform,\\the\\pdflastximage}\\fi\\endofdump\n"
+    src = format_source(a)
+    lines = split_lines(src)
+    assert len(lines) == a.split_line  # lines 1..s-1 (numbers kept), then the probes
+    assert lines[0] == (
+        "\\expandafter\\def\\csname chapmk@formatbuild\\endcsname{}"
+        "\\RequirePackage{chapmk-ini}\\documentclass{book}\n"
     )
+    assert lines[1] == "\\usepackage{tikz}\n"
+    # probes of the state a format cannot keep (S13), then the end of the dump
+    for probe in ("chapmk-pdf-objects:", "chapmk-pdf-colorstacks:", "chapmk-pdf-unrecorded:"):
+        assert probe in lines[-1]
+    assert src.endswith("\\endofdump\n")
 
 
 def test_run_main_keeps_line_numbers(tmp_path: Path) -> None:
