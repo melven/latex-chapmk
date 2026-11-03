@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 
 import pytest
+from conftest import reuse_reference, source_hash
 
 from fastinc.analysis import analyse
 from fastinc.check import compare_pdfs, compare_synctex
@@ -32,7 +33,16 @@ sub nlo2nls {
 
 
 def latexmk(src: Path, main_name: str, rc_dir: Path) -> Path:
-    """latexmk with shell escape in ``src``; returns the PDF."""
+    """latexmk with shell escape in ``src`` (reused from the reference cache, conftest);
+    returns the PDF."""
+    job = Path(main_name).stem
+    key = source_hash(src, "latexmk", main_name, LATEXMKRC, str(EPOCH))
+    outputs = {f"ref{s}": src / f"{job}{s}" for s in (".pdf", ".synctex.gz")}
+    reuse_reference(key, src, outputs, lambda: _latexmk(src, main_name, rc_dir))
+    return src / f"{job}.pdf"
+
+
+def _latexmk(src: Path, main_name: str, rc_dir: Path) -> None:
     rc = rc_dir / "latexmkrc"
     rc.write_text(LATEXMKRC)
     (src / "fig_tmp").mkdir(exist_ok=True)  # externalize prefix of the thesis corpus
@@ -52,7 +62,6 @@ def latexmk(src: Path, main_name: str, rc_dir: Path) -> Path:
     env = TeXLive().environment(EPOCH, os.environ)
     r = run(argv, cwd=src, env=env)
     assert r.ok, r.output[-3000:]
-    return src / f"{Path(main_name).stem}.pdf"
 
 
 @pytest.mark.parametrize(

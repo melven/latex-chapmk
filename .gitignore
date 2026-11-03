@@ -10,3 +10,4 @@ __pycache__/
 *.pdf
 !tests/corpus/**/fig/*.pdf
 !tests/corpus/pgfmanual/upstream/**/*.pdf
+.test-cache/

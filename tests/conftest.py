@@ -1,16 +1,110 @@
 """Shared fixtures. Tests marked ``slow`` need TeX Live on PATH (dev container)."""
 
+import hashlib
 import json
 import os
 import shutil
 import subprocess
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
 CORPUS = REPO / "tests" / "corpus"
+
+# --- reference cache ----------------------------------------------------------------------------
+# References (the --full build of `--check`, latexmk in the acceptance tests) depend only on the
+# sources, so they are kept in REFERENCE_CACHE by a hash of the source files and reused in later
+# test runs on this machine. Not keyed: the TeX installation and the full-mode code. After a TeX
+# update or an intended change of the --full output: rm -rf .test-cache (CI starts without it).
+REFERENCE_CACHE = REPO / ".test-cache"
+_SRC_PLACEHOLDER = "/@fastinc-test-source@"
+# files with a sibling .tex of the same stem are build outputs (fig/*.pdf, main.pdf, ...)
+_OUTPUT_SUFFIXES = (".pdf", ".log", ".aux", ".synctex.gz")
+
+
+def pytest_report_header(config: pytest.Config) -> list[str]:
+    n = len(list(REFERENCE_CACHE.iterdir())) if REFERENCE_CACHE.is_dir() else 0
+    return [
+        f"reference cache: {REFERENCE_CACHE} ({n} entries); after a TeX update or an intended "
+        "change of the --full output: rm -rf .test-cache"
+    ]
+
+
+def source_hash(src: Path, *extra: str) -> str:
+    """Hash of the source files below ``src`` (hidden directories and build outputs excluded)."""
+    h = hashlib.sha256("\0".join(extra).encode())
+    for path in sorted(src.rglob("*")):
+        rel = path.relative_to(src)
+        if any(part.startswith(".") for part in rel.parts) or not path.is_file():
+            continue
+        suffix = next((s for s in _OUTPUT_SUFFIXES if path.name.endswith(s)), None)
+        if suffix and (path.parent / (path.name[: -len(suffix)] + ".tex")).is_file():
+            continue
+        h.update(rel.as_posix().encode() + b"\0" + path.read_bytes() + b"\0")
+    return h.hexdigest()[:32]
+
+
+def reuse_reference(
+    key: str, src: Path, outputs: dict[str, Path], build: Callable[[], Any]
+) -> None:
+    """Copy the cached reference files ``outputs`` (name -> target) for ``key`` into place, or
+    ``build()`` them and store them. SyncTeX files are stored with ``src`` replaced."""
+    from fastinc.synctex import rewrite_paths
+
+    entry = REFERENCE_CACHE / key
+    if all((entry / name).is_file() for name in outputs):
+        for name, target in outputs.items():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if name.endswith(".synctex.gz"):
+                rewrite_paths(entry / name, target, [(_SRC_PLACEHOLDER, str(src))])
+            else:
+                shutil.copyfile(entry / name, target)
+        return
+    build()
+    tmp = REFERENCE_CACHE / f".{key}.{os.getpid()}"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    for name, source in outputs.items():
+        if not source.is_file():
+            shutil.rmtree(tmp)
+            return
+        if name.endswith(".synctex.gz"):
+            rewrite_paths(source, tmp / name, [(str(src), _SRC_PLACEHOLDER)])
+        else:
+            shutil.copyfile(source, tmp / name)
+    try:
+        tmp.rename(entry)
+    except OSError:  # stored meanwhile by another worker
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _cached_check_reference() -> Iterator[None]:
+    """`--check` builds its --full reference through ``fastinc.cli.full_build``; reuse cached
+    references. (`build --full` itself, the code under test in the acceptance tests, is not
+    cached: it goes through ``fastinc.incremental``.)"""
+    import fastinc.cli
+
+    real = fastinc.cli.full_build
+
+    def cached(analysis: Any, layout: Any, dist: Any, env: Any, **kwargs: Any) -> None:
+        src = analysis.source_dir
+        key = source_hash(
+            src,
+            "full",
+            analysis.main.name,
+            str(env.get("SOURCE_DATE_EPOCH")),
+            str(kwargs.get("picture_cache")),
+        )
+        outputs = {f"ref{s}": layout.output(s) for s in (".pdf", ".synctex.gz", ".log")}
+        reuse_reference(key, src, outputs, lambda: real(analysis, layout, dist, env, **kwargs))
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(fastinc.cli, "full_build", cached)
+        yield
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
