@@ -5,7 +5,9 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import signal
 import sys
+import threading
 import time
 from collections.abc import Sequence
 from dataclasses import replace
@@ -19,6 +21,7 @@ from chapmk.fullbuild import full_build
 from chapmk.incremental import Context, build, load_epoch
 from chapmk.layout import DEFAULT_BUILD_DIR, Layout, make_layout
 from chapmk.lock import LOCK_FILE, build_lock
+from chapmk.proc import Interrupted, allow_runs, terminate_all
 from chapmk.shadow import sync_project_shadow
 from chapmk.state import load_state
 from chapmk.texdist import TexDistribution, detect
@@ -205,10 +208,34 @@ def cmd_graph(args: argparse.Namespace, cwd: Path) -> int:
     return 0
 
 
+class _Terminated(BaseException):
+    """SIGTERM (e.g. an editor stopping a build on the next save)."""
+
+
+def _on_sigterm(_signum: int, _frame: object) -> None:
+    raise _Terminated
+
+
 def main(argv: Sequence[str] | None = None, cwd: Path | None = None) -> int:
-    """Run the CLI; returns the exit code (0 ok, 1 TeX error, 2 other errors)."""
+    """Run the CLI; returns the exit code (0 ok, 1 TeX error, 2 other errors, 130/143 after
+    SIGINT/SIGTERM: all child processes are killed first, C8)."""
     args = _parser().parse_args(argv)
     workdir = cwd or Path.cwd()
+    main_thread = threading.current_thread() is threading.main_thread()
+    previous = signal.signal(signal.SIGTERM, _on_sigterm) if main_thread else None
+    try:
+        return _main(args, workdir)
+    except (KeyboardInterrupt, _Terminated, Interrupted) as err:
+        terminate_all()
+        _say("interrupted")
+        return 143 if isinstance(err, _Terminated) else 130
+    finally:
+        allow_runs()
+        if main_thread:
+            signal.signal(signal.SIGTERM, previous)
+
+
+def _main(args: argparse.Namespace, workdir: Path) -> int:
     try:
         if args.command in ("build", "check"):
             return cmd_build(args, workdir)

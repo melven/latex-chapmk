@@ -14,7 +14,7 @@ from chapmk.files import write_if_changed
 from chapmk.gensrc import run_main
 from chapmk.layout import Layout
 from chapmk.logs import first_error, map_paths
-from chapmk.proc import run
+from chapmk.proc import run, terminate_all
 from chapmk.texdist import TexDistribution
 
 #: File name of the generated run main. TeX reads the command line with the catcodes of the
@@ -132,8 +132,14 @@ def run_batch(
 ) -> list[RunResult]:
     """Run prepared runs with at most ``jobs`` parallel pdflatex processes (N2). Results are
     returned in the order of ``specs``. Threads only wait for subprocesses (no fork)."""
-    with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
+    pool = ThreadPoolExecutor(max_workers=max(1, jobs))
+    try:
         futures = [
             pool.submit(run_one, analysis, layout, dist, env, spec, fmt_name) for spec in specs
         ]
         return [f.result() for f in futures]
+    except BaseException:  # a signal in the main thread: stop the workers' processes (C8)
+        terminate_all()
+        raise
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
