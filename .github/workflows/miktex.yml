@@ -1,0 +1,76 @@
+name: miktex
+
+# MiKTeX backend (M9): manual trigger only (Windows minutes count double on private
+# repositories). Linux uses Dockerfile.miktex (complete MiKTeX); Windows installs MiKTeX with
+# Chocolatey and runs the unit tests plus smoke checks of the tools chapmk needs (spike S11).
+on:
+  workflow_dispatch:
+    inputs:
+      linux:
+        description: "Linux job (builds Dockerfile.miktex, complete MiKTeX: slow)"
+        type: boolean
+        default: false
+      windows:
+        description: "Windows job"
+        type: boolean
+        default: true
+
+env:
+  MIKTEX_REPOSITORY: https://ftp.fau.de/ctan/systems/win32/miktex/tm/packages/
+
+jobs:
+  linux-miktex:
+    if: ${{ inputs.linux }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build MiKTeX image
+        run: docker build -f Dockerfile.miktex -t chapmk-miktex .
+      - name: Lint, type-check, unit tests, tool versions
+        run: |
+          docker run --rm -v "$PWD":/work -w /work --user root chapmk-miktex bash -c '
+            set -e
+            pip install -e .
+            ruff check . && ruff format --check .
+            mypy --strict src
+            pytest -m "not slow"
+            pdflatex --version | head -1; biber --version; kpsewhich mylatexformat.ltx
+          '
+
+  windows-miktex:
+    if: ${{ inputs.windows }}
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install MiKTeX
+        run: |
+          choco install miktex --no-progress -y
+          $bin = "C:\Program Files\MiKTeX\miktex\bin\x64"
+          Add-Content $env:GITHUB_PATH $bin
+          $env:PATH = "$bin;$env:PATH"
+          mpm --admin --set-repository="$env:MIKTEX_REPOSITORY"
+          miktex --admin packages update-package-database
+          miktex --admin packages update
+          # packages chapmk and the corpora need beyond the basic installation are installed
+          # on the fly (the normal Windows setup); chapmk's own requirements explicitly
+          miktex --admin packages install mylatexformat nomencl biblatex latexmk
+          initexmf --admin --set-config-value "[MPM]AutoInstall=1"
+          initexmf --admin --update-fndb
+      - name: Install Python package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . -r requirements-dev.txt
+      - name: Unit tests (no TeX)
+        run: pytest -m "not slow"
+      - name: Tool versions and files
+        run: |
+          pdflatex --version | Select-Object -First 1
+          biber --version
+          Get-Command pdflatex, biber, makeindex, synctex, kpsewhich, latexmk | Format-Table Name, Source
+          kpsewhich mylatexformat.ltx nomencl.sty biblatex.sty
