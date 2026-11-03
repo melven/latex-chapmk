@@ -37,8 +37,8 @@ from chapmk.canon import CanonView, commit_lists, commit_run, read_canon, run_to
 from chapmk.config import Config
 from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
 from chapmk.errors import ChapmkError, TexError
-from chapmk.fmt import FormatInfo, ensure_format, format_stamp
-from chapmk.fullbuild import full_build, read_inputs
+from chapmk.fmt import FormatInfo, ensure_format, format_inputs, format_stamp
+from chapmk.fullbuild import full_build
 from chapmk.layout import Layout
 from chapmk.lint import LintHit, glue_hints, lint_files
 from chapmk.outputs import (
@@ -77,6 +77,7 @@ from chapmk.records import (
     tex_phases,
 )
 from chapmk.runner import DERIVED_SUFFIXES, RunSpec, prepare_run_dir, run_batch
+from chapmk.shadow import read_inputs
 from chapmk.state import State, UnitInputs, load_state, save_state
 from chapmk.texdist import TexDistribution
 from chapmk.timing import Timings
@@ -181,7 +182,7 @@ def _global_files(ctx: Context, run_dir: Path, attributed: set[str]) -> dict[str
     for path in read_inputs(
         run_dir / f"{ctx.job}.fls", ctx.layout.shadow_dir, ctx.layout.shadow_dir
     ):
-        rel = path.relative_to(ctx.layout.shadow_dir.resolve()).as_posix()
+        rel = path.relative_to(Path(ctx.layout.shadow_dir).absolute()).as_posix()
         if (ctx.analysis.source_dir / rel).is_file() and rel not in attributed:
             names.add(rel)
     bcf = run_dir / f"{ctx.job}.bcf"
@@ -827,7 +828,11 @@ class Fixpoint:
         attributed = {n for files in state.segment_files.values() for n in files}
         state.global_files = {
             n: h
-            for n, h in {**state.global_files, **_global_files(ctx, run_dir, attributed)}.items()
+            for n, h in {
+                **state.global_files,
+                **_global_files(ctx, run_dir, attributed),
+                **format_inputs(ctx.layout),  # read by the format build, not by the runs
+            }.items()
             if n not in attributed
         }
 

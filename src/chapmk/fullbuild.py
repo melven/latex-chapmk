@@ -31,6 +31,7 @@ from chapmk.pictures import (
 )
 from chapmk.proc import run
 from chapmk.publish import copy_bytes, publish
+from chapmk.shadow import read_inputs
 from chapmk.synctex import rewrite_paths
 from chapmk.texdist import TexDistribution
 
@@ -65,25 +66,10 @@ def _digest(path: Path) -> str:
 def _snapshot(outdir: Path) -> dict[Path, str]:
     """Content hashes of the files in ``outdir`` that a pass may read."""
     return {
-        p.resolve(): _digest(p)
+        Path(p).absolute(): _digest(p)
         for p in outdir.rglob("*")
         if p.is_file() and not p.name.endswith(_NOT_INPUTS)
     }
-
-
-def read_inputs(fls: Path, cwd: Path, within: Path) -> set[Path]:
-    """Files read by a run (``INPUT`` lines of the ``-recorder`` file) that lie in ``within``."""
-    if not fls.is_file():
-        return set()
-    root = within.resolve()
-    found: set[Path] = set()
-    for line in fls.read_text(errors="replace").splitlines():
-        if line.startswith("INPUT "):
-            p = Path(line[6:])
-            p = (p if p.is_absolute() else cwd / p).resolve()
-            if p.is_relative_to(root) and p.is_file():
-                found.add(p)
-    return found
 
 
 @dataclass

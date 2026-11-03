@@ -91,7 +91,9 @@ def run_one(
     argv = dist.pdflatex(RUN_MAIN, job, run_dir, fmt=fmt_name)
     result = run(argv, cwd=layout.shadow_dir, env=run_env, log_path=run_dir / "pdflatex.out")
     log = run_dir / f"{job}.log"
-    ok = result.ok and (run_dir / f"{job}.pdf").is_file()
+    # a run without pages (glue-only run of a document whose glue ships none) writes no PDF
+    no_pages = log.is_file() and "No pages of output." in log.read_text(errors="replace")
+    ok = result.ok and ((run_dir / f"{job}.pdf").is_file() or no_pages)
     err = None
     if not ok:
         text = log.read_text(errors="replace") if log.is_file() else result.output

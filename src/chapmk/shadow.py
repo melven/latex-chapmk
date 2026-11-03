@@ -176,3 +176,28 @@ def sync_project_shadow(analysis: Analysis, shadow_dir: Path, build_dir: Path) -
         skip_dirs=[build_dir, analysis.source_dir / DEFAULT_BUILD_DIR],
         excluded=build_output_filter(analysis),
     )
+
+
+def read_inputs(fls: Path, cwd: Path, within: Path) -> set[Path]:
+    """Files read by a run (``INPUT`` lines of the ``-recorder`` file) that lie in ``within``,
+    as paths below ``within``. The test is made on the normalised path before resolving
+    symlinks (files of the shadow tree are symlinks into the source directory), and on the
+    resolved path (a ``within`` given through a symlink)."""
+    if not fls.is_file():
+        return set()
+    root = Path(within).absolute()
+    resolved_root = root.resolve()
+    found: set[Path] = set()
+    for line in fls.read_text(errors="surrogateescape").split("\n"):
+        if line.startswith("INPUT "):
+            p = Path(line[6:].rstrip("\r"))
+            p = Path(os.path.normpath(p if p.is_absolute() else Path(cwd).absolute() / p))
+            if p.is_relative_to(root):
+                rel = p.relative_to(root)
+            elif p.resolve().is_relative_to(resolved_root):
+                rel = p.resolve().relative_to(resolved_root)
+            else:
+                continue
+            if (root / rel).is_file():
+                found.add(root / rel)
+    return found
