@@ -18,7 +18,8 @@ CORPUS = REPO / "tests" / "corpus"
 # References (the --full build of `--check`, latexmk in the acceptance tests) depend only on the
 # sources, so they are kept in REFERENCE_CACHE by a hash of the source files and reused in later
 # test runs on this machine. Not keyed: the TeX installation and the full-mode code. After a TeX
-# update or an intended change of the --full output: rm -rf .test-cache (CI starts without it).
+# update or an intended change of the --full output: rm -rf .test-cache. CI restores the cache of
+# an earlier run only if the image and the full-mode code are unchanged (.github/workflows/ci.yml).
 REFERENCE_CACHE = REPO / ".test-cache"
 _SRC_PLACEHOLDER = "/@chapmk-test-source@"
 # files with a sibling .tex of the same stem are build outputs (fig/*.pdf, main.pdf, ...)
