@@ -1,6 +1,6 @@
 # pgf/TikZ manual: stress-test corpus (third-party)
 
-**Not written by the fastinc authors.** `upstream/` is an unmodified copy of the directory
+**Not written by the chapmk authors.** `upstream/` is an unmodified copy of the directory
 `doc/generic/pgf` of the PGF/TikZ package, used only as a large real-world test document
 (about 1300 pages, 123 `\include` chapters, heavy TikZ use).
 
@@ -11,13 +11,13 @@
 | Copyright | Till Tantau and the PGF/TikZ contributors (see the file headers and `upstream/CHANGELOG.md`) |
 | License | dual: GNU Free Documentation License 1.2 **or** LaTeX Project Public License 1.3c, see `upstream/licenses/LICENSE` and the licence texts next to it |
 
-The files in `upstream/` must stay unchanged. Adaptations needed by fastinc v1 are made at
-test time on a copy by `adapt.py`, which writes an additional main file `fastinc-main.tex`:
+The files in `upstream/` must stay unchanged. Adaptations needed by chapmk v1 are made at
+test time on a copy by `adapt.py`, which writes an additional main file `chapmk-main.tex`:
 the include structure is inlined into one main file, the index (`imakeidx`) is removed and
 `bookmark` is loaded (see the docstring of `adapt.py`).
 
 Use:
-- `upstream/pgfmanual.tex` unchanged: full-mode builds (`fastinc build --full`, `fastinc check`);
-- `fastinc-main.tex` after `adapt.py`: incremental builds and benchmarks.
+- `upstream/pgfmanual.tex` unchanged: full-mode builds (`chapmk build --full`, `chapmk check`);
+- `chapmk-main.tex` after `adapt.py`: incremental builds and benchmarks.
 
 Builds take minutes; tests on this corpus are marked `bench` (manual only).

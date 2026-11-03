@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from fastinc.cli import main
+from chapmk.cli import main
 
 pytestmark = [pytest.mark.bench, pytest.mark.slow]
 CORPUS = Path(__file__).resolve().parents[1] / "corpus" / "pgfmanual"

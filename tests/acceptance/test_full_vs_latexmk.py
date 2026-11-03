@@ -1,8 +1,8 @@
-"""M1/M7 acceptance: ``fastinc build --full`` equals plain latexmk (PLAN §3.3, §9 M1).
+"""M1/M7 acceptance: ``chapmk build --full`` equals plain latexmk (PLAN §3.3, §9 M1).
 
 Both builds use the same environment (N4); latexmk gets a rule for nomencl. latexmk runs the
 unmodified document with shell escape, so the user's TikZ externalize (thesis corpus, draft
-mode) makes its figures with its own figure jobs; fastinc redirects externalize to its picture
+mode) makes its figures with its own figure jobs; chapmk redirects externalize to its picture
 cache (§6.4.3, §6.17) and must give the same result. latexmk builds in the source directory:
 externalize's figure jobs read the main aux from there.
 """
@@ -13,12 +13,12 @@ from pathlib import Path
 import pytest
 from conftest import reuse_reference, source_hash
 
-from fastinc.analysis import analyse
-from fastinc.check import compare_pdfs, compare_synctex
-from fastinc.cli import main
-from fastinc.config import Config
-from fastinc.proc import run
-from fastinc.texdist import TeXLive
+from chapmk.analysis import analyse
+from chapmk.check import compare_pdfs, compare_synctex
+from chapmk.cli import main
+from chapmk.config import Config
+from chapmk.proc import run
+from chapmk.texdist import TeXLive
 
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
 

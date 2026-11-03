@@ -6,13 +6,13 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-from fastinc.analysis import analyse
-from fastinc.config import Config
-from fastinc.errors import ToolError
-from fastinc.layout import make_layout
-from fastinc.proc import run
-from fastinc.shadow import build_output_filter, sync_project_shadow, sync_shadow
-from fastinc.texdist import TEX_DIR, TeXLive, detect, deterministic_env, tex_path
+from chapmk.analysis import analyse
+from chapmk.config import Config
+from chapmk.errors import ToolError
+from chapmk.layout import make_layout
+from chapmk.proc import run
+from chapmk.shadow import build_output_filter, sync_project_shadow, sync_shadow
+from chapmk.texdist import TEX_DIR, TeXLive, detect, deterministic_env, tex_path
 
 
 def test_run_captures_output_and_errors(tmp_path: Path) -> None:
@@ -107,10 +107,10 @@ def test_layout_defaults_and_overrides(tmp_path: Path) -> None:
     a = analyse(cfg)
     lay = make_layout(cfg, a)
     src = tmp_path / "src"
-    assert (lay.build_dir, lay.out_dir, lay.jobname) == (src / ".fastinc", src, "thesis")
-    assert lay.shadow_dir == src / ".fastinc" / "src"
+    assert (lay.build_dir, lay.out_dir, lay.jobname) == (src / ".chapmk" / "thesis", src, "thesis")
+    assert lay.shadow_dir == src / ".chapmk" / "thesis" / "src"
     assert lay.output(".pdf") == src / "thesis.pdf"
-    assert lay.path_map() == [(str(src / ".fastinc" / "src"), str(src))]
+    assert lay.path_map() == [(str(src / ".chapmk" / "thesis" / "src"), str(src))]
     lay2 = make_layout(Config(main=cfg.main, build_dir=tmp_path / "b", out_dir=tmp_path / "o"), a)
     assert (lay2.build_dir, lay2.out_dir) == (tmp_path / "b", tmp_path / "o")
 
@@ -132,9 +132,12 @@ def test_shadow_tree_sync_and_refresh(tmp_path: Path) -> None:
     a = analyse(cfg)
     src, shadow, build = (
         tmp_path / "src",
-        tmp_path / "src" / ".fastinc" / "src",
-        tmp_path / "src" / ".fastinc",
+        tmp_path / "src" / ".chapmk" / "thesis" / "src",
+        tmp_path / "src" / ".chapmk" / "thesis",
     )
+    other = tmp_path / "src" / ".chapmk" / "other"  # another job's build directory
+    other.mkdir(parents=True)
+    (other / "x.tex").write_text("x")
     stats = sync_project_shadow(a, shadow, build)
     assert files_in(shadow) == {
         "thesis.tex",

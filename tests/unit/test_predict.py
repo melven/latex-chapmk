@@ -1,6 +1,6 @@
 """Unit tests for the composition model and prediction (PLAN §6.9.3)."""
 
-from fastinc.predict import (
+from chapmk.predict import (
     SegmentVectors,
     compose,
     normalized,
@@ -44,7 +44,7 @@ def test_partition_contiguous_balanced() -> None:
 
 
 def test_modified_registers() -> None:
-    from fastinc.predict import modified
+    from chapmk.predict import modified
 
     seg = SegmentVectors({0: 5, 7: 3, 8: 2, 9: 1}, {0: 9, 7: 3, 8: 2}, frozenset({8}))
     # 0 changes, 8 is assigned absolutely, 9 is reset to 0; 7 and all registers that are 0 at
@@ -54,13 +54,13 @@ def test_modified_registers() -> None:
 
 def test_rewrite_checkpoint_keeps_only_modified() -> None:
     stmts = [
-        "\\fastinc@ckpt{U1}{0=6,154=1,300=4,}",
+        "\\chapmk@ckpt{U1}{0=6,154=1,300=4,}",
         "\\@setckpt{ch1}{\n\\setcounter{page}{6}\n\\setcounter{maxextraname}{4}\n}",
     ]
     out = rewrite_checkpoint(
         stmts, {0: 8, 154: 1, 300: 4}, {"page": 0, "maxextraname": 300}, frozenset({0, 154})
     )
-    assert out[0] == "\\fastinc@ckpt{U1}{0=8,154=1,}"
+    assert out[0] == "\\chapmk@ckpt{U1}{0=8,154=1,}"
     assert "maxextraname" not in out[1] and "\\setcounter{page}{8}" in out[1]
     assert "\n\n" not in out[1]
 
@@ -68,13 +68,13 @@ def test_rewrite_checkpoint_keeps_only_modified() -> None:
 def test_rewrite_checkpoint() -> None:
     stmts = [
         "\\relax",
-        "\\fastinc@ckpt{U1}{0=6,154=1,278=1,}",
+        "\\chapmk@ckpt{U1}{0=6,154=1,278=1,}",
         "\\@setckpt{chapters/ch1}{\n\\setcounter{page}{6}\n\\setcounter{equation}{1}\n"
         "\\setcounter{mystery}{4}\n}",
     ]
     out = rewrite_checkpoint(stmts, {0: 8, 278: 1, 514: 3}, {"page": 0, "equation": 154})
     assert out[0] == "\\relax"
-    assert out[1] == "\\fastinc@ckpt{U1}{0=8,154=0,278=1,514=3,}"
+    assert out[1] == "\\chapmk@ckpt{U1}{0=8,154=0,278=1,514=3,}"
     assert "\\setcounter{page}{8}" in out[2] and "\\setcounter{equation}{0}" in out[2]
     assert "\\setcounter{mystery}{4}" in out[2]  # unknown counter: unchanged
 
@@ -88,16 +88,16 @@ def test_compose_odd_start_page() -> None:
 
 
 def test_list_sections_and_splice() -> None:
-    from fastinc.canon import splice_list, unit_sections
+    from chapmk.canon import splice_list, unit_sections
 
     base = (
-        "\\fastinc@lmark {/G0}\nfront\n\\fastinc@lmark {U1}\nold a\n\\fastinc@lmark {/U1}\n"
-        "\\fastinc@lmark {/G1}\n\\fastinc@lmark {U2}\nb\n\\fastinc@lmark {/U2}\nend\n"
+        "\\chapmk@lmark {/G0}\nfront\n\\chapmk@lmark {U1}\nold a\n\\chapmk@lmark {/U1}\n"
+        "\\chapmk@lmark {/G1}\n\\chapmk@lmark {U2}\nb\n\\chapmk@lmark {/U2}\nend\n"
     )
     assert unit_sections(base) == {"U1": ["old a\n"], "U2": ["b\n"]}
     out = splice_list(base, {"U1": ["new a\n", "new a2\n"]})
-    assert out is not None and "new a\nnew a2\n\\fastinc@lmark {/U1}" in out and "old a" not in out
-    assert out.endswith("b\n\\fastinc@lmark {/U2}\nend\n")
+    assert out is not None and "new a\nnew a2\n\\chapmk@lmark {/U1}" in out and "old a" not in out
+    assert out.endswith("b\n\\chapmk@lmark {/U2}\nend\n")
     assert splice_list(base, {"U3": ["x\n"]}) is None  # no markers for U3
     assert splice_list(base, {}) == base
 
@@ -106,17 +106,17 @@ def test_list_extensions_match_the_driver() -> None:
     import re
     from pathlib import Path
 
-    from fastinc.canon import LIST_SUFFIXES
+    from chapmk.canon import LIST_SUFFIXES
 
-    sty = (Path(__file__).parents[2] / "src/fastinc/tex/fastinc.sty").read_text()
-    m = re.search(r"\\providecommand\\fastinc@listexts\{([^}]*)\}", sty)
+    sty = (Path(__file__).parents[2] / "src/chapmk/tex/chapmk.sty").read_text()
+    m = re.search(r"\\providecommand\\chapmk@listexts\{([^}]*)\}", sty)
     assert m is not None
     assert [f".{e}" for e in m.group(1).split(",")] == list(LIST_SUFFIXES)
 
 
 def test_tex_phases_and_timings() -> None:
-    from fastinc.records import RunRecords, tex_phases
-    from fastinc.timing import Timings
+    from chapmk.records import RunRecords, tex_phases
+    from chapmk.timing import Timings
 
     recs = RunRecords(
         times=[("load", 0.5), ("begin", 0.8), ("G0", 0.8), ("U1", 1.0), ("G1", 1.5), ("end", 1.6)]
@@ -144,7 +144,7 @@ def test_tex_phases_and_timings() -> None:
         "pictures": 0.0,
     }
     assert tex_phases(RunRecords(), 1.0)["format"] == 0.0
-    from fastinc.records import glue_times
+    from chapmk.records import glue_times
 
     assert glue_times(recs) == {"G0": 0.2, "G1": 0.1}
     assert glue_times(recs, minimum=0.15) == {"G0": 0.2}

@@ -4,13 +4,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastinc.cli import main
+from chapmk.cli import main
 
 EPOCH = "1700000000"
 
 
 def build(src: Path, *args: str, main_file: str = "main.tex") -> tuple[int, dict[str, Any]]:
-    """``fastinc build`` with a JSON report; returns the exit code and the report."""
+    """``chapmk build`` with a JSON report; returns the exit code and the report."""
     report = src.parent / "report.json"
     report.unlink(missing_ok=True)
     rc = main(["build", main_file, "--report", str(report), *args], cwd=src)

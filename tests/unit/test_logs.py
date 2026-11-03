@@ -1,4 +1,4 @@
-from fastinc.logs import first_error, map_paths
+from chapmk.logs import first_error, map_paths
 
 
 def test_map_paths() -> None:

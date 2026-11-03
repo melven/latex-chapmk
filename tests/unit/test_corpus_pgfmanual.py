@@ -4,8 +4,8 @@ import importlib.util
 import shutil
 from pathlib import Path
 
-from fastinc.analysis import analyse
-from fastinc.config import Config
+from chapmk.analysis import analyse
+from chapmk.config import Config
 
 CORPUS = Path(__file__).resolve().parents[1] / "corpus" / "pgfmanual"
 
@@ -31,7 +31,7 @@ def test_adapted_main(tmp_path: Path) -> None:
     assert a.fallback_reasons == ()
     assert len(a.includes) == 123
     assert len(a.units) == 123  # ltxdoc (no \chapter): each \section include is a unit
-    assert "fastinc adapt" in main.read_text()
+    assert "chapmk adapt" in main.read_text()
     # the upstream files are untouched
     for f in (CORPUS / "upstream").rglob("*.tex"):
         assert (src / f.relative_to(CORPUS / "upstream")).read_bytes() == f.read_bytes()

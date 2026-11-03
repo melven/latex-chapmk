@@ -4,16 +4,16 @@ from pathlib import Path
 
 import pytest
 
-from fastinc.aux import (
+from chapmk.aux import (
     bookmark_levels,
     content_lines,
     parse_bookmark,
     segment_slices,
     tex_octal_bytes,
 )
-from fastinc.errors import FastincError
-from fastinc.merge_pdf import label_style, page_labels
-from fastinc.state import (
+from chapmk.errors import ChapmkError
+from chapmk.merge_pdf import label_style, page_labels
+from chapmk.state import (
     STATE_FILE,
     STATE_VERSION,
     SegmentArtifact,
@@ -22,7 +22,7 @@ from fastinc.state import (
     load_state,
     save_state,
 )
-from fastinc.synctex import SyncTexError, merge, parse, write_lines
+from chapmk.synctex import SyncTexError, merge, parse, write_lines
 
 
 def test_state_round_trip(tmp_path: Path) -> None:
@@ -50,35 +50,35 @@ def test_state_round_trip(tmp_path: Path) -> None:
     (tmp_path / STATE_FILE).write_text('{"version": 999}')
     assert load_state(tmp_path) is None
     (tmp_path / STATE_FILE).write_text(f'{{"version": {STATE_VERSION}}}')
-    with pytest.raises(FastincError, match="corrupt"):
+    with pytest.raises(ChapmkError, match="corrupt"):
         load_state(tmp_path)
 
 
 MAIN_AUX = [
     "\\relax",
-    "\\providecommand\\fastinc@base[1]{}",
-    "\\fastinc@base{0=1,}",
-    "\\fastinc@entry{G0}{}",
+    "\\providecommand\\chapmk@base[1]{}",
+    "\\chapmk@base{0=1,}",
+    "\\chapmk@entry{G0}{}",
     "\\babel@aux{english}{}",
     "\\@input{ch1.aux}",
-    "\\fastinc@gexit{G0}{}",
-    "\\fastinc@abs{G0}{}",
-    "\\fastinc@unit{U1}{ch1.tex}",
-    "\\fastinc@entry{U1}{0=3,}",
+    "\\chapmk@gexit{G0}{}",
+    "\\chapmk@abs{G0}{}",
+    "\\chapmk@unit{U1}{ch1.tex}",
+    "\\chapmk@entry{U1}{0=3,}",
     "\\BKM@entry{id=1,open,dest={636861707465722E31},srcline={1}}{5C3337365C3337375C3030304F}",
     "\\abx@aux@cite{0}{knuth}",
-    "\\fastinc@entry{G1}{0=5,}",
+    "\\chapmk@entry{G1}{0=5,}",
     "\\@writefile{toc}{\\contentsline {chapter}{Bib}{5}{x}%",
     "}",
-    "\\fastinc@bkmlevels{1=0,}",
+    "\\chapmk@bkmlevels{1=0,}",
 ]
 
 
 def test_segment_slices_and_content() -> None:
     sl = segment_slices(MAIN_AUX)
-    assert sl["G0"] == ["\\fastinc@entry{G0}{}", "\\babel@aux{english}{}", "\\@input{ch1.aux}"]
+    assert sl["G0"] == ["\\chapmk@entry{G0}{}", "\\babel@aux{english}{}", "\\@input{ch1.aux}"]
     assert sl["U1"][1].startswith("\\BKM@entry") and sl["U1"][2] == "\\abx@aux@cite{0}{knuth}"
-    assert content_lines(MAIN_AUX[:3]) == ["\\fastinc@base{0=1,}"]
+    assert content_lines(MAIN_AUX[:3]) == ["\\chapmk@base{0=1,}"]
     assert bookmark_levels(MAIN_AUX) == {1: 0}
 
 
@@ -119,12 +119,12 @@ def synctex_file(path: Path, main: str, sheets: int) -> None:
 
 def test_synctex_merge(tmp_path: Path) -> None:
     a, b = tmp_path / "a.synctex.gz", tmp_path / "b.synctex.gz"
-    synctex_file(a, "/build/runs/r1/fastinc-run.tex", 3)
-    synctex_file(b, "/build/runs/r2/fastinc-run.tex", 2)
+    synctex_file(a, "/build/runs/r1/chapmk-run.tex", 3)
+    synctex_file(b, "/build/runs/r2/chapmk-run.tex", 2)
     out = tmp_path / "m.synctex.gz"
     merge(
         [(a, 0), (b, 1), (a, 2)],
-        lambda p: "/src/./main.tex" if p.endswith("fastinc-run.tex") else p,
+        lambda p: "/src/./main.tex" if p.endswith("chapmk-run.tex") else p,
         out,
     )
     m = parse(out)

@@ -1,4 +1,4 @@
-# Dev and CI image for fastinc: TeX Live (full scheme) + Python tooling.
+# Dev and CI image for chapmk: TeX Live (full scheme) + Python tooling.
 # For reproducibility, pin the base image by digest once M1 is green, e.g.
 #   FROM texlive/texlive:latest@sha256:<digest>
 FROM texlive/texlive:latest

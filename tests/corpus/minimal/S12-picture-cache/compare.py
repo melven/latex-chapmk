@@ -1,10 +1,10 @@
-"""S12: §3.3 comparison of a run against the reference (fastinc.check)."""
+"""S12: §3.3 comparison of a run against the reference (chapmk.check)."""
 
 import shutil
 import sys
 from pathlib import Path
 
-from fastinc.check import compare_pdfs, compare_synctex
+from chapmk.check import compare_pdfs, compare_synctex
 
 src, ref, got, name = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4]
 units = sorted(f.name for f in src.glob("*.tex") if f.name != "main.tex")

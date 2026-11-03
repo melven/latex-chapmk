@@ -1,7 +1,7 @@
 """M3 scenarios (PLAN §8.2): T1, T14, T15, T17 on the thesis corpus; unit grouping on hgb.
 The M3 test of the cold fallback after a layout change is replaced by T2 (M4).
 
-Each scenario asserts §3.3 equality against --full (``fastinc build --check``) and the set of
+Each scenario asserts §3.3 equality against --full (``chapmk build --check``) and the set of
 compiled includes from ``--report``.
 """
 
@@ -22,7 +22,7 @@ def test_t1_typo_compiles_one_unit(thesis: Path, capsys: pytest.CaptureFixture[s
     so the list files change once (PLAN §6.7.1). In the steady state a typo is one run.
     """
     # the cold build ended with a run of all units: its .bcf is a full run's
-    bcf = thesis / ".fastinc" / "canon" / "main.bcf"
+    bcf = thesis / ".chapmk" / "main" / "canon" / "main.bcf"
     full_bcf = bcf.read_bytes()
     # typo in body text after the \\todo (whose margin-note position is recorded)
     edit(thesis / "chapters" / "ch3.tex", "Further reading:", "Furhter reading:")

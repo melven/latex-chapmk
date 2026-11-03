@@ -1,6 +1,6 @@
-# fastinc — incremental, parallel pdfLaTeX builds
+# chapmk — incremental, parallel pdfLaTeX builds
 
-Implementation plan and specification. Working name: `fastinc` (rename freely).
+Implementation plan and specification. Name: `latex-chapmk` (distribution), `chapmk` (command, package, macros); formerly `fastinc` (renamed in R0.9, `docs/review/M8.md` R13). The default build directory is `.chapmk/<jobname>/` (C17); paths such as `.chapmk/fmt` below are relative to it.
 
 ---
 
@@ -17,7 +17,7 @@ Implementation plan and specification. Working name: `fastinc` (rename freely).
 
 ## 1. Goal
 
-One command (`fastinc build main.tex`) replaces `latexmk -pdf -synctex=1`. It produces the same document (§3.3), but rebuilds faster after small edits by:
+One command (`chapmk build main.tex`) replaces `latexmk -pdf -synctex=1`. It produces the same document (§3.3), but rebuilds faster after small edits by:
 
 - precompiling the static preamble into a format file,
 - recompiling only the `\include` units affected by an edit,
@@ -28,7 +28,7 @@ One command (`fastinc build main.tex`) replaces `latexmk -pdf -synctex=1`. It pr
 
 - Engines other than pdfLaTeX.
 - Units other than `\include` (no automatic splitting at `\chapter`).
-- The user's TikZ externalize settings (prefix, shell escape, system calls). fastinc keeps the user's `\tikzexternalize` but redirects it to its own picture cache (§6.4.3, §6.17).
+- The user's TikZ externalize settings (prefix, shell escape, system calls). chapmk keeps the user's `\tikzexternalize` but redirects it to its own picture cache (§6.4.3, §6.17).
 - Byte-identical PDFs.
 - `glossaries`, `imakeidx`/`makeidx`, `minted`, `cleveref`. Detect these and fall back to full builds with a warning (§6.14).
 - biblatex with `backend=bibtex` (or classic BibTeX). Only biber is supported; others fall back to full builds.
@@ -61,12 +61,12 @@ The user's documents follow these rules. The driver relies on them and checks th
 - **F5** Internal hyperref links (`\ref`, `\autoref`, `\nameref`, `\hyperref[...]`, `\cite`, ToC entries), outline (bookmarks), page labels and document info work in the merged PDF.
 - **F6** biblatex+biber and nomencl+makeindex are handled.
 - **F7** Errors are reported with paths and line numbers mapped back to the user's sources. On error the previous `main.pdf` is kept.
-- **F8** `fastinc watch`, equivalent to `latexmk -pvc` (future, after M9).
-- **F9** `fastinc build --full` runs a plain reference build (latexmk-equivalent, same environment) for release and checks.
-- **F10** `fastinc check` (or `fastinc build --check`) builds incrementally and with `--full`, then compares the results using §3.3. One call, exit code 1 and a per-item report on a difference. Available from M3 on, as a user-facing self-test.
+- **F8** `chapmk watch`, equivalent to `latexmk -pvc` (future, after M9).
+- **F9** `chapmk build --full` runs a plain reference build (latexmk-equivalent, same environment) for release and checks.
+- **F10** `chapmk check` (or `chapmk build --check`) builds incrementally and with `--full`, then compares the results using §3.3. One call, exit code 1 and a per-item report on a difference. Available from M3 on, as a user-facing self-test.
 - **F11** Coexistence with plain LaTeX builds in the same directory, without manual cleaning in between:
-  - fastinc never reads build outputs from the source directory (shadow tree, §6.5).
-  - In the output directory (default: next to `main.tex`), fastinc writes only `main.pdf`, `main.synctex.gz` and `main.log`. Each is replaced atomically, and the pdf and synctex file always come from the same build.
+  - chapmk never reads build outputs from the source directory (shadow tree, §6.5).
+  - In the output directory (default: next to `main.tex`), chapmk writes only `main.pdf`, `main.synctex.gz` and `main.log`. Each is replaced atomically, and the pdf and synctex file always come from the same build.
   - Everything else goes to the build directory.
 
 ### 3.2 Non-functional
@@ -76,12 +76,12 @@ The user's documents follow these rules. The driver relies on them and checks th
 - **N3** Requirements: Python ≥ 3.10 and `pikepdf` (qpdf; wheels exist for Linux, macOS and Windows). LaTeX kernel ≥ 2023 (LaTeX hooks, `\ReadonlyShipoutCounter`). Optional for tests: poppler-utils (`pdftoppm`, `pdftotext`), `synctex` CLI.
   - Platforms: Linux, macOS and Windows with TeX Live (tier 1); Windows with MiKTeX (tier 2, §6.16).
 - **N4** Deterministic environment: `SOURCE_DATE_EPOCH` and `FORCE_SOURCE_DATE=1`, so `\today` and the PDF dates are identical across runs.
-  - The epoch is fixed **per canonical state** (M3): it is set at the cold build (`SOURCE_DATE_EPOCH` from the environment, else the build start time) and reused by all incremental runs and by the `--full` reference of `fastinc check`.
+  - The epoch is fixed **per canonical state** (M3): it is set at the cold build (`SOURCE_DATE_EPOCH` from the environment, else the build start time) and reused by all incremental runs and by the `--full` reference of `chapmk check`.
   - Reason: pages reused from earlier runs and new runs must show the same dates.
 
 ### 3.3 Acceptance criterion ("identical output")
 
-The reference is `fastinc build --full`: plain latexmk on the unmodified sources, with only the externalize redirection injected (§6.4.3) and the same environment (N4). The merged result must match it in:
+The reference is `chapmk build --full`: plain latexmk on the unmodified sources, with only the externalize redirection injected (§6.4.3) and the same environment (N4). The merged result must match it in:
 
 1. Page count; every page rasterised (`pdftoppm -r 150`) pixel-identical.
 2. Extracted text per page (`pdftotext -layout`).
@@ -117,7 +117,7 @@ Short reference for the implementer. Details go into spike notes.
 ## 5. Architecture
 
 ```
-                 fastinc (Python driver)
+                 chapmk (Python driver)
  ┌───────────────────────────────────────────────────────────────┐
  │ analysis → format → scheduler/fixpoint → runs (parallel)       │
  │              │            │                 │                 │
@@ -125,11 +125,11 @@ Short reference for the implementer. Details go into spike notes.
  │              │            ├─ biber / makeindex                 │
  │              │            └─ dependency model                  │
  │              ▼                                                 │
- │          canonical state (.fastinc/canon)                      │
+ │          canonical state (.chapmk/canon)                      │
  │              ▼                                                 │
  │          merge: PDF (pikepdf) + SyncTeX → main.pdf / .synctex.gz │
  └───────────────────────────────────────────────────────────────┘
-        LaTeX side: fastinc-ini.sty (format/reference), fastinc.sty (runtime)
+        LaTeX side: chapmk-ini.sty (format/reference), chapmk.sty (runtime)
 ```
 
 **Data flow of one build:**
@@ -150,7 +150,7 @@ Short reference for the implementer. Details go into spike notes.
 
 ### 6.1 Project analysis
 
-Input: the main file (CLI argument or `fastinc.toml`).
+Input: the main file (CLI argument or `chapmk.toml`).
 
 1. **Locate the preamble:** lines `1 .. b-1`, where line `b` contains `\begin{document}`. Comments must be respected (`%` not preceded by `\`). Lines read via `\input` in the preamble are inlined for split detection only.
 2. **Split point `s`** (first line not dumped into the format): the first preamble line matching the deny list (§6.3.2), or a config override `format.split_before = "<regex>"`. If the match lies inside a top-level command or group spanning several lines (e.g. `\ifdraft{` … `}`), set `s` to the line where that command starts (brace-depth tracking, S1). If `s` falls inside an `\input`ed preamble file, set `s` to the line of that `\input`.
@@ -165,29 +165,29 @@ Input: the main file (CLI argument or `fastinc.toml`).
 
 All generated files keep the user's line numbers, so errors and SyncTeX map back by a path substitution only.
 
-- **`.fastinc/fmt/pre.tex`** (format source):
-  - `\RequirePackage{fastinc-ini}` prepended to line 1 (same line);
+- **`.chapmk/fmt/pre.tex`** (format source):
+  - `\RequirePackage{chapmk-ini}` prepended to line 1 (same line);
   - lines `1..s-1` verbatim;
   - then `\endofdump` [S1].
-- **`.fastinc/runs/<r>/main.tex`** (per-run main), a copy of the user's main file with:
+- **`.chapmk/runs/<r>/main.tex`** (per-run main), a copy of the user's main file with:
   - lines `1..s-1` replaced by empty lines;
-  - line `s` prefixed (same line) with `\csname endofdump\endcsname\usepackage{fastinc}\includeonly{<selection>}`;
+  - line `s` prefixed (same line) with `\csname endofdump\endcsname\usepackage{chapmk}\includeonly{<selection>}`;
   - everything else verbatim.
 
   An empty selection is written as `\includeonly{}`, which means a glue-only run.
-- **Path mapping table:** `runs/<r>/main.tex` → user `main.tex`, and the shadow-tree prefix `.fastinc/src/` → source directory (§6.5). Used for logs (§6.13) and SyncTeX (§6.12).
+- **Path mapping table:** `runs/<r>/main.tex` → user `main.tex`, and the shadow-tree prefix `.chapmk/src/` → source directory (§6.5). Used for logs (§6.13) and SyncTeX (§6.12).
 
 ### 6.3 Format
 
 #### 6.3.1 Build
 
 ```
-pdflatex -ini -jobname=pre -output-directory=.fastinc/fmt "&pdflatex" mylatexformat.ltx .fastinc/fmt/pre.tex
+pdflatex -ini -jobname=pre -output-directory=.chapmk/fmt "&pdflatex" mylatexformat.ltx .chapmk/fmt/pre.tex
 ```
 
-- Rebuild when `pre`, the TeX Live version string, or the `fastinc-ini.sty` version changes.
+- Rebuild when `pre`, the TeX Live version string, or the `chapmk-ini.sty` version changes.
 - The class options are part of `pre` (the `draft` option freezes `\ifdraft`).
-- Run usage: `TEXFORMATS=.fastinc/fmt:` and `-fmt=pre`. An absolute `-fmt=` path breaks `-recorder` (S1).
+- Run usage: `TEXFORMATS=.chapmk/fmt:` and `-fmt=pre`. An absolute `-fmt=` path breaks `-recorder` (S1).
 
 **Verified by S1** (`docs/spikes/S1.md`):
 - At runtime, mylatexformat skips the main file line by line up to the first line containing `\endofdump`, `\csname endofdump\endcsname` or `\begin{document}`, then executes that whole line.
@@ -202,22 +202,22 @@ pdflatex -ini -jobname=pre -output-directory=.fastinc/fmt "&pdflatex" mylatexfor
 | `\makeindex`, `\makeglossaries`, `\usepackage{minted}` | Unsupported in v1 → full-build mode. |
 | Config additions | User override. |
 
-#### 6.3.3 Deferral (`fastinc-ini.sty`, format mode only)
+#### 6.3.3 Deferral (`chapmk-ini.sty`, format mode only)
 
-`\openout` calls during the dump (e.g. `\makenomenclature`) need no handling: mylatexformat replays them at runtime (S1). The deferral table in `fastinc-ini.sty` is kept, empty, as a contingency for state that is opened or frozen by other means.
+`\openout` calls during the dump (e.g. `\makenomenclature`) need no handling: mylatexformat replays them at runtime (S1). The deferral table in `chapmk-ini.sty` is kept, empty, as a contingency for state that is opened or frozen by other means.
 
 ### 6.4 LaTeX packages
 
-#### 6.4.1 `fastinc-ini.sty` (loaded before `\documentclass` in format builds and in the `--full` reference build)
+#### 6.4.1 `chapmk-ini.sty` (loaded before `\documentclass` in format builds and in the `--full` reference build)
 
 1. Externalize redirection (§6.4.3).
 2. Format mode only: the deferral table (§6.3.3; empty in v1).
 
-#### 6.4.2 `fastinc.sty` (runtime, loaded at the split point)
+#### 6.4.2 `chapmk.sty` (runtime, loaded at the split point)
 
 Requirements:
 
-1. **Segment tracking.** The variable `\fastinc@seg` holds the current segment id:
+1. **Segment tracking.** The variable `\chapmk@seg` holds the current segment id:
    - `G0` at `\begin{document}`;
    - `U<k>` at `include/before` (after the initial `\clearpage`, unit aux open; S3);
    - `G<k>` at `include/after` (after the final `\clearpage`, which ships deferred float pages; S3);
@@ -225,33 +225,33 @@ Requirements:
 2. **State records.**
    - The *state vector* (S4) is:
      - the LaTeX counters in the kernel checkpoint list (`\cl@@ckpt`),
-     - plus all `\count` registers allocated **after the kernel**, i.e. with an index above `\count10` at `\documentclass` (recorded by `fastinc-ini.sty`). Allocation is linear in `\count10`, with a jump to 266 when the classic range is exhausted.
+     - plus all `\count` registers allocated **after the kernel**, i.e. with an index above `\count10` at `\documentclass` (recorded by `chapmk-ini.sty`). Allocation is linear in `\count10`, with a jump to 266 when the classic range is exhausted.
      - minus a deny list of **run-local** registers, which number objects created in the current run: `Hy@abspage`, `BKM@id`, plus config `[state] ignore`.
-     Kernel registers are scratch, absolute (shipout counters) or float-box insert counts; they are neither compared nor restored. Package scratch registers need no deny list: after the restore (3) they equal the full run (S4). The number↔name map comes from the allocation lines `\<name>=\count<n>` in the format and run logs. The deny list is re-evaluated against real documents (`fastinc check` on the benchmark document); a run-local register missing from it breaks the run (fallback) or shows up in acceptance tests.
-   - At `\begin{document}` (end of the `AtBeginDocument` hooks), write a baseline `\fastinc@base{...}` to the main aux (`\immediate\write\@mainaux`), as a sparse vector `n=v,...`.
-   - At each segment start, write `\fastinc@entry{<seg>}{<sparse vector vs base>}` to the main aux. This happens in every run, for selected and excluded units alike. For excluded units it is written **before** their checkpoints are restored. `include/excluded` runs after the kernel restore (S3), so the entry is recorded by wrapping `\@setckpt` (an aux handler): `\cp@<unit>` becomes `<record entry><original checkpoint>`. A unit without a checkpoint (never compiled) records no entry; it is dirty anyway (§6.9.1 f).
-   - At each unit end, **after** the final `\clearpage` of `\include` (`include/after`, while the unit aux is still open [S3]), write `\fastinc@ckpt{U<k>}{<complete state vector: n=v,...>}` to the unit aux. Not at `include/end`: that hook runs before the final `\clearpage`, so the page counter and other changes made by the last shipouts would be missing.
+     Kernel registers are scratch, absolute (shipout counters) or float-box insert counts; they are neither compared nor restored. Package scratch registers need no deny list: after the restore (3) they equal the full run (S4). The number↔name map comes from the allocation lines `\<name>=\count<n>` in the format and run logs. The deny list is re-evaluated against real documents (`chapmk check` on the benchmark document); a run-local register missing from it breaks the run (fallback) or shows up in acceptance tests.
+   - At `\begin{document}` (end of the `AtBeginDocument` hooks), write a baseline `\chapmk@base{...}` to the main aux (`\immediate\write\@mainaux`), as a sparse vector `n=v,...`.
+   - At each segment start, write `\chapmk@entry{<seg>}{<sparse vector vs base>}` to the main aux. This happens in every run, for selected and excluded units alike. For excluded units it is written **before** their checkpoints are restored. `include/excluded` runs after the kernel restore (S3), so the entry is recorded by wrapping `\@setckpt` (an aux handler): `\cp@<unit>` becomes `<record entry><original checkpoint>`. A unit without a checkpoint (never compiled) records no entry; it is dirty anyway (§6.9.1 f).
+   - At each unit end, **after** the final `\clearpage` of `\include` (`include/after`, while the unit aux is still open [S3]), write `\chapmk@ckpt{U<k>}{<complete state vector: n=v,...>}` to the unit aux. Not at `include/end`: that hook runs before the final `\clearpage`, so the page counter and other changes made by the last shipouts would be missing.
      - **Complete vector, not only the registers changed within the unit (M2):** the exclusion itself can change registers. For example, calc's `\setcounter` uses the scratch register `\calc@Acount` during the kernel checkpoint restore. With the complete vector the restore undoes this; the per-unit delta for prediction is exit minus entry.
-   - At each glue end, write `\fastinc@gexit{<seg>}{...}` to the main aux: at `include/before` or in the `\@setckpt` wrapper of the following unit, and at `\end{document}` for the last glue.
-   - Absolute assignments: for each segment, record the set of registers assigned absolutely (hooks on `\setcounter`, counter resets via `\@stpelt`, `\pagenumbering`) as `\fastinc@abs{<seg>}{n,n,...}`, written to the unit aux for units and to the main aux for glue. Used for prediction only (§6.9.3), so missing cases only cost speed.
-3. **Restore.** Reading `\fastinc@ckpt` from the unit aux stores the vector. The `\@setckpt{<unit>}` line read next in the same unit aux takes it over for `<unit>`. In the `\@setckpt` wrapper, after LaTeX's own checkpoint restore, the stored post-kernel registers (minus the deny list) are assigned globally. Loop indices must be macros, not registers. Without this restore, real state is lost (e.g. `Hy@linkcounter`, biblatex citation order, `LT@tables`, pgf picture serials) and pages differ; with it, all partial-run pages equal the full run (S4).
+   - At each glue end, write `\chapmk@gexit{<seg>}{...}` to the main aux: at `include/before` or in the `\@setckpt` wrapper of the following unit, and at `\end{document}` for the last glue.
+   - Absolute assignments: for each segment, record the set of registers assigned absolutely (hooks on `\setcounter`, counter resets via `\@stpelt`, `\pagenumbering`) as `\chapmk@abs{<seg>}{n,n,...}`, written to the unit aux for units and to the main aux for glue. Used for prediction only (§6.9.3), so missing cases only cost speed.
+3. **Restore.** Reading `\chapmk@ckpt` from the unit aux stores the vector. The `\@setckpt{<unit>}` line read next in the same unit aux takes it over for `<unit>`. In the `\@setckpt` wrapper, after LaTeX's own checkpoint restore, the stored post-kernel registers (minus the deny list) are assigned globally. Loop indices must be macros, not registers. Without this restore, real state is lost (e.g. `Hy@linkcounter`, biblatex citation order, `LT@tables`, pgf picture serials) and pages differ; with it, all partial-run pages equal the full run (S4).
 4. **Page map.** At `shipout/before`, `\immediate\write` to the records file `\jobname.frec`: `P <\ReadonlyShipoutCounter> <seg> <\the\c@page> <\thepage expanded via \protected@edef>`. One records file for page map and file attribution saves a write stream (TeX has 16).
-5. **Segment markers in shared streams.** The only shared stream is `.nlo` (`\@nomenclaturefile`); outline entries go to the aux files (`bookmark`, §4). At every segment change, write the line `%fastinc-seg <seg>` into the stream, using a delayed `\write`, like nomencl's own `\protected@write` (S2b). This lets the driver attribute entries to segments.
+5. **Segment markers in shared streams.** The only shared stream is `.nlo` (`\@nomenclaturefile`); outline entries go to the aux files (`bookmark`, §4). At every segment change, write the line `%chapmk-seg <seg>` into the stream, using a delayed `\write`, like nomencl's own `\protected@write` (S2b). This lets the driver attribute entries to segments.
 6. **File attribution.** On `file/before`, `\immediate\write` to `\jobname.frec`: `F <seg> <\CurrentFilePathUsed/\CurrentFileUsed>`. Graphics: wrap `\Gin@setfile{type}{ext}{file}` (#3 is the resolved file name; S3) and write `F <seg> <file>`.
-7. **Aux handlers.** Define `\fastinc@base`, `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs`, `\fastinc@unit`, `\fastinc@bkmlevels` as no-ops, and `\fastinc@ckpt` as store (aux is read at begin and end document). `\providecommand` lines for all of them are written to the main aux.
+7. **Aux handlers.** Define `\chapmk@base`, `\chapmk@entry`, `\chapmk@gexit`, `\chapmk@abs`, `\chapmk@unit`, `\chapmk@bkmlevels` as no-ops, and `\chapmk@ckpt` as store (aux is read at begin and end document). `\providecommand` lines for all of them are written to the main aux.
    - **Implementation rules (M2):**
-     - fastinc.sty allocates no registers, because they would enter the state vector; bookkeeping uses global macros.
+     - chapmk.sty allocates no registers, because they would enter the state vector; bookkeeping uses global macros.
      - The include counter is advanced on every `\include` (`include/before` or the `\@setckpt` wrapper or `include/excluded`).
-     - Driver parameters (`\fastinc@denynames`) are defined before `\usepackage{fastinc}` in the run main.
+     - Driver parameters (`\chapmk@denynames`) are defined before `\usepackage{chapmk}` in the run main.
 8. **Externalize redirection** (§6.4.3), repeated idempotently.
-9. **Bookmark levels.** At `enddocument`, write `\fastinc@bkmlevels{<id>=<level>,...}` to the main aux, read from bookmark's `\BKM@<id>` macros (S6).
+9. **Bookmark levels.** At `enddocument`, write `\chapmk@bkmlevels{<id>=<level>,...}` to the main aux, read from bookmark's `\BKM@<id>` macros (S6).
 10. **Deferred commands:** run the entries of the deferral table (§6.3.3; empty in v1).
 
 #### 6.4.3 Externalize redirection
 
 Install a file hook for `file/tikzlibraryexternal.code.tex/after` (the older name `file/after/<file>` is deprecated) [S3]. After the library loads, `\tikzexternalize[<options>]` keeps its effect (every picture is externalized unless disabled), but its settings are altered (S12):
 
-- the user's options are applied first, then fastinc's: mode *graphics if exists*, no system call (no shell escape), prefix in the build directory, figure names per unit (§6.17);
+- the user's options are applied first, then chapmk's: mode *graphics if exists*, no system call (no shell escape), prefix in the build directory, figure names per unit (§6.17);
 - `\tikzexternalenable`, `\tikzexternaldisable` and `\tikzsetnextfilename` keep working; the user's `\todo` wrapper keeps working;
 - the user's own figure directory (e.g. `fig_tmp/`) is neither read nor written.
 
@@ -263,13 +263,13 @@ Without `\tikzexternalize` in the document nothing is changed: pictures are type
 
 ```
 pdflatex -fmt=<fmt> -interaction=nonstopmode -halt-on-error -file-line-error \
-         -synctex=1 -recorder -output-directory=.fastinc/runs/<r> -jobname=<job> \
-         fastinc-run.tex
+         -synctex=1 -recorder -output-directory=.chapmk/runs/<r> -jobname=<job> \
+         chapmk-run.tex
 ```
 
-The run main has the fixed name `fastinc-run.tex` and is found via `TEXINPUTS` (run directory first). TeX reads the command line with the catcodes of the format, where e.g. the `underscore` package makes `_` active; a path on the command line containing `_` would abort the run (M2).
+The run main has the fixed name `chapmk-run.tex` and is found via `TEXINPUTS` (run directory first). TeX reads the command line with the catcodes of the format, where e.g. the `underscore` package makes `_` active; a path on the command line containing `_` would abort the run (M2).
 
-- The working directory is the **shadow tree** `.fastinc/src/`, so relative `\include`, `\input` and `\graphicspath` resolve as usual, and stale build files in the user's source directory (left over from manual builds) can never be read.
+- The working directory is the **shadow tree** `.chapmk/src/`, so relative `\include`, `\input` and `\graphicspath` resolve as usual, and stale build files in the user's source directory (left over from manual builds) can never be read.
   - **Contents:** a mirror of the source tree made of symlinks to regular files. Excluded:
     - the build directory and `.git/`;
     - the LaTeX outputs of the main job: `<job><suffix>` for known output suffixes (`.aux`, `.toc`, `.log`, `.bbl`, `.synctex.gz`, `.pdf`, …; `shadow.BUILD_OUTPUT_SUFFIXES`), but not other `<job>.*` files, which may be sources (`pgfmanual.cfg`);
@@ -297,13 +297,13 @@ A run with selection *S* compiles the glue plus the units in *S*. A **full run**
 
 ### 6.6 Canonical state and commit
 
-`.fastinc/canon/` holds:
+`.chapmk/canon/` holds:
 
 - the committed aux of each unit;
 - the canonical `main.aux` and derived files;
 - `main.bcf` and `main.bbl`;
 - `main.nlo` and `main.nls`;
-- bookmark records (`\BKM@entry` lines and `\fastinc@bkmlevels`, in the main-aux slices);
+- bookmark records (`\BKM@entry` lines and `\chapmk@bkmlevels`, in the main-aux slices);
 - `state.json`.
 
 Per segment, `state.json` stores:
@@ -317,14 +317,14 @@ Per segment, `state.json` stores:
 **Commit after a run with selection *S*:**
 
 1. Each unit in *S*: take its aux, its pages (page map), its **main-aux slice**, and its per-segment `.nlo` entries (by markers). Its bookmark records are part of its aux.
-   - The main-aux slice is the set of lines written to the main aux while the unit was the current segment, e.g. `\abx@aux@cite` (S5). Slices are delimited by the immediate `\fastinc@entry` records.
+   - The main-aux slice is the set of lines written to the main aux while the unit was the current segment, e.g. `\abx@aux@cite` (S5). Slices are delimited by the immediate `\chapmk@entry` records.
    - The canonical `main.aux` is assembled from the glue slices and the committed unit slices, in document order.
 2. Glue: commit the glue artifacts from the run that §6.9 designates.
 3. Store the observed entry vectors of **all** segments from this run, tagged with the run's input snapshot id.
 4. Unreferenced run directories are garbage-collected after a successful merge (`--keep-runs` disables this).
 
 **Implemented in M3** (`incremental.py`, `state.py`):
-- **Cold build:** one run with all units, format and fastinc.sty, to the fixpoint (`fullbuild.converge`). Its aux, derived and `.bcf`/`.nlo` files become `canon/`. `state.json` records:
+- **Cold build:** one run with all units, format and chapmk.sty, to the fixpoint (`fullbuild.converge`). Its aux, derived and `.bcf`/`.nlo` files become `canon/`. `state.json` records:
   - per segment the run and page indices;
   - per segment the source files attributed by the `F` records, with sha256;
   - global inputs: source files in the `.fls` attributed to no segment, plus the `.bcf` data sources.
@@ -351,8 +351,8 @@ Aux files are parsed as brace-balanced statements, not lines: `\@setckpt` and `\
 |---|---|---|
 | `\newlabel{k}{...}` | unit / main | export `k` (value = whole argument) |
 | `\@writefile{ext}{...}` | unit / main | list contribution. Main-aux ones come from glue; delayed glue writes (e.g. `\appendix`) may be flushed inside a unit slice (S8) and keep the glue run's position. |
-| `\@setckpt{u}{...}`, `\fastinc@ckpt{u}{...}` | unit | exit state |
-| `\fastinc@entry`, `\fastinc@gexit`, `\fastinc@abs`, `\fastinc@base` | main | state records; `\fastinc@entry` also delimits the main-aux slices |
+| `\@setckpt{u}{...}`, `\chapmk@ckpt{u}{...}` | unit | exit state |
+| `\chapmk@entry`, `\chapmk@gexit`, `\chapmk@abs`, `\chapmk@base` | main | state records; `\chapmk@entry` also delimits the main-aux slices |
 | `\abx@aux@cite{n}{key}`, `\abx@aux@segm{n}{n}{key}` | main, unit slice | citation (set and order), one line per key per citation command (S5) |
 | `\abx@aux@backref{i}{key}{…}` | main, unit slice | unit content (citing page; read by the bibliography in the glue) |
 | `\abx@aux@category{c}{key}` and other `\abx@aux@*` in a unit slice | main, unit slice | unit content (written at citation time, M4) |
@@ -363,7 +363,7 @@ Aux files are parsed as brace-balanced statements, not lines: `\@setckpt` and `\
 | `\expandafter\gdef\csname eqp@(this\|next\|minwd\|maxwd)@<tag>\endcsname{…}` (eqparbox) | main, end of document | *self* per tag. Written only for tags typeset in the run, so they are merged per tag from the latest run that wrote the tag. Owners = the segments that use the tag (`Q` records, M6; without records: the units of that run). A tag shared by several units is computed in a partial run from the included owners only (known limitation; `check` detects it). |
 | `\global\csname @altsecnumformattrue\endcsname` (KOMA autodot) | main, end of document | OR-aggregate over the typeset segments; attributed to the run's included units; *global* |
 | `\BKM@entry{...}{...}` (bookmark) | main, unit slice | outline record: merge only (§6.11); a change dirties nothing |
-| `\fastinc@bkmlevels{id=level,...}` | main, end | outline levels (§6.4.2); merge only |
+| `\chapmk@bkmlevels{id=level,...}` | main, end | outline levels (§6.4.2); merge only |
 | `\babel@aux{...}`, `\@nameuse{bbl@beforestart}`, `` \catcode `"\active `` | main, header | structural (language state; A1 lint covers `\selectlanguage`) |
 | `\gdef\@abspage@last{N}` | main, end | rewritten to the merged page count |
 | `\relax`, `\@input{u.aux}`, `\providecommand…` | header / glue | structural |
@@ -431,7 +431,7 @@ Scan unit sources (comments stripped) for occurrences of the commands below. The
 - A hit gives a warning with `file:line`, and the unit is marked *global*.
   - **M4:** state changed by a global unit (e.g. `\parskip`) is not in the checkpoints, so later units and later glue see it only in a run that compiles the global unit. Therefore a global unit is compiled **in every run**, and when it is dirty itself, all later units are compiled in the same run. (The earlier rule "when recompiled, all successors are dirty" would compile them in a later run without the global unit, i.e. without its state.)
 - Config `lint.allow = [...]` lists exceptions; `lint.verbatim` and `lint.shortverb` declare a document's verbatim conventions (M6, pgf manual).
-- **Slow glue (hint):** a glue block that takes ≥ 0.5 s in every run (`T` records) is reported with its line range. The part from its first chapter-level heading or list command that typesets one (`\printbibliography`, `\tableofcontents`, …) can move into an `\include`'d file (output unchanged, compiled only when needed; for list commands with `units.heading`) if it has no lint hits and no group or environment is open across the split or its ends; what precedes it (e.g. `\backmatter`) stays. Otherwise the hint gives the reason.
+- **Slow glue (hint):** a glue block that takes ≥ 0.5 s in every run (`T` records) is reported with its line range, as a hint (report field `hints`), not as a warning: it depends on the machine's speed. The part from its first chapter-level heading or list command that typesets one (`\printbibliography`, `\tableofcontents`, …) can move into an `\include`'d file (output unchanged, compiled only when needed; for list commands with `units.heading`) if it has no lint hits and no group or environment is open across the split or its ends; what precedes it (e.g. `\backmatter`) stays. Otherwise the hint gives the reason.
 - The exemption is a heuristic. The acceptance tests guard it (T18 and a grouped variant).
 
 ### 6.9 Scheduling and fixpoint
@@ -481,7 +481,7 @@ Cheap common case: a typo edit means one run, the unit's exit, exports and contr
   - sources changed;
   - imports: keys found by the text scan (`\label{key}` arguments are definitions, not references) whose value differs from the one at compile start (label: whole `\newlabel` argument; citation: `.bbl` block and position plus keyed biblatex aux data such as `\abx@aux@number`);
   - self data (unit-aux and slice statements of class *self*) differs before/after the compile;
-  - entry state: a unit not compiled in the run whose observed entry vector differs from the one it was compiled with, ignoring the counters that its leading numbered heading (`\chapter`, `\part`, `\section`) resets (`\cl@` closure from the `\fastinc@counters` record; assumes the include reads none of them before the heading). Tail rule: it and **all later units** are compiled in the next run (no prediction until M5);
+  - entry state: a unit not compiled in the run whose observed entry vector differs from the one it was compiled with, ignoring the counters that its leading numbered heading (`\chapter`, `\part`, `\section`) resets (`\cl@` closure from the `\chapmk@counters` record; assumes the include reads none of them before the heading). Tail rule: it and **all later units** are compiled in the next run (no prediction until M5);
   - eqparbox widths changed: the units that use a changed tag (since M6; before: the units of the run); aggregate (KOMA autodot) or unclassified aux data changed: all units;
   - a list file changed for a unit that typesets lists (text scan for `\tableofcontents`, `\listof…`, `\printbibliography`, …, or a derived file in its `F` records). Only the files it typesets count (`\printbibliography` → `.bbl`, `\tableofcontents` → `.toc`, `\@starttoc{x}` → `.x`, …); a list command of unknown file counts all list files.
 - Glue validity: hash of the derived files, the values of keys imported by the main file and glue files, and the glue aux data (list typesetting data, eqparbox, aggregates, backrefs, unclassified, glue self data; keyed data order-insensitive) at the start of the run that produced the committed glue, compared with the current canonical state; glue sources changed → invalid (a glue-only run, no cold build).
@@ -495,9 +495,9 @@ When a unit's exit state changes (e.g. its page count), successors would otherwi
 
 1. **Composition model** for a segment *g* with old entry *E*, old exit *X*, absolute set *A*, and new entry *E'*:
    `X'[r] = X[r]` for `r ∈ A`, otherwise `X[r] + (E'[r] − E[r])`.
-   This holds for units (from `\fastinc@ckpt` / `\@setckpt`) and for glue (from `\fastinc@entry` / `\fastinc@gexit`).
+   This holds for units (from `\chapmk@ckpt` / `\@setckpt`) and for glue (from `\chapmk@entry` / `\chapmk@gexit`).
 2. **Predict:** starting from the first changed exit, propagate predicted entries and exits through all later segments.
-3. **Write predictions:** rewrite the predicted exit checkpoints (`\@setckpt` values and `\fastinc@ckpt`) into the canonical aux of units that are not recompiled in this batch but lie before recompiled ones.
+3. **Write predictions:** rewrite the predicted exit checkpoints (`\@setckpt` values and `\chapmk@ckpt`) into the canonical aux of units that are not recompiled in this batch but lie before recompiled ones.
 4. **Run** all dirty units in parallel.
 5. **Verify** in document order: each recompiled unit's observed entry must equal its predicted entry, and every unit whose predicted exit was used must have an actual exit equal to the prediction. At the first mismatch, every later unit compiled in this batch is dirty again.
 6. **Limit:** two consecutive mispredictions for the same unit → that iteration uses a tail run.
@@ -510,10 +510,10 @@ Known misprediction cases are harmless and only cost an iteration:
 **Implemented in M5** (`predict.py`, `incremental.Fixpoint.groups/batch/_verify`):
 - An iteration is a batch of at most `-j` runs: the selected compilation units are split into contiguous groups balanced by page count; every run compiles its group plus the glue. One run (M4 tail run) if `-j 1`, a global unit exists (it would be in every run), a segment of the zone has no vectors yet, or a unit was mispredicted twice in a row.
 - Vectors per segment (entry, exit, absolute set) are stored from the committing run (`state.vectors`). The prediction starts at the first unit of the batch with its entry observed in the latest run, and composes through all later segments.
-- **Odd start pages:** with `twoside` and `openright` (`\fastinc@layout` record) a unit that starts with a chapter-level heading starts on the next odd page, so its page counter composes as `X + odd(E') − odd(E)` with `odd(e) = e` for odd `e`, else `e + 1`. This removes the parity mispredictions (T10). The flag is recorded per unit at its start (`O` record), so a local `open=any` (e.g. `\begingroup\KOMAoptions{open=any}\include{notation}\endgroup`) counts; units not compiled yet use the document's flags.
-- Predicted exits are written into the checkpoints (`\@setckpt` counters and `\fastinc@ckpt`) of the excluded units in the run directories (not in `canon/`).
+- **Odd start pages:** with `twoside` and `openright` (`\chapmk@layout` record) a unit that starts with a chapter-level heading starts on the next odd page, so its page counter composes as `X + odd(E') − odd(E)` with `odd(e) = e` for odd `e`, else `e + 1`. This removes the parity mispredictions (T10). The flag is recorded per unit at its start (`O` record), so a local `open=any` (e.g. `\begingroup\KOMAoptions{open=any}\include{notation}\endgroup`) counts; units not compiled yet use the document's flags.
+- Predicted exits are written into the checkpoints (`\@setckpt` counters and `\chapmk@ckpt`) of the excluded units in the run directories (not in `canon/`).
 - Runs of a batch are committed in document order; the glue pages come from the last run; biber/makeindex run once per batch.
-- **List files of a batch** (§6.7.1): no run read all new contributions. fastinc.sty writes no-op markers into the list files (`\fastinc@lmark{U<k>}` before and `{/U<k>}` after each unit's contributions, written while the aux files are read at `\end{document}`). The canonical list files are the last run's, with each unit's section spliced in from the run that committed the unit (TeX-written bytes, so exact). Missing markers: the glue is rewritten by a glue-only run.
+- **List files of a batch** (§6.7.1): no run read all new contributions. chapmk.sty writes no-op markers into the list files (`\chapmk@lmark{U<k>}` before and `{/U<k>}` after each unit's contributions, written while the aux files are read at `\end{document}`). The canonical list files are the last run's, with each unit's section spliced in from the run that committed the unit (TeX-written bytes, so exact). Missing markers: the glue is rewritten by a glue-only run.
 - Verification: the actual exit of every unit compiled in a run before the last equals its prediction; at the first mismatch, all units after that run's group are dirty again ("misprediction"), and the glue.
 - Measured on the thesis corpus (4 cores): T2 `-j 1` 8.8 s, `-j 4` 6.8 s (3 iterations each, no misprediction); benchmark `tests/bench/test_t2_speedup.py` (whole build incl. merge), 3 repetitions: `-j 1` 11.0/12.0/11.3 s, `-j 4` 10.2/9.6/10.5 s. Each run has a fixed cost of about 1.4 s (format load, glue) and each build about 4–5 s outside TeX (aux analysis, commit, PDF/SyncTeX merge), so the speedup grows with the size of the units; the driver overhead is an M6 benchmark item.
 
@@ -570,7 +570,7 @@ Input: for each segment in document order, its committed artifact `(run PDF, pag
    - Links using named destinations (`/A <</S/GoTo/D (name)>>` or `/Dest (name)`) stay as they are.
    - Direct page-object destinations are remapped via the `(segment, offset)` map.
    - `/P` entries are set to the merged page.
-4. **Outline:** built from the `\BKM@entry` records of the canonical main aux (segment slices in document order). Decode the hex fields: `dest` → name; the title → PDF string bytes (TeX octal escapes, typically UTF-16BE with BOM). The level of each entry comes from the same run's `\fastinc@bkmlevels`. The tree is rebuilt with bookmark's rule: the parent is the nearest previous entry with a lower level. `open`, `color` and `flags` come from the entry (S6).
+4. **Outline:** built from the `\BKM@entry` records of the canonical main aux (segment slices in document order). Decode the hex fields: `dest` → name; the title → PDF string bytes (TeX octal escapes, typically UTF-16BE with BOM). The level of each entry comes from the same run's `\chapmk@bkmlevels`. The tree is rebuilt with bookmark's rule: the parent is the nearest previous entry with a lower level. `open`, `color` and `flags` come from the entry (S6).
    - Each outline item gets `/Dest (dest)` (named) with `/Parent`, `/First`, `/Last`, `/Next`, `/Prev` and `/Count` (open state and level-gap handling as `bookmark` does it).
    - The catalog `/PageMode` comes from the reference run.
 5. **Page labels:** from the page map's `(value, \thepage text)` per page, infer the style: arabic → `/D`, roman → `/r`, Roman → `/R`, alph → `/a`, Alph → `/A`, otherwise a prefix-only label `/P`. Compress into a `/PageLabels` number tree. Compare against the reference in tests.
@@ -629,14 +629,14 @@ Each trigger prints a one-line reason.
 ### 6.15 CLI and configuration
 
 ```
-fastinc build [MAIN] [-j N] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [-v]
-fastinc watch [MAIN] [same options]        # future: rebuild on change of any recorded input
-fastinc check [MAIN]                       # = build --check: incremental vs --full, criterion §3.3
-fastinc clean [MAIN]
-fastinc graph [MAIN] [--format text|dot|json]   # compilation units and dependencies
+chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [-v]
+chapmk watch [MAIN] [same options]        # future: rebuild on change of any recorded input
+chapmk check [MAIN]                       # = build --check: incremental vs --full, criterion §3.3
+chapmk clean [MAIN]
+chapmk graph [MAIN] [--format text|dot|json]   # compilation units and dependencies
 ```
 
-**`fastinc graph`** shows the build structure from the analysis and the last state:
+**`chapmk graph`** shows the build structure from the analysis and the last state:
 - the compilation units (§6.1) with their includes;
 - glue segments;
 - units marked *global* (lint hits);
@@ -645,14 +645,14 @@ fastinc graph [MAIN] [--format text|dot|json]   # compilation units and dependen
   - imports (label/cite key → exporting unit);
   - list contributions → derived files → reading segments (ToC, LoF, bibliography, nomenclature).
 
-`--format dot` gives a Graphviz graph. The build report (`fastinc build --report json`) uses the same data and adds, per compiled unit, the dirty reason (§6.9.1 a–f).
+`--format dot` gives a Graphviz graph. The build report (`chapmk build --report json`) uses the same data and adds, per compiled unit, the dirty reason (§6.9.1 a–f).
 
-`fastinc.toml` (optional):
+`chapmk.toml` (optional):
 
 ```toml
 main = "thesis.tex"
 jobs = 0                       # 0 = CPU count
-build_dir = ".fastinc"
+build_dir = ".chapmk"
 [format]
 split_before = []              # extra regexes
 [lint]
@@ -679,14 +679,14 @@ All TeX invocations go through a **distribution adapter** (`texdist.py`) with tw
 | Format build and use | `-ini`, `-fmt=` | `--initialize`, `--undump=` (also `&name`) [S11] | Adapter |
 | Output and aux directories | `-output-directory`, `TEXMF_OUTPUT_DIRECTORY` | `--output-directory`, `--aux-directory`; own search order [S11] | Adapter; S2 is repeated for MiKTeX |
 | On-the-fly package install | n/a | may prompt or block parallel runs | Require "install missing packages: never/always" with no prompting; check at startup, otherwise abort with instructions |
-| `SOURCE_DATE_EPOCH` / `FORCE_SOURCE_DATE` | supported | [S11] | If unsupported: no determinism guarantee; `check` uses a pinned date via a `\today` override in `fastinc-ini.sty` |
+| `SOURCE_DATE_EPOCH` / `FORCE_SOURCE_DATE` | supported | [S11] | If unsupported: no determinism guarantee; `check` uses a pinned date via a `\today` override in `chapmk-ini.sty` |
 | mylatexformat, biber, makeindex, synctex | available | packages available [S11] | Startup check |
 
 **OS rules:**
 - **Paths:** use `pathlib` internally; always pass forward slashes to TeX; reject source paths with spaces under `\include` (TeX limitation) with a clear error.
 - **SyncTeX paths:** normalise case and drive letters on Windows when mapping input tags.
 - **Line endings:** generated files keep the source's line endings; read and write in binary mode, so line numbers are preserved.
-- **Output replacement:** `os.replace` onto `main.pdf` fails on Windows while a viewer locks the file (e.g. Adobe Reader). Retry with backoff for 2 s, then write `main.fastinc.pdf` and warn. SumatraPDF does not lock.
+- **Output replacement:** `os.replace` onto `main.pdf` fails on Windows while a viewer locks the file (e.g. Adobe Reader). Retry with backoff for 2 s, then write `main.chapmk.pdf` and warn. SumatraPDF does not lock.
 - **Processes:** use `subprocess` only, no `fork`; the process pool must be spawn-safe.
 - **Watch mode (future):** `watchdog` (cross-platform).
 - **Performance on Windows:** process start-up and antivirus scanning of many small files are slower. Document the recommendation to exclude the build directory from on-access scanning.
@@ -708,15 +708,15 @@ Measured on the user's document (M6): up to 70 % of a unit's TeX time is spent i
   - references: an exported figure stores its code (`.src`) and the values of the label and citation keys the code references (`.deps`, text scan as in §6.8); before each batch, figures with a changed, new or removed referenced key are removed, so the picture is exported again. References hidden in preamble macros are not seen (as with externalize).
   - A typo leaves all keys unchanged; a new label elsewhere leaves pictures that do not reference it cached.
 - **PDF merge:** pdfTeX writes the font descriptor of a font that also occurs in an included PDF with font-file metrics (Ascent = FontBBox top, no XHeight), otherwise with TFM metrics. Runs see only some figures, so the merge normalises the descriptors to the whole-document rule (text extraction, §3.3 item 2, depends on them).
-- Driver parameters: `fastinc-pics.tex` in the run (or full-mode output) directory, read at `\begin{document}`. `[pictures] cache = false`: pictures are typeset inline (externalize effectively off).
+- Driver parameters: `chapmk-pics.tex` in the run (or full-mode output) directory, read at `\begin{document}`. `[pictures] cache = false`: pictures are typeset inline (externalize effectively off).
 
 ## 7. Repository layout
 
-The module map with public APIs is in `src/fastinc/CLAUDE.md` and is kept current there.
+The module map with public APIs is in `src/chapmk/CLAUDE.md` and is kept current there.
 
 ```
-pyproject.toml                 # console script: fastinc
-src/fastinc/
+pyproject.toml                 # console script: chapmk
+src/chapmk/
   CLAUDE.md                    # module map for agents
   cli.py  config.py  errors.py
   texsource.py                 # TeX source scanning
@@ -730,7 +730,7 @@ src/fastinc/
   synctex.py                   # SyncTeX file handling (§6.12; the merge follows in M3)
   check.py                     # §3.3 comparison
   runner.py  state.py  aux.py  deps.py  scheduler.py  tools.py  merge_pdf.py   # M2-M5
-  tex/fastinc-ini.sty  tex/fastinc.sty  tex/CLAUDE.md
+  tex/chapmk-ini.sty  tex/chapmk.sty  tex/CLAUDE.md
 tests/
   unit/  slow/  acceptance/  scenarios/  bench/
   corpus/thesis/               # §8.1 (generated by generate.py)
@@ -766,14 +766,14 @@ docs/spikes/S1.md ... S10.md
 
 **`tests/corpus/pgfmanual/`**: the pgf/TikZ manual (third-party, see its README), about 1300 pages and 123 `\include` sections.
 - `upstream/` is unmodified (pgf tag 3.1.12, which matches TeX Live 2026; FDL 1.2 / LPPL 1.3c).
-- `adapt.py` writes `fastinc-main.tex` in a test copy: includes inlined into the main file (A2), index removed (non-goal), `bookmark` added.
+- `adapt.py` writes `chapmk-main.tex` in a test copy: includes inlined into the main file (A2), index removed (non-goal), `bookmark` added.
 - Stress test and benchmark only (marker `bench`).
 
 **`tests/corpus/minimal/`**: tiny documents isolating each mechanism, used in spikes and unit tests.
 
 ### 8.2 Scenario tests
 
-Each test starts from a built state, applies an edit, runs `fastinc build`, asserts §3.3 against `--full`, and asserts the expected set of compiled units (from the build report, `--report json`).
+Each test starts from a built state, applies an edit, runs `chapmk build`, asserts §3.3 against `--full`, and asserts the expected set of compiled units (from the build report, `--report json`).
 
 | ID | Edit | Expected recompiles |
 |---|---|---|
@@ -798,7 +798,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | T18 | `\setlength` in ch2 body | lint warning; ch2 is global; successors recompiled after ch2 changes |
 | T18b | `\setlength` inside a `table` environment and inside `{...}` in ch2 | no lint hit; ch2 not global; §3.3 holds |
 | T19 | stale `main.aux` and unit aux files in the source directory | ignored (shadow tree); §3.3 holds |
-| T19b | alternate latexmk → fastinc → edit → latexmk → fastinc in one directory, no cleaning | both builds correct (fastinc: §3.3; latexmk: same as a latexmk build in a clean copy); SyncTeX matches the current pdf |
+| T19b | alternate latexmk → chapmk → edit → latexmk → chapmk in one directory, no cleaning | both builds correct (chapmk: §3.3; latexmk: same as a latexmk build in a clean copy); SyncTeX matches the current pdf |
 | T20 | ch3 split into `ch3.tex` (starts with `\chapter`) and `ch3b.tex` (continues with `\section`), edit in `ch3b` | one compilation unit {ch3, ch3b} recompiled; running heads identical to `--full` (§3.3) |
 
 ### 8.3 Unit tests
@@ -815,7 +815,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 
 ### 8.4 Benchmarks
 
-`tests/bench/run.py` reports wall times for T1, T2, T4 and T16 against `latexmk` (same environment, externalize off) with `-j 1` and `-j N`, plus the time per build phase (`--report`). Corpus: the thesis generator scaled up (many and long chapters), since the fixed cost per run (format load, glue) and per build hides the gain on small documents; the private document (`FASTINC_BENCH_DOC`) when available (numbers only). Numbers go into `docs/bench.md`.
+`tests/bench/run.py` reports wall times for T1, T2, T4 and T16 against `latexmk` (same environment, externalize off) with `-j 1` and `-j N`, plus the time per build phase (`--report`). Corpus: the thesis generator scaled up (many and long chapters), since the fixed cost per run (format load, glue) and per build hides the gain on small documents; the private document (`CHAPMK_BENCH_DOC`) when available (numbers only). Numbers go into `docs/bench.md`.
 
 ---
 
@@ -827,7 +827,7 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 |---|---|
 | S1 | *Done.* mylatexformat with the thesis preamble split before `hyperref`: dump OK? Runtime skip semantics with the marker plus blank lines? SyncTeX OK? Can `hyperref` and `biblatex` go into the format? `\makenomenclature` deferral works? |
 | S2 | *Done.* `-output-directory` read order (aux and derived files); shadow tree (§6.5): `\include` subdirectories, `\graphicspath`, symlinked graphics and `.bib`, SyncTeX paths; stale files in a plain source directory (documentation only); `TEXMF_OUTPUT_DIRECTORY`. S2b: write mode of nomencl's `.nlo` writes. |
-| S3 | *Done.* Hook order: `include/before` relative to the initial `\clearpage`; pages from the final `\clearpage` before `include/after`; whether the unit aux is still open (`\@auxout` = `\@partaux`) at `include/after`, else where to write `\fastinc@ckpt`; existence and timing of `include/excluded` relative to the checkpoint restore; file hook for TikZ libraries; graphicx inclusion hook point. |
+| S3 | *Done.* Hook order: `include/before` relative to the initial `\clearpage`; pages from the final `\clearpage` before `include/after`; whether the unit aux is still open (`\@auxout` = `\@partaux`) at `include/after`, else where to write `\chapmk@ckpt`; existence and timing of `include/excluded` relative to the checkpoint restore; file hook for TikZ libraries; graphicx inclusion hook point. |
 | S4 | *Done.* Enumerating allocated `\count` registers (kernel allocation pointers, extended registers); confirm `LT@tables` and `\Hy@linkcounter` are covered; cost of writing vectors; initial scratch-register deny list (registers whose segment-entry values differ between a partial and a full run on the corpus). |
 | S5 | biblatex `.bcf` contents after an `\includeonly` run; `.bcf` patch feasibility. *Done: patch needed and feasible (decision: patch).* |
 | S6 | *Done.* hyperref: `/Dests` name tree, dummy-destination log format, duplicate-destination warning and which definition wins, anchor naming (`section*.N` via `\Hy@linkcounter`), `\HyPL@Entry` semantics. `bookmark`: complete `\BKM@entry` grammar (level, open state, colour and style keys, `srcline`), how the outline is built from it, level-gap handling, and which keys depend on segment state (`id` from `\c@bookmark@seq@number`). |
@@ -844,13 +844,14 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 | Milestone | Content | Done when |
 |---|---|---|
 | **M1** | *Done.* CLI, config, analysis, generated sources, format build, `--full` reference mode, deterministic environment | `--full` matches plain latexmk (§3.3) on the corpus |
-| **M2** | *Done.* `fastinc-ini.sty` and `fastinc.sty` (all §6.4 records), run directory preparation, runner (process pool) | records present and parseable; unit tests green |
-| **M3** | *Done.* Single-unit incremental path: commit, aux slices (no Python linker, §6.7.1), PDF and SyncTeX merge, logs, `fastinc check` / `build --check` (§3.3 comparison), `--report` | T1, T14, T15, T17 green; `check` passes on the corpus |
-| **M4** | *Done.* Full mode also runs makeindex for a generic `<job>.idx` (the reference and fallback must equal latexmk; found on the pgf manual, whose imakeidx call fails with `-output-directory`), dependency model, compilation units, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks, `fastinc graph` and dirty reasons in the report | T2–T13, T16, T18, T19, T20 green (T2 via tail run) |
+| **M2** | *Done.* `chapmk-ini.sty` and `chapmk.sty` (all §6.4 records), run directory preparation, runner (process pool) | records present and parseable; unit tests green |
+| **M3** | *Done.* Single-unit incremental path: commit, aux slices (no Python linker, §6.7.1), PDF and SyncTeX merge, logs, `chapmk check` / `build --check` (§3.3 comparison), `--report` | T1, T14, T15, T17 green; `check` passes on the corpus |
+| **M4** | *Done.* Full mode also runs makeindex for a generic `<job>.idx` (the reference and fallback must equal latexmk; found on the pgf manual, whose imakeidx call fails with `-output-directory`), dependency model, compilation units, basic fixpoint with tail runs, biber with `.bcf` patch, makeindex, cold build, lint, fallbacks, `chapmk graph` and dirty reasons in the report | T2–T13, T16, T18, T19, T20 green (T2 via tail run) |
 | **M5** | *Done.* Prediction (§6.9.3) and parallel successor recompilation | T2 and T10 green with parallel runs; benchmark shows a speedup over M4 for T2 |
 | **M6** | *Done* (`docs/bench.md`). Benchmarks on large documents (§8.4), time breakdown per phase and resulting optimisations, README (short: usage, assumptions A1–A5, limitations) | §8.4 numbers and breakdown recorded |
-| **M7** | *Done.* Picture cache (§6.17). First spike S12: evaluate TikZ's `external` library under fastinc (per-unit names, figures built via the format in the pool without shell escape, §3.3 equality with inline pictures, cache validity, glue pictures, `remember picture`); **decision point** with the results; then the implementation (active for documents with `\tikzexternalize`, results identical to an externalized build; opt-out in `fastinc.toml`) | S12 note written; typo scenario in a picture-heavy unit reuses its pictures; all scenario and acceptance tests green with the cache |
-| **M8** | Engineering review (intermission): reusable functionality and duplication, software design and layering, modularity, dependencies, test coverage and test design; findings fixed or recorded in `docs/review.md`. Known items: config `aux.self`/`aux.ignore` are parsed but not used by the classification; the `.sty` change → cold-build rule makes benchmarks sensitive to package edits | review note written; module maps match the code; all tests green |
+| **M7** | *Done.* Picture cache (§6.17). First spike S12: evaluate TikZ's `external` library under chapmk (per-unit names, figures built via the format in the pool without shell escape, §3.3 equality with inline pictures, cache validity, glue pictures, `remember picture`); **decision point** with the results; then the implementation (active for documents with `\tikzexternalize`, results identical to an externalized build; opt-out in `chapmk.toml`) | S12 note written; typo scenario in a picture-heavy unit reuses its pictures; all scenario and acceptance tests green with the cache |
+| **M8** | *Done* (`docs/review/M8.md`). Engineering review (intermission): reusable functionality and duplication, software design and layering, modularity, dependencies, test coverage and test design; findings fixed or recorded in `docs/review/M8.md`. Known items: config `aux.self`/`aux.ignore` are parsed but not used by the classification; the `.sty` change → cold-build rule makes benchmarks sensitive to package edits | review note written; module maps match the code; all tests green |
+| **R0.9** | First test release 0.9: the "must" items of `docs/review/M8.md` §6. In order: (0) renaming to `latex-chapmk` / `chapmk` (R13), then the build directory per job (C17); (1) stale-output paths C1–C5 with scenarios; (2) robustness C6–C9 with the enabling refactors D1–D4; (3) remove `aux.self`/`aux.ignore` (E3); (4) coverage in CI (T3) and the scenarios T1; (5) release items R1–R5, R9–R12 (packaging, CHANGELOG, README, help, config doc, REUSE, issue template, CONTRIBUTING, history scan, pinned CI image). The cleanup of this plan into a current design document (R7) follows after 0.9 | all "must" items done; `ruff`, `mypy --strict` and the full suite green; wheel smoke test passes; `0.9.0` tagged |
 | **M9** | Spike S11 (MiKTeX), MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
 | Future | `watch` (F8) | rebuild on change of a recorded input |
 
@@ -901,25 +902,25 @@ Each test starts from a built state, applies an edit, runs `fastinc build`, asse
 - `loalg` list;
 - `twoside` with `scrbook`'s default `openright` (parity).
 
-## Appendix B — Record formats (written by `fastinc.sty`)
+## Appendix B — Record formats (written by `chapmk.sty`)
 
 | Record | File | Format |
 |---|---|---|
-| baseline | main aux | `\fastinc@base{n=v,n=v,...}` (state vector, §6.4.2) |
-| entry | main aux | `\fastinc@entry{<seg>}{n=v,...}` (sparse vs baseline) |
-| glue exit | main aux | `\fastinc@gexit{<seg>}{n=v,...}` (sparse vs baseline) |
-| absolute set | unit aux / main aux | `\fastinc@abs{<seg>}{n,n,...}` |
-| unit checkpoint | unit aux | `\fastinc@ckpt{U<k>}{n=v,...}` (complete state vector at unit exit, absolute values) |
-| unit name | main aux | `\fastinc@unit{U<k>}{<path>}` (empty for an excluded unit without checkpoint) |
-| bookmark levels | main aux | `\fastinc@bkmlevels{<id>=<level>,...}` |
-| counters (M4) | main aux, header | `\fastinc@counters{<name>=<register>:<child>/<child>/;...}`: register and `\cl@<name>` reset list of each checkpointed counter |
-| layout (M5) | main aux, header | `\fastinc@layout{twoside=0|1,openright=0|1}` |
+| baseline | main aux | `\chapmk@base{n=v,n=v,...}` (state vector, §6.4.2) |
+| entry | main aux | `\chapmk@entry{<seg>}{n=v,...}` (sparse vs baseline) |
+| glue exit | main aux | `\chapmk@gexit{<seg>}{n=v,...}` (sparse vs baseline) |
+| absolute set | unit aux / main aux | `\chapmk@abs{<seg>}{n,n,...}` |
+| unit checkpoint | unit aux | `\chapmk@ckpt{U<k>}{n=v,...}` (complete state vector at unit exit, absolute values) |
+| unit name | main aux | `\chapmk@unit{U<k>}{<path>}` (empty for an excluded unit without checkpoint) |
+| bookmark levels | main aux | `\chapmk@bkmlevels{<id>=<level>,...}` |
+| counters (M4) | main aux, header | `\chapmk@counters{<name>=<register>:<child>/<child>/;...}`: register and `\cl@<name>` reset list of each checkpointed counter |
+| layout (M5) | main aux, header | `\chapmk@layout{twoside=0|1,openright=0|1}` |
 | unit start layout | `.frec` | `O <seg> 0\|1` (twoside and openright at the unit start) |
-| unit start (M5) | unit aux, first statement | `\fastinc@ustart{U<k>}`: at `\end{document}` writes `\fastinc@lmark{U<k>}` into the open list files; `\fastinc@entry{<seg>}` writes `\fastinc@lmark{/<seg>}` |
+| unit start (M5) | unit aux, first statement | `\chapmk@ustart{U<k>}`: at `\end{document}` writes `\chapmk@lmark{U<k>}` into the open list files; `\chapmk@entry{<seg>}` writes `\chapmk@lmark{/<seg>}` |
 | page map | `<job>.frec` | `P <shipout#> <seg> <\c@page> <\thepage text>` per line |
 | elapsed time (M6) | `<job>.frec` | `T <point> <\pdfelapsedtime>`: points `load`, `begin`, each segment id, `end`, `picture+`/`picture-` around every `\pgfpicture` |
 | eqparbox use (M6) | `<job>.frec` | `Q <seg> <tag>` for every eqparbox width computation |
 | file attribution | `<job>.frec` | `F <seg> <path>` per line |
-| stream marker | `.nlo` | `%fastinc-seg <seg>` per line |
+| stream marker | `.nlo` | `%chapmk-seg <seg>` per line |
 
-Segment ids: `G0..Gn` for glue, `U1..Un` for units (k-th `\include` of the body). The driver checks the `\fastinc@unit` records against the include order of the analysis.
+Segment ids: `G0..Gn` for glue, `U1..Un` for units (k-th `\include` of the body). The driver checks the `\chapmk@unit` records against the include order of the analysis.

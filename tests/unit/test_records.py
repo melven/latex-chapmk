@@ -2,11 +2,11 @@ from pathlib import Path
 
 import pytest
 
-from fastinc.analysis import analyse
-from fastinc.config import Config
-from fastinc.layout import make_layout
-from fastinc.records import RecordError, parse_indices, parse_vector, read_run_records
-from fastinc.runner import RUN_MAIN, RunSpec, prepare_run_dir
+from chapmk.analysis import analyse
+from chapmk.config import Config
+from chapmk.layout import make_layout
+from chapmk.records import RecordError, parse_indices, parse_vector, read_run_records
+from chapmk.runner import RUN_MAIN, RunSpec, prepare_run_dir
 
 
 def project(tmp_path: Path) -> Config:
@@ -21,24 +21,24 @@ def project(tmp_path: Path) -> Config:
 
 
 MAIN_AUX = r"""\relax
-\fastinc@base{0=1,276=5,}
-\fastinc@entry{G0}{}
-\fastinc@gexit{G0}{0=3,}
-\fastinc@abs{G0}{0,}
-\fastinc@unit{U1}{ch/a.tex}
-\fastinc@entry{U1}{0=3,}
+\chapmk@base{0=1,276=5,}
+\chapmk@entry{G0}{}
+\chapmk@gexit{G0}{0=3,}
+\chapmk@abs{G0}{0,}
+\chapmk@unit{U1}{ch/a.tex}
+\chapmk@entry{U1}{0=3,}
 \@input{ch/a.aux}
-\fastinc@entry{G1}{0=7,276=6,}
-\fastinc@gexit{G1}{0=7,276=6,}
-\fastinc@abs{G1}{}
-\fastinc@unit{U2}{}
-\fastinc@entry{G2}{0=7,276=6,}
-\fastinc@gexit{G2}{0=8,276=6,}
-\fastinc@bkmlevels{1=0,2=1,}
+\chapmk@entry{G1}{0=7,276=6,}
+\chapmk@gexit{G1}{0=7,276=6,}
+\chapmk@abs{G1}{}
+\chapmk@unit{U2}{}
+\chapmk@entry{G2}{0=7,276=6,}
+\chapmk@gexit{G2}{0=8,276=6,}
+\chapmk@bkmlevels{1=0,2=1,}
 """
-UNIT_AUX = "\\relax\n\\fastinc@ckpt{U1}{0=7,276=6,280=-2,}\n\\fastinc@abs{U1}{12,-1,}\n"
+UNIT_AUX = "\\relax\n\\chapmk@ckpt{U1}{0=7,276=6,280=-2,}\n\\chapmk@abs{U1}{12,-1,}\n"
 FREC = "F G0 /usr/x/book.cls\nP 0 G0 1 i\nP 1 U1 1 1\nP 2 U1 2 2\nF U1 ch/a.tex\nF U1 plot1.pdf\n"
-NLO = "%fastinc-seg G0\n%fastinc-seg U1\n\\nomenclatureentry{A$x$}{1}\n%fastinc-seg G1\n"
+NLO = "%chapmk-seg G0\n%chapmk-seg U1\n\\nomenclatureentry{A$x$}{1}\n%chapmk-seg G1\n"
 
 
 def write_run(d: Path) -> None:
@@ -87,7 +87,7 @@ def test_read_run_records(tmp_path: Path) -> None:
             "expected",
         ),
         (
-            lambda d: (d / "doc.aux").write_text(MAIN_AUX.replace("\\fastinc@unit{U2}{}\n", "")),
+            lambda d: (d / "doc.aux").write_text(MAIN_AUX.replace("\\chapmk@unit{U2}{}\n", "")),
             "include 2",
         ),
         (lambda d: (d / "doc.nlo").write_text("\\nomenclatureentry{x}{1}\n"), "before the first"),

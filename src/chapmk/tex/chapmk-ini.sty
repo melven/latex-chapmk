@@ -1,0 +1,115 @@
+%% chapmk-ini.sty -- loaded before \documentclass in format builds and in full-mode and
+%% reference builds (PLAN §6.4.1). Records and hooks only, no logic.
+%% The version must equal the driver version (chapmk.__version__).
+\NeedsTeXFormat{LaTeX2e}[2023/06/01]
+\ProvidesPackage{chapmk-ini}[2026/10/31 v0.1.0 chapmk: format and reference-build hooks]
+
+% Kernel register boundary (S4): \count registers with a higher index are allocated by the
+% class, packages or the document; only those belong to the state vector.
+\xdef\chapmk@kernelcount{\the\count10}
+
+% Externalize redirection (§6.4.3, §6.17, S12). The user's \tikzexternalize keeps its
+% effect (every picture is externalized unless disabled); only how a picture becomes a figure
+% changes: no system call, no shell escape. A figure is looked up by its key (md5 of the
+% picture code and the state it is typeset in) in \chapmk@picdir. A missing figure is
+% typeset inline, with the \count registers restored afterwards as if the picture had been
+% skipped (externalize semantics), and a copy of its box is shipped as an extra page
+% (primitive \shipout, no LaTeX hooks). Records in the log (one line each):
+%   chapmk-picture: x <key> <0-based PDF page> <depth> <segment>   exported
+%   chapmk-picture: u <key> <segment>                              figure used
+%   chapmk-picture: s <key> <picture code>                         code of an exported one
+% Driver parameters (chapmk-pics.tex, read at \begin{document}): \chapmk@picdir (relative
+% to the working directory, with a trailing slash; empty: no cache, pictures inline),
+% \chapmk@picstamp, \chapmk@picrefs@<segment>.
+\def\chapmk@picdir{}
+\def\chapmk@picstamp{}
+\def\chapmk@pics{0}% extra pages shipped so far (chapmk.sty adds it to page indices)
+\def\chapmk@picseg{-}% segment of the records (chapmk.sty: the current segment)
+\def\chapmk@picdepth{0}% \pgfpicture nesting
+\def\chapmk@pictarget{0}
+\def\chapmk@picexport{}% key of the picture being typeset for export
+\def\chapmk@picstate@setup{}
+% state part of the key: all \count registers (chapmk.sty: the state vector, without the
+% run-local registers)
+\def\chapmk@allcounts#1{\ifnum#1>\count10 \else#1=\the\count#1,%
+  \expandafter\chapmk@allcounts\expandafter{\the\numexpr#1+1\expandafter}\fi}
+\def\chapmk@picstate{\chapmk@allcounts{0}}
+\def\chapmk@picrec#1{\immediate\write-1{chapmk-picture: #1}}
+\newbox\chapmk@picbox
+\ExplSyntaxOn \cs_new_eq:NN \chapmk@shipout \tex_shipout:D \ExplSyntaxOff
+% registers before an inline picture; restored after it (not the allocation registers 10-19)
+\def\chapmk@snap{\xdef\chapmk@snapped{\chapmk@allcounts{0}}}
+\def\chapmk@unsnap{\expandafter\chapmk@unsnap@\chapmk@snapped-1=0,}
+\def\chapmk@unsnap@#1=#2,{\ifnum#1<0 \else
+  \ifnum#1>9 \ifnum#1<20 \else\ifnum\count#1=#2 \else\global\count#1=#2\relax\fi\fi
+  \else\ifnum\count#1=#2 \else\global\count#1=#2\relax\fi\fi
+  \expandafter\chapmk@unsnap@\fi}
+\def\chapmk@picrefs{\ifcsname chapmk@picrefs@\chapmk@picseg\endcsname
+  \csname chapmk@picrefs@\chapmk@picseg\endcsname\fi}
+% the counter state enters the key only if the code shows counters (\the..., \arabic, ...;
+% not \theta): otherwise shifted page numbers would invalidate every later figure
+\edef\chapmk@countersre{\detokenize{\\}(the([^t]|t[^a]|ta[^ ])|arabic|roman|Roman|alph|Alph|%
+  fnsymbol|value|number|romannumeral|c@)}
+% replaces TikZ external's system-call handler; #1: the picture body
+\long\def\chapmk@picture#1{%
+  \chapmk@picstate@setup
+  \edef\chapmk@pickey{\pdfmdfivesum{\detokenize{#1}|\chapmk@picstamp|\chapmk@picrefs|%
+    \ifnum\pdfmatch{\chapmk@countersre}{\detokenize{#1}}=1 \chapmk@picstate\fi|\the\linewidth|\the\hsize|\fontname\font|\f@size|\the\baselineskip|%
+    \ifdefined\current@color\current@color\fi}}%
+  \ifx\chapmk@picdir\@empty\expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi
+  {\tikzexternaldisable\tikzpicture#1\end{tikzpicture}}% no cache: plain inline picture
+  {\IfFileExists{\chapmk@picdir\chapmk@pickey.pdf}{%
+     \chapmk@picrec{u \chapmk@pickey\space\chapmk@picseg}%
+     \expandafter\pgfincludeexternalgraphics\expandafter{\chapmk@picdir\chapmk@pickey}%
+     \tikzexternal@closeenvironments}{\chapmk@inline{#1}}}}
+\long\def\chapmk@inline#1{%
+  \chapmk@picrec{s \chapmk@pickey\space\detokenize{#1}}%
+  \chapmk@snap
+  \xdef\chapmk@picexport{\chapmk@pickey}%
+  \xdef\chapmk@pictarget{\the\numexpr\chapmk@picdepth+1}%
+  \tikzexternaldisable
+  \tikzpicture#1\end{tikzpicture}%
+  \global\let\chapmk@picexport\@empty
+  \chapmk@unsnap}
+% the final box of the exported picture: shipped as an extra page, then typeset
+\def\chapmk@typesetpicturebox#1{%
+  \ifx\chapmk@picexport\@empty\chapmk@orig@typesetpicturebox#1\else
+  \ifnum\chapmk@picdepth=\chapmk@pictarget\relax
+    \setbox\chapmk@picbox\hbox{\chapmk@orig@typesetpicturebox#1}%
+    \chapmk@picship
+    \unhbox\chapmk@picbox\spacefactor\@m
+  \else\chapmk@orig@typesetpicturebox#1\fi\fi}
+\def\chapmk@picship{%
+  \ifdim\wd\chapmk@picbox>\z@ \ifdim\dimexpr\ht\chapmk@picbox+\dp\chapmk@picbox>\z@
+    \begingroup
+      \pdfpagewidth=\wd\chapmk@picbox
+      \pdfpageheight=\dimexpr\ht\chapmk@picbox+\dp\chapmk@picbox\relax
+      \pdfhorigin=\z@ \pdfvorigin=\z@
+      \setbox\z@\vbox{\hbox{\copy\chapmk@picbox}}%
+      \chapmk@shipout\box\z@
+    \endgroup
+    \chapmk@picrec{x \chapmk@picexport\space
+      \the\numexpr\ReadonlyShipoutCounter+\chapmk@pics\relax\space
+      \the\dp\chapmk@picbox\space\chapmk@picseg}%
+    \xdef\chapmk@pics{\the\numexpr\chapmk@pics+1}%
+  \fi\fi
+  \global\let\chapmk@picexport\@empty}
+\def\chapmk@redirect@externalize{%
+  \let\chapmk@orig@externalize\tikzexternalize
+  \def\tikzexternalize{\@ifnextchar[\chapmk@externalize{\chapmk@externalize[]}}%
+  \let\tikzexternal@externalizefig@systemcall@@\chapmk@picture
+  \let\chapmk@orig@typesetpicturebox\pgfsys@typesetpicturebox
+  \let\pgfsys@typesetpicturebox\chapmk@typesetpicturebox
+  \AddToHook{cmd/pgfpicture/before}{\xdef\chapmk@picdepth{\the\numexpr\chapmk@picdepth+1}}%
+  \AddToHook{cmd/endpgfpicture/after}{\xdef\chapmk@picdepth{\the\numexpr\chapmk@picdepth-1}}}
+% \tikzexternalize[<options>]{<real job>}: the real job is always \jobname
+\def\chapmk@externalize[#1]{\@ifnextchar\bgroup
+  {\chapmk@externalize@{#1}\@gobble}{\chapmk@externalize@{#1}}}
+\def\chapmk@externalize@#1{\chapmk@orig@externalize[#1,mode=convert with system call]}
+\AddToHook{file/tikzlibraryexternal.code.tex/after}{\chapmk@redirect@externalize}
+\AddToHook{begindocument/before}{\InputIfFileExists{chapmk-pics.tex}{}{}}
+
+% Deferral table (§6.3.3): empty in v1, because mylatexformat replays \openout calls (S1).
+\def\chapmk@deferred{}
+
+\endinput

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from fastinc.cli import main
+from chapmk.cli import main
 
 pytestmark = [pytest.mark.bench, pytest.mark.slow]
 PARA = "\n\n".join(["Additional text to make the chapter longer. " * 40] * 6)

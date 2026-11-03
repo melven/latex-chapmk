@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from fastinc.config import ConfigError, parse_config_file
-from fastinc.pictures import (
+from chapmk.config import ConfigError, parse_config_file
+from chapmk.pictures import (
     PictureRecord,
     collect_garbage,
     driver_file,
@@ -22,13 +22,13 @@ KEY_B = "40DEAF2B0E91DA6C2B120A60FC4ECAE6"
 def test_read_pictures(tmp_path: Path) -> None:
     log = tmp_path / "main.log"
     long = "\\draw " + "(0,0) -- " * 2000  # longer than max_print_line: broken by TeX
-    first = f"fastinc-picture: s {KEY_A} " + long
+    first = f"chapmk-picture: s {KEY_A} " + long
     log.write_text(
         "(./chapter.tex\n" + first[:10000] + "\n" + first[10000:] + "\n"
-        f"fastinc-picture: x {KEY_A} 7 6.63135pt U2\n"
+        f"chapmk-picture: x {KEY_A} 7 6.63135pt U2\n"
         "Overfull \\hbox\n"
-        f"fastinc-picture: u {KEY_B} G1\n"
-        "fastinc-picture: x tooshort 1 0.0pt U1\n"
+        f"chapmk-picture: u {KEY_B} G1\n"
+        "chapmk-picture: x tooshort 1 0.0pt U1\n"
     )
     assert read_pictures(log) == [
         PictureRecord(KEY_A, "U2", True, 7, "6.63135pt", long),
@@ -41,14 +41,14 @@ def test_driver_file(tmp_path: Path) -> None:
     shadow = tmp_path / "b" / "src"
     text = driver_file(tmp_path / "b" / "fig", shadow, "S", {"U1": "d1", "G0": "g"})
     assert text == (
-        "\\expandafter\\def\\csname fastinc@picdir\\endcsname{../fig/}%\n"
-        "\\expandafter\\def\\csname fastinc@picstamp\\endcsname{S}%\n"
-        "\\expandafter\\def\\csname fastinc@picrefs@G0\\endcsname{g}%\n"
-        "\\expandafter\\def\\csname fastinc@picrefs@U1\\endcsname{d1}%\n"
+        "\\expandafter\\def\\csname chapmk@picdir\\endcsname{../fig/}%\n"
+        "\\expandafter\\def\\csname chapmk@picstamp\\endcsname{S}%\n"
+        "\\expandafter\\def\\csname chapmk@picrefs@G0\\endcsname{g}%\n"
+        "\\expandafter\\def\\csname chapmk@picrefs@U1\\endcsname{d1}%\n"
     )
     # no cache: empty directory, pictures are typeset inline
     assert driver_file(None, shadow, "S", {}).startswith(
-        "\\expandafter\\def\\csname fastinc@picdir\\endcsname{}%"
+        "\\expandafter\\def\\csname chapmk@picdir\\endcsname{}%"
     )
 
 
@@ -78,7 +78,7 @@ def test_stale_figures(tmp_path: Path) -> None:
 
 
 def test_config_picture_cache(tmp_path: Path) -> None:
-    cfg = tmp_path / "fastinc.toml"
+    cfg = tmp_path / "chapmk.toml"
     cfg.write_text("[pictures]\ncache = false\n")
     assert parse_config_file(cfg).picture_cache is False
     cfg.write_text("[pictures]\ncache = 1\n")

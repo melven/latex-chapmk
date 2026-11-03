@@ -1,5 +1,5 @@
-"""Benchmarks (PLAN §8.4): wall times of T16 (cold), T1, T2, T4 for latexmk, ``fastinc -j 1``
-and ``fastinc -j N`` on a generated large thesis, plus the time per build phase.
+"""Benchmarks (PLAN §8.4): wall times of T16 (cold), T1, T2, T4 for latexmk, ``chapmk -j 1``
+and ``chapmk -j N`` on a generated large thesis, plus the time per build phase.
 
 Run inside the dev container (no xdist, idle cores), e.g.::
 
@@ -25,9 +25,9 @@ sys.path[:0] = [str(HERE.parent.parent / "src"), str(HERE.parent)]
 
 from conftest import prepare_figures  # noqa: E402
 
-from fastinc.cli import main  # noqa: E402
-from fastinc.proc import run  # noqa: E402
-from fastinc.texdist import TeXLive  # noqa: E402
+from chapmk.cli import main  # noqa: E402
+from chapmk.proc import run  # noqa: E402
+from chapmk.texdist import TeXLive  # noqa: E402
 
 EPOCH = 1700000000
 PARA = "\n\n".join(["Additional text to make the chapter longer. " * 40] * 6)
@@ -65,13 +65,13 @@ def _restore(cache: Path, live: Path) -> None:
     shutil.copytree(cache, live, symlinks=True)
 
 
-def fastinc(src: Path, *args: str) -> tuple[float, dict[str, Any]]:
+def chapmk(src: Path, *args: str) -> tuple[float, dict[str, Any]]:
     report = src.parent / "report.json"
     report.unlink(missing_ok=True)
     start = time.monotonic()
     rc = main(["build", "main.tex", "--report", str(report), *args], cwd=src)
     seconds = time.monotonic() - start
-    assert rc == 0, f"fastinc {args} failed"
+    assert rc == 0, f"chapmk {args} failed"
     return seconds, json.loads(report.read_text())
 
 
@@ -88,7 +88,7 @@ def latexmk(src: Path) -> float:
         f"-outdir={src.parent / 'lmk-out'}",
         "-r",
         str(rc),
-        "-usepretex=\\RequirePackage{fastinc-ini}",
+        "-usepretex=\\RequirePackage{chapmk-ini}",
         "-jobname=main",  # -usepretex makes the job name texput otherwise
         "main.tex",
     ]
@@ -153,11 +153,11 @@ def bench(out: Path, chapters: int, scale: int, jobs: int) -> dict[str, Any]:
     shutil.copytree(lmk.parent, lmk_cache, symlinks=True)
     row: dict[str, Any] = {"latexmk": round(t_lmk, 1)}
     _restore(pristine, live)
-    t, _ = fastinc(live, "--full")
+    t, _ = chapmk(live, "--full")
     row["--full"] = round(t, 1)
     for j in (1, jobs):  # the -jN cold state is the start of the edit scenarios
         _restore(pristine, live)
-        t, rep = fastinc(live, "-j", str(j))
+        t, rep = chapmk(live, "-j", str(j))
         row[f"-j{j}"] = round(t, 1)
         row[f"-j{j} breakdown"] = breakdown(rep)
     import pikepdf
@@ -180,7 +180,7 @@ def bench(out: Path, chapters: int, scale: int, jobs: int) -> dict[str, Any]:
         for j in (1, jobs):
             _restore(cache, live.parent)
             apply(live)
-            t, rep = fastinc(live, "-j", str(j))
+            t, rep = chapmk(live, "-j", str(j))
             row[f"-j{j}"] = round(t, 1)
             row[f"-j{j} breakdown"] = breakdown(rep)
             row[f"-j{j} compiled"] = len(rep["compiled"])
@@ -195,7 +195,7 @@ def markdown(res: dict[str, Any]) -> str:
         f"Thesis generator: {res['chapters']} chapters, scale {res['scale']} "
         f"({res['pages']} pages); -j {j}. T16: --full {res['rows']['T16 cold']['--full']} s.",
         "",
-        f"| scenario | latexmk | fastinc -j 1 | fastinc -j {j} |",
+        f"| scenario | latexmk | chapmk -j 1 | chapmk -j {j} |",
         "|---|---|---|---|",
     ]
     for name, row in res["rows"].items():

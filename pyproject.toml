@@ -3,7 +3,7 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "fastinc"
+name = "latex-chapmk"
 version = "0.1.0"
 description = "Incremental, parallel pdfLaTeX builds for documents split with \\include"
 readme = "README.md"
@@ -19,13 +19,13 @@ dependencies = [
 dev = ["pytest>=8", "pytest-xdist>=3", "ruff>=0.6", "mypy>=1.11"]
 
 [project.scripts]
-fastinc = "fastinc.cli:main"
+chapmk = "chapmk.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-fastinc = ["tex/*.sty", "py.typed"]
+chapmk = ["tex/*.sty", "py.typed"]
 
 [tool.ruff]
 line-length = 100

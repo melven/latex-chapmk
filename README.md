@@ -1,23 +1,25 @@
-# fastinc
+# latex-chapmk
+
+`chapmk` (formerly `fastinc`): latexmk for books: rebuilds only the changed chapters, in parallel.
 
 Drop-in replacement for `latexmk -pdf -synctex=1` that rebuilds faster after small edits:
 the preamble is precompiled into a format, only the `\include` units affected by an edit are
 recompiled (in parallel), and the per-run PDFs and SyncTeX files are merged into one
 `main.pdf` / `main.synctex.gz`. The output looks the same as a plain full build (checked by
-`fastinc check`). Specification: `PLAN.md`.
+`chapmk check`). Specification: `PLAN.md`.
 
 ```
-fastinc build [MAIN] [-j N] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [-v]
-fastinc check [MAIN]                            # build + plain full build, compare
-fastinc graph [MAIN] [--format text|dot|json]   # compilation units and dependencies
-fastinc clean [MAIN]
+chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [-v]
+chapmk check [MAIN]                            # build + plain full build, compare
+chapmk graph [MAIN] [--format text|dot|json]   # compilation units and dependencies
+chapmk clean [MAIN]
 ```
 
-- Generated files go to `.fastinc/`; only `<main>.pdf`, `.synctex.gz` and `.log` are
+- Generated files go to `.chapmk/<jobname>/`; only `<main>.pdf`, `.synctex.gz` and `.log` are
   written next to `MAIN`. Plain latexmk builds in the same directory do not interfere.
 - `-j N`: parallel pdflatex runs (default: CPU count). `--report`: JSON with the runs, the
   reason each unit was recompiled and the time per phase.
-- Optional `fastinc.toml` next to the main file (`PLAN.md` §6.15).
+- Optional `chapmk.toml` next to the main file (`PLAN.md` §6.15).
 - Requirements: Python ≥ 3.10, TeX Live (pdflatex, biber, makeindex), pikepdf.
 
 **Document assumptions** (checked where possible):
@@ -34,12 +36,12 @@ fastinc clean [MAIN]
 package. Documents using `glossaries`, `imakeidx`/`makeidx`, `minted` or `cleveref` are built
 in full mode (like latexmk), with the reason printed.
 
-**Slow glue:** fastinc reports parts of the main file outside `\include`s that cost time in every
+**Slow glue:** chapmk reports parts of the main file outside `\include`s that cost time in every
 run (e.g. a long bibliography) and whether they can move into an `\include`'d file.
 
-**TikZ externalize:** if the document calls `\tikzexternalize`, fastinc keeps it but makes the
+**TikZ externalize:** if the document calls `\tikzexternalize`, chapmk keeps it but makes the
 figures itself (no shell escape, figures in the build directory; the prefix and system call
 are ignored). Unchanged pictures are reused; the result equals a latexmk build with
-externalize. `[pictures] cache = false` in `fastinc.toml` typesets all pictures inline instead.
+externalize. `[pictures] cache = false` in `chapmk.toml` typesets all pictures inline instead.
 
 License: BSD-3-Clause.

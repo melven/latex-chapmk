@@ -1,4 +1,4 @@
-.fastinc/
+.chapmk/
 __pycache__/
 *.egg-info/
 .venv/

@@ -5,15 +5,15 @@ from pathlib import Path
 
 import pytest
 
-from fastinc.analysis import analyse
-from fastinc.config import Config
-from fastinc.errors import TexError
-from fastinc.fmt import ensure_format
-from fastinc.gensrc import run_main, write_if_changed
-from fastinc.layout import make_layout
-from fastinc.proc import run
-from fastinc.shadow import sync_project_shadow
-from fastinc.texdist import detect
+from chapmk.analysis import analyse
+from chapmk.config import Config
+from chapmk.errors import TexError
+from chapmk.fmt import ensure_format
+from chapmk.gensrc import run_main, write_if_changed
+from chapmk.layout import make_layout
+from chapmk.proc import run
+from chapmk.shadow import sync_project_shadow
+from chapmk.texdist import detect
 
 pytestmark = pytest.mark.slow
 
@@ -33,7 +33,7 @@ def test_format_build_reuse_and_run(copy_corpus) -> None:  # type: ignore[no-unt
     # a run with the format and the generated run main succeeds
     out = lay.build_dir / "run"
     out.mkdir()
-    write_if_changed(out / "main.tex", run_main(a, None).replace("\\usepackage{fastinc}", ""))
+    write_if_changed(out / "main.tex", run_main(a, None).replace("\\usepackage{chapmk}", ""))
     r = run(
         dist.pdflatex(str(out / "main.tex"), "main", out, fmt=info.name),
         cwd=lay.shadow_dir,
@@ -63,7 +63,7 @@ def test_format_build_error_is_mapped(tmp_path: Path) -> None:
 def test_pdf_objects_in_the_format_fall_back(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
     """Code that creates PDF form xobjects cannot be dumped (pgf manual: fadings); the build
     falls back to full mode with a reason instead of failing in TeX."""
-    from fastinc.cli import main
+    from chapmk.cli import main
 
     src = tmp_path / "s"
     src.mkdir()

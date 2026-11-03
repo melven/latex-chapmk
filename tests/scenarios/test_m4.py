@@ -172,7 +172,7 @@ def test_t11_moved_appendix(thesis: Path, capsys: pytest.CaptureFixture[str]) ->
 
 
 def _fmt(thesis: Path) -> Path:
-    fmts = list((thesis / ".fastinc" / "fmt").glob("*.fmt"))
+    fmts = list((thesis / ".chapmk" / "main" / "fmt").glob("*.fmt"))
     assert len(fmts) == 1, fmts
     return fmts[0]
 
@@ -183,7 +183,7 @@ def test_t12a_preamble_after_split(thesis: Path, capsys: pytest.CaptureFixture[s
     edit(
         thesis / "main.tex",
         "\\begin{document}",
-        "\\newcommand{\\fastincTestA}{x}\n\\begin{document}",
+        "\\newcommand{\\chapmkTestA}{x}\n\\begin{document}",
     )
     rep = checked(thesis, capsys)
     assert rep["mode"] == "cold" and "main file changed" in rep["reason"]
@@ -195,7 +195,7 @@ def test_t12b_preamble_before_split(thesis: Path, capsys: pytest.CaptureFixture[
     before = _fmt(thesis).stat().st_mtime_ns
     text = (thesis / "main.tex").read_text()
     line = next(x for x in text.split("\n") if x.startswith("\\documentclass"))
-    edit(thesis / "main.tex", line, line + "\n\\newcommand{\\fastincTestB}{x}")
+    edit(thesis / "main.tex", line, line + "\n\\newcommand{\\chapmkTestB}{x}")
     rep = checked(thesis, capsys)
     assert rep["mode"] == "cold" and "format part" in rep["reason"]
     assert _fmt(thesis).stat().st_mtime_ns != before
@@ -314,7 +314,7 @@ def test_bibliography_as_unit(thesis: Path, capsys: pytest.CaptureFixture[str]) 
     \\def\\@chapapp line for the ToC lands in the glue slice of that run (§6.7.1)."""
     edit(thesis / "main.tex", "\\printbibliography\n", "\\include{bibliography}\n")
     (thesis / "bibliography.tex").write_text("\\printbibliography\n")
-    (thesis / "fastinc.toml").write_text('[units]\nheading = ["printbibliography"]\n')
+    (thesis / "chapmk.toml").write_text('[units]\nheading = ["printbibliography"]\n')
     rc, rep = build(thesis, "--check")
     out = capsys.readouterr()
     assert rc == 0 and "PASS" in out.out, out.out + out.err
