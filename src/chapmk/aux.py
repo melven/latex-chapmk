@@ -239,16 +239,6 @@ def canonical_main_aux(
     return out + carried + list(dict.fromkeys(aggregates)) + tail
 
 
-_STRUCTURAL = re.compile(r"^\\(relax\b|providecommand)")
-
-
-def content_lines(lines: list[str]) -> list[str]:
-    """Aux lines without structural ones (``\\relax``, ``\\providecommand``): packages write
-    these once per run into whichever aux file comes first, so they depend on the selection
-    of a run, not on the document (S8, M3)."""
-    return [line for line in lines if not _STRUCTURAL.match(line)]
-
-
 @dataclass(frozen=True)
 class Bookmark:
     """A ``\\BKM@entry`` record (S6): run-local id, open flag, destination, title bytes."""

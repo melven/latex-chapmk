@@ -174,13 +174,9 @@ def stale_figures(
         deps_file = fig_dir / f"{key}.deps"
         try:
             data = json.loads(deps_file.read_text(encoding="utf-8"))
-            if "tokens" in data:
-                scan = TokenScan.stored(data["tokens"], data["text"])
-                stored = data["deps"]
-            else:  # written by an earlier version: only the referenced values
-                code = src.read_text(encoding="utf-8", errors="surrogateescape")
-                scan, stored = TokenScan([code]), data
-        except (OSError, ValueError, KeyError, TypeError):
+            scan = TokenScan.stored(data["tokens"], data["text"])
+            stored = data["deps"]
+        except (OSError, ValueError, KeyError, TypeError):  # also an earlier format: stale
             stale.append(key)
             continue
         files = data.get("files", {}) if isinstance(data, dict) else {}

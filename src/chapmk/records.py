@@ -209,10 +209,6 @@ class RunRecords:
             todo += children
         return out
 
-    def segments_in_order(self) -> list[str]:
-        """Segment ids in the order their entries were recorded."""
-        return list(self.entries)
-
     def entry_state(self, segment: str) -> Vector:
         """Absolute entry vector of ``segment`` (baseline updated by the sparse entry)."""
         return {**self.base, **self.entries[segment]}
