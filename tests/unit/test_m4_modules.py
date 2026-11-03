@@ -404,3 +404,36 @@ def test_lint_cache(tmp_path: Path) -> None:
     (tmp_path / "a.tex").write_text("\\chapter{A}\n")
     assert lint_files(tmp_path, ["a.tex"], cache=cache) == []  # type: ignore[arg-type]
     assert len(cache) == 3
+
+
+def test_bcf_datalists() -> None:
+    """Datalists of a .bcf are read by section/name and replaced in sorted order."""
+    from fastinc.tools import datalists, with_datalists
+
+    dl = (
+        '  <bcf:datalist section="0"\n                name="{}"\n  type="entry">\n  </bcf:datalist>'
+    )
+    bcf = (
+        '<bcf:controlfile>\n  <bcf:section number="0">\n  </bcf:section>\n'
+        + dl.format("b")
+        + "\n</bcf:controlfile>\n"
+    )
+    assert list(datalists(bcf)) == ["0/b"]
+    without = (
+        '<bcf:controlfile>\n  <bcf:section number="0">\n  </bcf:section>\n</bcf:controlfile>\n'
+    )
+    assert datalists(without) == {}
+    blocks = {"0/b": dl.format("b"), "0/a": dl.format("a")}
+    merged = with_datalists(without, blocks)
+    assert list(datalists(merged)) == ["0/a", "0/b"] and merged.endswith("</bcf:controlfile>\n")
+    assert with_datalists(bcf, blocks) == merged
+    assert with_datalists(bcf, datalists(bcf)) == bcf
+
+
+def test_list_reads() -> None:
+    """List readers depend on the files they typeset; unknown list commands on all."""
+    assert TokenScan(["\\printbibliography[heading=bibintoc]"]).list_reads() == {".bbl"}
+    assert TokenScan(["\\tableofcontents\\listoffigures"]).list_reads() == {".toc", ".lof"}
+    assert TokenScan(["\\makeatletter\\@starttoc{lol}"]).list_reads() == {".lol"}
+    assert TokenScan(["\\listofexamples"]).list_reads() is None
+    assert TokenScan(["\\section{A} text"]).list_reads() == set()

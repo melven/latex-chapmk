@@ -303,3 +303,28 @@ def test_t20_split_chapter_is_one_unit(thesis: Path, capsys: pytest.CaptureFixtu
     edit(ch(thesis, "ch3b"), "Further reading:", "Furhter reading:")
     rep = checked(thesis, capsys)
     assert rep["compiled"] == ["chapters/ch3", "chapters/ch3b"]
+
+
+def test_bibliography_as_unit(thesis: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """\\printbibliography in its own \\include (the reference document's setup): a typo in a
+    chapter compiles that chapter once; biber does not run although the run's .bcf lacks the
+    datalist that only \\printbibliography declares (kept from the canonical .bcf), and the
+    bibliography (reader of .bbl only) is not recompiled for a .toc change. The first typo
+    build after a run that compiled the bibliography may add one glue-only run: KOMA's
+    \\def\\@chapapp line for the ToC lands in the glue slice of that run (§6.7.1)."""
+    edit(thesis / "main.tex", "\\printbibliography\n", "\\include{bibliography}\n")
+    (thesis / "bibliography.tex").write_text("\\printbibliography\n")
+    (thesis / "fastinc.toml").write_text('[units]\nheading = ["printbibliography"]\n')
+    rc, rep = build(thesis, "--check")
+    out = capsys.readouterr()
+    assert rc == 0 and "PASS" in out.out, out.out + out.err
+    for typo, glue_runs in (("Furhter reading:", ([], [[]])), ("Furhtr reading:", ([],))):
+        text = (thesis / "chapters" / "ch5.tex").read_text()
+        old = "Further reading:" if "Further reading:" in text else "Furhter reading:"
+        edit(thesis / "chapters" / "ch5.tex", old, typo)
+        rc, rep = build(thesis, "--check")
+        out = capsys.readouterr()
+        assert rc == 0 and "PASS" in out.out, out.out + out.err
+        assert selections(rep)[0] == ["chapters/ch5"], rep["runs"]
+        assert selections(rep)[1:] in glue_runs, rep["runs"]
+        assert [t for r in rep["runs"] for t in r["tools"]] == []
