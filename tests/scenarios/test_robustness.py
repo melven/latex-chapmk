@@ -77,3 +77,51 @@ def test_interrupted_full_build(
     out = capsys.readouterr()
     assert rc == 0, out.err
     assert not (full / ".in-progress").exists()
+
+
+def _processes_mentioning(text: str) -> list[str]:
+    out = []
+    for cmd in Path("/proc").glob("[0-9]*/cmdline"):
+        try:
+            argv = cmd.read_bytes().replace(b"\0", b" ").decode(errors="replace")
+        except OSError:
+            continue
+        if text in argv and "pytest" not in argv:
+            out.append(argv)
+    return out
+
+
+@pytest.mark.skipif(not Path("/proc").is_dir(), reason="needs /proc (Linux)")
+@pytest.mark.parametrize("sig", ["SIGTERM", "SIGINT"])
+def test_signal_kills_children(tmp_path: Path, sig: str) -> None:
+    """C8: SIGTERM (an editor stopping a build) or Ctrl-C kills the pdflatex processes of the
+    build and exits with 143/130; no orphan keeps writing into the run directories."""
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\begin{document}\n\\include{a}\n\\include{b}\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}A\n")
+    (src / "b.tex").write_text("\\chapter{B}\\loop\\iftrue\\repeat\n")  # runs until killed
+    env = {
+        **os.environ,
+        "SOURCE_DATE_EPOCH": EPOCH,
+        "PYTHONPATH": str(Path(chapmk.incremental.__file__).parents[1]),
+    }
+    p = subprocess.Popen([sys.executable, "-m", "chapmk", "build", "main.tex"], cwd=src, env=env)
+    runs = src / ".chapmk" / "main" / "runs"
+    deadline = time.monotonic() + 60
+    while not list(runs.glob("*/main.log")) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert list(runs.glob("*/main.log")), "pdflatex did not start"
+    time.sleep(0.5)
+    assert _processes_mentioning(str(runs))
+    p.send_signal(getattr(signal, sig))
+    assert p.wait(30) == (143 if sig == "SIGTERM" else 130)
+    assert _processes_mentioning(str(runs)) == []
