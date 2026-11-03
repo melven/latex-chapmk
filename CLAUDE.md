@@ -89,4 +89,4 @@ pytest -m acceptance -n auto          # scenario tests with the PLAN.md §3.3 co
 - References (the `--full` build of `--check`, latexmk in the acceptance tests) are cached in `.test-cache/` by a hash of the source files (`tests/conftest.py`). After a TeX update or an intended change of the `--full` output: `rm -rf .test-cache`. CI restores it from an earlier run with the same image and full-mode code (`actions/cache`, key in `.github/workflows/ci.yml`); extend that key when full-mode output starts to depend on another file.
 - Tests must be xdist-safe: no shared paths outside `tmp_path`/`tmp_path_factory`, no global state beyond the process. Session fixtures (e.g. the built thesis state) run once per worker.
 - Scenario tests (`PLAN.md` §8.2) assert both §3.3 equality and the expected set of compiled units, from `chapmk build --report json`.
-- Windows/macOS/MiKTeX are tested only in CI (`.github/workflows/ci.yml`, extended in M9).
+- MiKTeX: the whole suite runs in the MiKTeX image (`Dockerfile.miktex`; CI: `.github/workflows/miktex.yml`, manual). Windows/macOS are tested only in CI (extended in M9).

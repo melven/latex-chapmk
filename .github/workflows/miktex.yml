@@ -50,14 +50,14 @@ jobs:
           fi
       - name: Smoke test (corpora with latexmk, biber, makeindex, synctex, mylatexformat)
         run: docker run --rm -v "$PWD":/work:ro chapmk-miktex bash /work/tests/miktex-smoke.sh
-      - name: Lint, type-check, unit tests, tool versions
+      - name: Lint, type-check, all tests (slow, scenario, acceptance)
         run: |
           docker run --rm -v "$PWD":/work -w /work --user root chapmk-miktex bash -c '
             set -e
             pip install -e .
             ruff check . && ruff format --check .
             mypy --strict src
-            pytest -m "not slow"
+            pytest -n auto --dist worksteal
           '
 
   windows-miktex:
