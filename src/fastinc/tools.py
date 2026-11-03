@@ -77,6 +77,52 @@ def patch_bcf(bcf: str, elements: Sequence[tuple[str, str]]) -> str:
     return "\n".join(out) + "\n"
 
 
+_DATALIST_NAME = re.compile(r'\bname="([^"]*)"')
+_DATALIST_SECTION = re.compile(r'\bsection="([^"]*)"')
+
+
+def datalists(bcf: str) -> dict[str, str]:
+    """``<bcf:datalist>`` blocks of a ``.bcf`` by ``section/name``. biblatex declares a
+    datalist where ``\\printbibliography`` (or a refcontext) is executed, so a run that
+    excludes the bibliography's unit lacks it."""
+    blocks: dict[str, str] = {}
+    current: list[str] | None = None
+    for line in bcf.splitlines():
+        if current is None and line.lstrip().startswith("<bcf:datalist"):
+            current = []
+        if current is not None:
+            current.append(line)
+            if line.strip() == "</bcf:datalist>":
+                text = "\n".join(current)
+                name, section = _DATALIST_NAME.search(text), _DATALIST_SECTION.search(text)
+                key = f"{section.group(1) if section else ''}/{name.group(1) if name else text}"
+                blocks[key] = text
+                current = None
+    return blocks
+
+
+def with_datalists(bcf: str, blocks: Mapping[str, str]) -> str:
+    """The ``.bcf`` with its datalist blocks replaced by ``blocks`` (sorted by key, at the
+    place of the first datalist, else before ``</bcf:controlfile>``)."""
+    out: list[str] = []
+    inside, placed = False, False
+    lines = bcf.splitlines()
+    for line in lines:
+        if not inside and line.lstrip().startswith("<bcf:datalist"):
+            inside = True
+            if not placed:
+                out += [blocks[k] for k in sorted(blocks)]
+                placed = True
+        if inside:
+            inside = line.strip() != "</bcf:datalist>"
+            continue
+        if line.strip() == "</bcf:controlfile>" and not placed:
+            out += [blocks[k] for k in sorted(blocks)]
+            placed = True
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
 def nomenclature_file(segments: Sequence[str], entries: Mapping[str, list[str]]) -> str:
     """Canonical ``.nlo``: the entries of each segment in document order, with markers."""
     lines: list[str] = []

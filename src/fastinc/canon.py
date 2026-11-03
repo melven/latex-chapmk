@@ -8,8 +8,8 @@ from __future__ import annotations
 import hashlib
 import re
 import shutil
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from fastinc.analysis import Analysis
@@ -27,7 +27,7 @@ from fastinc.aux import (
     statement_key,
     statements,
 )
-from fastinc.deps import cite_values, label_values
+from fastinc.deps import cite_values, label_values, short_hash
 from fastinc.errors import ToolError
 from fastinc.fullbuild import NOMENCL_STYLE
 from fastinc.layout import Layout
@@ -37,7 +37,13 @@ from fastinc.records import RunRecords, read_nomenclature
 from fastinc.runner import DERIVED_SUFFIXES
 from fastinc.state import SegmentArtifact, State
 from fastinc.texdist import TexDistribution
-from fastinc.tools import citations_by_segment, nomenclature_file, patch_bcf
+from fastinc.tools import (
+    citations_by_segment,
+    datalists,
+    nomenclature_file,
+    patch_bcf,
+    with_datalists,
+)
 
 #: list files written by every run (glue typesets them); .bbl and .nls come from the tools
 LIST_SUFFIXES = tuple(s for s in DERIVED_SUFFIXES if s not in (".bbl", ".nls"))
@@ -60,6 +66,16 @@ class CanonView:
     unit_aux: dict[str, list[str]]  # unit segment -> statements of its aux file
     values: dict[str, str]  # imported-key values (deps)
     lists: str  # hash of the derived files (.toc ... .bbl .nls)
+    list_digests: dict[str, str | None] = field(default_factory=dict)  # per suffix
+
+    def lists_key(self, suffixes: Iterable[str] | None) -> str:
+        """What a list reader depends on: ``.bbl,.toc=<hash>`` of the given derived files;
+        all of them (``None``): :attr:`lists`."""
+        if suffixes is None:
+            return self.lists
+        names = sorted(suffixes)
+        digest = short_hash("".join(f"{s}:{self.list_digests.get(s) or ''}" for s in names))
+        return f"{','.join(names)}={digest}"
 
     def unit_self(self, seg: str) -> list[str]:
         """Self data of a unit (§6.8.1 item 6): self statements of its aux and of its
@@ -114,9 +130,11 @@ def read_canon(analysis: Analysis, canon: Path) -> CanonView:
     values = label_values([main, *unit_aux.values()])
     values.update(cite_values(canon / f"{job}.bbl", main))
     h = hashlib.sha256()
+    digests = {}
     for suffix in DERIVED_SUFFIXES:
-        h.update(f"{suffix}:{_digest(canon / f'{job}{suffix}')}\n".encode())
-    return CanonView(main, unit_aux, values, h.hexdigest()[:16])
+        digests[suffix] = _digest(canon / f"{job}{suffix}")
+        h.update(f"{suffix}:{digests[suffix]}\n".encode())
+    return CanonView(main, unit_aux, values, h.hexdigest()[:16], digests)
 
 
 def commit_run(
@@ -297,10 +315,16 @@ def run_tools(
     env: Mapping[str, str],
     state: State,
     template_run: str,
+    batch_runs: Sequence[str] = (),
+    complete: bool = False,
 ) -> list[str]:
     """biber on the patched ``.bcf`` (S5: the template run's ``.bcf`` with the canonical
     citations of all segments) if it changed or there is no ``.bbl``; makeindex if the
-    canonical ``.nlo`` changed or there is no ``.nls``. Returns the tool runs."""
+    canonical ``.nlo`` changed or there is no ``.nls``. Returns the tool runs.
+
+    Datalists are declared where ``\\printbibliography`` runs: the ``.bcf`` gets those of
+    all ``batch_runs`` and, unless a run of the batch compiled all units (``complete``), those
+    of the previous canonical ``.bcf`` (a unit with the bibliography may be excluded)."""
     job, canon = analysis.jobname, layout.canon_dir
     tools: list[str] = []
     bcf = layout.runs_dir / template_run / f"{job}.bcf"
@@ -308,6 +332,15 @@ def run_tools(
         elements = [(seg, e) for seg in segments(analysis) for e in state.citations.get(seg, [])]
         patched = patch_bcf(bcf.read_text(encoding="utf-8", errors="surrogateescape"), elements)
         target = canon / f"{job}.bcf"
+        blocks: dict[str, str] = {}
+        if not complete and target.is_file():
+            blocks.update(datalists(target.read_text(encoding="utf-8", errors="surrogateescape")))
+        for run_name in [*batch_runs, template_run]:
+            run_bcf = layout.runs_dir / run_name / f"{job}.bcf"
+            if run_bcf.is_file():
+                text = run_bcf.read_text(encoding="utf-8", errors="surrogateescape")
+                blocks.update(datalists(text))
+        patched = with_datalists(patched, blocks)
         if _write_if_changed(target, patched) or not (canon / f"{job}.bbl").is_file():
             r = run(
                 dist.biber(job, canon), cwd=layout.shadow_dir, env=env, log_path=canon / "biber.out"
