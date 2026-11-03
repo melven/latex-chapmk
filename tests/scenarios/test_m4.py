@@ -172,7 +172,7 @@ def test_t11_moved_appendix(thesis: Path, capsys: pytest.CaptureFixture[str]) ->
 
 
 def _fmt(thesis: Path) -> Path:
-    fmts = list((thesis / ".chapmk" / "fmt").glob("*.fmt"))
+    fmts = list((thesis / ".chapmk" / "main" / "fmt").glob("*.fmt"))
     assert len(fmts) == 1, fmts
     return fmts[0]
 

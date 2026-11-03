@@ -107,10 +107,10 @@ def test_layout_defaults_and_overrides(tmp_path: Path) -> None:
     a = analyse(cfg)
     lay = make_layout(cfg, a)
     src = tmp_path / "src"
-    assert (lay.build_dir, lay.out_dir, lay.jobname) == (src / ".chapmk", src, "thesis")
-    assert lay.shadow_dir == src / ".chapmk" / "src"
+    assert (lay.build_dir, lay.out_dir, lay.jobname) == (src / ".chapmk" / "thesis", src, "thesis")
+    assert lay.shadow_dir == src / ".chapmk" / "thesis" / "src"
     assert lay.output(".pdf") == src / "thesis.pdf"
-    assert lay.path_map() == [(str(src / ".chapmk" / "src"), str(src))]
+    assert lay.path_map() == [(str(src / ".chapmk" / "thesis" / "src"), str(src))]
     lay2 = make_layout(Config(main=cfg.main, build_dir=tmp_path / "b", out_dir=tmp_path / "o"), a)
     assert (lay2.build_dir, lay2.out_dir) == (tmp_path / "b", tmp_path / "o")
 
@@ -132,9 +132,12 @@ def test_shadow_tree_sync_and_refresh(tmp_path: Path) -> None:
     a = analyse(cfg)
     src, shadow, build = (
         tmp_path / "src",
-        tmp_path / "src" / ".chapmk" / "src",
-        tmp_path / "src" / ".chapmk",
+        tmp_path / "src" / ".chapmk" / "thesis" / "src",
+        tmp_path / "src" / ".chapmk" / "thesis",
     )
+    other = tmp_path / "src" / ".chapmk" / "other"  # another job's build directory
+    other.mkdir(parents=True)
+    (other / "x.tex").write_text("x")
     stats = sync_project_shadow(a, shadow, build)
     assert files_in(shadow) == {
         "thesis.tex",

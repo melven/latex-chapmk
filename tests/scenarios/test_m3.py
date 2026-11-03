@@ -22,7 +22,7 @@ def test_t1_typo_compiles_one_unit(thesis: Path, capsys: pytest.CaptureFixture[s
     so the list files change once (PLAN §6.7.1). In the steady state a typo is one run.
     """
     # the cold build ended with a run of all units: its .bcf is a full run's
-    bcf = thesis / ".chapmk" / "canon" / "main.bcf"
+    bcf = thesis / ".chapmk" / "main" / "canon" / "main.bcf"
     full_bcf = bcf.read_bytes()
     # typo in body text after the \\todo (whose margin-note position is recorded)
     edit(thesis / "chapters" / "ch3.tex", "Further reading:", "Furhter reading:")

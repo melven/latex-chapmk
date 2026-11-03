@@ -17,7 +17,7 @@ def test_full_build_with_biber_and_nomencl(copy_corpus, tmp_path: Path, capsys) 
     err = capsys.readouterr().err
     assert rc == 0, err
     assert (out / "main.pdf").is_file() and (out / "main.log").is_file()
-    full = src / ".chapmk" / "full"
+    full = src / ".chapmk" / "main" / "full"
     assert (full / "main.bbl").is_file() and (full / "main.nls").is_file()
     assert "stable" in err and "pass 1: changed" in err
     inputs = [line for line in read_lines(out / "main.synctex.gz") if line.startswith("Input:")]
@@ -38,7 +38,7 @@ def test_full_build_runs_makeindex_for_an_index(tmp_path: Path, capsys) -> None:
         "Alpha\\index{alpha} beta\\index{beta}\n\\printindex\n\\end{document}\n"
     )
     assert main(["build", "d.tex", "-v"], cwd=src) == 0, capsys.readouterr().err
-    ind = src / ".chapmk" / "full" / "d.ind"
+    ind = src / ".chapmk" / "d" / "full" / "d.ind"
     assert ind.is_file() and "alpha" in ind.read_text()
 
 
@@ -63,7 +63,7 @@ def test_clean(tmp_path: Path) -> None:
     src.mkdir()
     (src / "d.tex").write_text("\\documentclass{article}\\begin{document}x\\end{document}\n")
     assert main(["build", "d.tex"], cwd=src) == 0
-    assert (src / ".chapmk").is_dir()
+    assert (src / ".chapmk" / "d").is_dir()
     assert main(["clean", "d.tex"], cwd=src) == 0
     assert not (src / ".chapmk").exists()
     (src / "other").mkdir()
