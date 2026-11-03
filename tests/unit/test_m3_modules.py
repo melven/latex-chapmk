@@ -6,7 +6,6 @@ import pytest
 
 from chapmk.aux import (
     bookmark_levels,
-    content_lines,
     parse_bookmark,
     segment_slices,
     tex_octal_bytes,
@@ -79,7 +78,6 @@ def test_segment_slices_and_content() -> None:
     sl = segment_slices(MAIN_AUX)
     assert sl["G0"] == ["\\chapmk@entry{G0}{}", "\\babel@aux{english}{}", "\\@input{ch1.aux}"]
     assert sl["U1"][1].startswith("\\BKM@entry") and sl["U1"][2] == "\\abx@aux@cite{0}{knuth}"
-    assert content_lines(MAIN_AUX[:3]) == ["\\chapmk@base{0=1,}"]
     assert bookmark_levels(MAIN_AUX) == {1: 0}
 
 

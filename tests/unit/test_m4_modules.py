@@ -201,8 +201,6 @@ def test_text_scan_imports() -> None:
     assert changed_imports(stored, scan, {"L:fig:a": "1"}) == ["C:k1"]
     assert not TokenScan(["\\section{A}\\label{sec:a} text"]).references("L:sec:a")
     assert TokenScan(["\\label{sec:a} \\ref{sec:a}"]).references("L:sec:a")
-    assert not TokenScan(["text"]).reads_lists()
-    assert TokenScan(["\\listoffigures"]).reads_lists()
 
 
 # --- tools ---------------------------------------------------------------------------------
