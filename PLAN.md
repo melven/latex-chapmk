@@ -623,8 +623,11 @@ Full mode means plain sequential full runs to a fixpoint inside the build direct
 - format build failure;
 - a merge error (missing destinations, inconsistent SyncTeX header);
 - the fixpoint not reached (§6.9.2);
-- missing records (e.g. a page without a page-map entry);
+- missing, truncated or inconsistent records (e.g. a page without a page-map entry or of an unknown segment);
+- primitive marks (§6.4.2, persistent, with a warning);
 - `--full`.
+
+All of these are one exception class, `errors.FallbackError` (records, tool inputs, merges derive from it; D3), handled only by the builder. Persistent reasons are also reported as warnings. Any other exception is a bug: exit code 3 with a one-line `internal error: ...` message, the traceback only with `-v` (C9).
 
 Each trigger prints a one-line reason.
 
