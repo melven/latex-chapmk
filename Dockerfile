@@ -44,7 +44,7 @@ RUN set -e; \
     for f in mylatexformat.ltx nomencl.sty biblatex.sty hyperref.sty gnuplot-lua-tikz.sty; do \
       kpsewhich "$f" >/dev/null || { echo "missing: $f"; exit 1; }; \
     done; \
-    python -c "import pikepdf, numpy, PIL"
+    python -c "import pikepdf, pytest_cov"
 
 # Non-root user (devcontainer); reuse an existing user with this UID if the base image has one
 RUN set -e; \
