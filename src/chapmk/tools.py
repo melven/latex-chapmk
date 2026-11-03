@@ -73,8 +73,9 @@ def run_makeindex(
     env: Mapping[str, str],
     log_name: str = "makeindex.out",
 ) -> None:
-    """makeindex in ``outdir`` (relative names). A failure, or errors in the transcript
-    (makeindex reports input errors with exit code 0), raise :class:`ToolError` (E7)."""
+    """makeindex in ``outdir`` (relative names). A failure raises :class:`ToolError` with the
+    errors of the transcript (E7). Input errors makeindex reports with exit code 0 (e.g. for
+    the segment markers of the canonical ``.nlo``) are not failures, as with latexmk."""
     r = run(
         dist.makeindex(input_name, output_name, style),
         cwd=outdir,
@@ -82,9 +83,8 @@ def run_makeindex(
         log_path=outdir / log_name,
     )
     ilg = outdir / f"{Path(input_name).stem}.ilg"
-    found = makeindex_errors(ilg)
-    if not r.ok or found:
-        found = found or [r.output.strip()[-500:]]
+    if not r.ok:
+        found = makeindex_errors(ilg) or [r.output.strip()[-500:]]
         raise ToolError(f"makeindex failed on {input_name} (see {ilg}):{_shown(found)}")
 
 
