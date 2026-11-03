@@ -477,3 +477,28 @@ def test_glue_hints() -> None:
     stateful = ["\\begin{document}\n", "\\chapter{X}\\pagestyle{empty}\n", "\\include{a}\n"]
     [hint] = glue_hints("m.tex", stateful, 1, [3], {"G0": 1.0}, ["chapter"])
     assert "contains \\pagestyle" in hint
+
+
+def test_tool_error_lines(tmp_path: Path) -> None:
+    """E7: the ERROR lines of a biber log and the errors of a makeindex transcript."""
+    from chapmk.tools import biber_errors, makeindex_errors
+
+    blg = tmp_path / "main.blg"
+    blg.write_text(
+        "[0] Config.pm:311> INFO - This is Biber 2.20\n"
+        "[5] Utils.pm:418> WARN - something\n"
+        "[9] Utils.pm:410> ERROR - BibTeX subsystem: x.utf8, line 6, syntax error\n"
+    )
+    assert biber_errors(blg) == ["BibTeX subsystem: x.utf8, line 6, syntax error"]
+    assert biber_errors(tmp_path / "missing.blg") == []
+    ilg = tmp_path / "main.ilg"
+    ilg.write_text(
+        "Scanning input file main.nlo....\n"
+        "!! Input index error (file = main.nlo, line = 3):\n"
+        "   -- Extra `@' at position 12 of first argument.\n"
+        "done (1 entries accepted, 1 rejected).\n"
+    )
+    assert makeindex_errors(ilg) == [
+        "!! Input index error (file = main.nlo, line = 3): -- Extra `@' at position 12 of first"
+        " argument."
+    ]

@@ -141,3 +141,42 @@ def test_fallback_uses_the_state_epoch(
     edit(src / "main.tex", "\\begin{document}", "\\usepackage{cleveref}\n\\begin{document}")
     rep = checked(src, capsys)
     assert rep["mode"] == "full" and "cleveref" in rep["reason"], rep
+
+
+@pytest.mark.parametrize("mode", [(), ("--full",)])
+def test_biber_error_is_shown(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    mode: tuple[str, ...],
+) -> None:
+    """E7: a broken .bib: exit code 2 with biber's error lines, in both builders."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage[backend=biber]{biblatex}\n"
+        "\\addbibresource{refs.bib}\n\\begin{document}\n\\include{a}\n"
+        "\\printbibliography\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}See \\cite{k1}.\n")
+    (src / "refs.bib").write_text(
+        "@book{k1,\n  title = {T},\n  author = {A, B,\n  year = 2000\n}\n"
+    )
+    assert main(["build", "main.tex", *mode], cwd=src) == 2
+    err = capsys.readouterr().err
+    assert "biber failed" in err and "syntax error" in err and "main.blg" in err, err
+
+
+def test_unreadable_state_gives_a_cold_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """E7: a corrupt state.json is a cold build with the reason, not an error."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    _document(src)
+    assert checked(src, capsys)["mode"] == "cold"
+    state = src / ".chapmk" / "main" / "canon" / "state.json"
+    state.write_text(state.read_text()[:100])
+    rep = checked(src, capsys)
+    assert rep["mode"] == "cold" and "unreadable" in rep["reason"], rep

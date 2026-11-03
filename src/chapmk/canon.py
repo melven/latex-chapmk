@@ -30,20 +30,21 @@ from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import SelfCheckError, ToolError
 from chapmk.facts import DEFAULT_LIST_SUFFIXES, derived_suffixes
 from chapmk.files import copy_atomic, digest, write_if_changed
-from chapmk.fullbuild import NOMENCL_STYLE
 from chapmk.layout import Layout
 from chapmk.predict import SegmentVectors, normalized
-from chapmk.proc import run
 from chapmk.records import RunRecords, read_nomenclature
 from chapmk.state import SegmentArtifact, State
 from chapmk.texdist import TexDistribution
 from chapmk.texsource import split_lines
 from chapmk.tools import (
+    NOMENCL_STYLE,
     citations_by_segment,
     citekey_lines,
     datalists,
     nomenclature_file,
     patch_bcf,
+    run_biber,
+    run_makeindex,
     with_datalists,
 )
 
@@ -383,19 +384,15 @@ def run_tools(
         if full_run is not None:
             _check_bcf(patched, layout.runs_dir / full_run / f"{job}.bcf")
         if write_if_changed(target, patched) or not (canon / f"{job}.bbl").is_file():
-            r = run(
-                dist.biber(job, canon), cwd=layout.shadow_dir, env=env, log_path=canon / "biber.out"
-            )
-            if not r.ok:
+            try:
+                run_biber(dist, job, canon, layout.shadow_dir, env)
+            except ToolError:
                 target.unlink()  # retried next time
-                raise ToolError(f"biber failed, see {canon / f'{job}.blg'}")
+                raise
             tools.append("biber")
     nlo = canon / f"{job}.nlo"
     if nlo.is_file() and ((canon / _NLO_CHANGED).is_file() or not (canon / f"{job}.nls").is_file()):
-        argv = dist.makeindex(nlo.name, f"{job}.nls", NOMENCL_STYLE)
-        r = run(argv, cwd=canon, env=env, log_path=canon / "makeindex.out")
-        if not r.ok:
-            raise ToolError(f"makeindex failed: {r.output.strip()[-500:]}")
+        run_makeindex(dist, nlo.name, f"{job}.nls", NOMENCL_STYLE, canon, env)
         (canon / _NLO_CHANGED).unlink(missing_ok=True)
         tools.append("makeindex")
     return tools
