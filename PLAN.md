@@ -680,13 +680,19 @@ cache = true                   # false: pictures inline even with \tikzexternali
 
 All TeX invocations go through a **distribution adapter** (`texdist.py`) with two implementations: `TeXLive` and `MiKTeX`. Driver logic must not hard-code engine flags or search behaviour.
 
-| Topic | TeX Live (all OS) | MiKTeX | Driver rule |
+| Topic | TeX Live (all OS) | MiKTeX (S11, Linux; Windows open) | Driver rule |
 |---|---|---|---|
-| Format build and use | `-ini`, `-fmt=` | `--initialize`, `--undump=` (also `&name`) [S11] | Adapter |
-| Output and aux directories | `-output-directory`, `TEXMF_OUTPUT_DIRECTORY` | `--output-directory`, `--aux-directory`; own search order [S11] | Adapter; S2 is repeated for MiKTeX |
-| On-the-fly package install | n/a | may prompt or block parallel runs | Require "install missing packages: never/always" with no prompting; check at startup, otherwise abort with instructions |
-| `SOURCE_DATE_EPOCH` / `FORCE_SOURCE_DATE` | supported | [S11] | If unsupported: no determinism guarantee; `check` uses a pinned date via a `\today` override in `chapmk-ini.sty` |
-| mylatexformat, biber, makeindex, synctex | available | packages available [S11] | Startup check |
+| Detection | `pdflatex --version` | banner contains "MiKTeX" (on Linux `pdflatex` is `/usr/local/bin/pdflatex`: the path does not tell) | `detect()` by the version banner |
+| Format build | `-ini … "&pdflatex" mylatexformat.ltx` | same argv | Adapter |
+| Format use | `-fmt=<name>` + `TEXFORMATS` (an absolute `-fmt` breaks `-recorder`, S1) | `TEXFORMATS` ignored; `--undump=<absolute path>` (`.fls` complete) | Adapter |
+| Input path | `TEXINPUTS` (trailing separator) | same | – |
+| Output directory, read order | `-output-directory`; the output directory wins once it holds a file (S2) | `-output-directory`; the **working directory is always read first** (S11); no `--aux-directory` needed | Shadow tree (§6.5) required for every input |
+| Log line length | env `max_print_line` | env ignored; `--max-print-line=10000` | Adapter (picture records, error lines) |
+| SyncTeX paths | `<cwd>/./<rel>` | `<cwd>/<rel>` (no `/./`; relative `synctex view` finds nothing) | Path mapping must not assume `/./`; the merged main-file path comes from the adapter; `check` samples with absolute paths |
+| `-recorder` `.fls` | paths relative to `PWD` for the working directory | all absolute; extra `OUTPUT <job>.auxlock` | `read_inputs` resolves both |
+| On-the-fly package install | n/a | unreliable in containers (skips packages silently); dev/CI image: complete MiKTeX, `[MPM]AutoInstall=0`. Windows: open | Require "install missing packages: never/always" with no prompting; check at startup, otherwise abort with instructions |
+| `SOURCE_DATE_EPOCH` / `FORCE_SOURCE_DATE` | supported | supported (`\today`, PDF dates, byte-identical reruns) | – |
+| mylatexformat, biber, makeindex, synctex, latexmk | available | available (biber 2.22) | Startup check |
 
 **OS rules:**
 - **Paths:** use `pathlib` internally; always pass forward slashes to TeX; reject source paths with spaces under `\include` (TeX limitation) with a clear error.
@@ -844,7 +850,7 @@ Each test starts from a built state, applies an edit, runs `chapmk build`, asser
 | S8 | *Done.* Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
 | S9 | *Done.* pikepdf merge prototype: two runs → merged PDF with working cross-run links, outline, page labels; verified by §3.3 items 1–3. |
 | S10 | *Done.* SyncTeX merge prototype; verified with `synctex view/edit`. |
-| S11 | *Deferred to M9 (needs a Windows CI runner).* MiKTeX: format flags, output/aux-directory read order (repeat S2), on-the-fly install settings, `SOURCE_DATE_EPOCH` support, availability of mylatexformat, biber, makeindex and synctex. |
+| S11 | *Done on Linux* (`docs/spikes/S11.md`, MiKTeX 26.5 in `Dockerfile.miktex`); Windows part in M9 (CI). MiKTeX: format flags, output/aux-directory read order (repeat S2), on-the-fly install settings, `SOURCE_DATE_EPOCH` support, availability of mylatexformat, biber, makeindex and synctex. |
 
 **Done when:** all notes except S11 (deferred to M9) are written and the plan is updated.
 
