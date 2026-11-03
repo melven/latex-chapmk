@@ -165,3 +165,30 @@ def test_primitive_marks_fall_back(
     assert rep["mode"] == "full" and [r["name"] for r in rep["runs"]] == ["full"], rep
     assert any("primitive marks" in w for w in rep["warnings"]), rep
     assert (src / ".chapmk" / "main" / "canon" / "full-only.json").is_file()
+
+
+def test_eqparbox_tag_shared_by_chapters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """C13: an eqparbox tag used in two chapters with different widths. A partial run computes
+    the width from its own boxes only, so a changed width of such a tag means a full build,
+    with the reason; a tag used in one chapter stays incremental."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage{eqparbox}\n\\begin{document}\n"
+        "\\include{a}\n\\include{b}\n\\include{c}\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}\\eqparbox{shared}{a very very wide box}|after\n")
+    (src / "b.tex").write_text("\\chapter{B}\\eqparbox{shared}{narrow}|after\n\nText b.\n")
+    (src / "c.tex").write_text("\\chapter{C}\\eqparbox{own}{only here}|after\n\nText c.\n")
+    rep = checked(src, capsys)
+    assert rep["mode"] == "full" and "eqparbox tag 'shared' is used in a, b" in rep["reason"]
+    assert any("eqparbox tag 'shared'" in w for w in rep["warnings"]), rep
+    # the shared tag in one chapter only: incremental again
+    (src / "b.tex").write_text("\\chapter{B}\\eqparbox{bown}{narrow}|after\n\nText b.\n")
+    assert checked(src, capsys)["mode"] == "cold"
+    path = src / "c.tex"
+    path.write_text(path.read_text().replace("Text c.", "Txet c."))
+    assert checked(src, capsys)["mode"] == "incremental"
