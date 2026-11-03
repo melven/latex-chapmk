@@ -50,8 +50,7 @@ def test_interrupted_commit(
 
     with monkeypatch.context() as m:
         m.setattr(chapmk.incremental, "commit_lists", killed)
-        with pytest.raises(KeyboardInterrupt):
-            main(["build", "main.tex"], cwd=src)
+        assert main(["build", "main.tex"], cwd=src) == 130  # Ctrl-C (C8)
     canon = src / ".chapmk" / "main" / "canon"
     assert (canon / ".in-progress").exists()
     aux = canon / "a.aux"
