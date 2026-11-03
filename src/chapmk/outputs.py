@@ -14,7 +14,7 @@ from chapmk.errors import FallbackError, TexError
 from chapmk.files import digest, write_atomic
 from chapmk.layout import Layout
 from chapmk.logs import map_paths
-from chapmk.publish import publish, text_writer
+from chapmk.publish import publish, publish_all, text_writer
 from chapmk.records import RunRecords, read_run_records
 from chapmk.runner import RUN_MAIN, run_path_map
 from chapmk.state import State
@@ -82,11 +82,19 @@ def publish_state(
         recs = records(art.run)
         run_dir = layout.runs_dir / art.run
         by_index = {p.index: p for p in recs.pages}
+        # pages after an extra picture page (§6.17) are not indexed by the run's own labels
+        first_gap = next((n for n, p in enumerate(recs.pages) if p.index != n), len(recs.pages))
         for i in art.pages:
             if i not in by_index:
                 raise MergeFailedError(f"page {i} of run {art.run} has no page record")
             pages.append(
-                PageSource(run_dir / f"{job}.pdf", i, by_index[i].value, by_index[i].label)
+                PageSource(
+                    run_dir / f"{job}.pdf",
+                    i,
+                    by_index[i].value,
+                    by_index[i].label,
+                    check_label=i < first_gap,
+                )
             )
             syn.append((run_dir / f"{job}.synctex.gz", i))
         for line in slices[art.run].get(seg, []):
@@ -101,9 +109,8 @@ def publish_state(
             merge_pdf(pages, outline, first_run / f"{job}.pdf", tmp)
         except MergeError as err:
             raise MergeFailedError(f"PDF merge: {err}") from err
+        t.lap("merge_pdf")
 
-    pdf = publish(write_pdf, layout.output(".pdf"))
-    t.lap("merge_pdf")
     main_name = dist.synctex_input(analysis.source_dir, analysis.main.name)
 
     prefixes = [(old + "/", new) for old, new in layout.path_map()]
@@ -116,11 +123,18 @@ def publish_state(
                 return new + path[len(old) - 1 :]
         return path
 
-    try:
-        publish(lambda tmp: merge_synctex(syn, map_path, tmp), layout.output(".synctex.gz"))
-    except SyncTexError as err:
-        raise MergeFailedError(f"SyncTeX merge: {err}") from err
-    t.lap("merge_synctex")
+    def write_synctex(tmp: Path) -> None:
+        try:
+            merge_synctex(syn, map_path, tmp)
+        except SyncTexError as err:
+            raise MergeFailedError(f"SyncTeX merge: {err}") from err
+        t.lap("merge_synctex")
+
+    # both merged first, then renamed back to back (C16); SyncTeX first, so a viewer that
+    # reloads on the PDF change already finds the matching SyncTeX file
+    _, pdf = publish_all(
+        [(write_synctex, layout.output(".synctex.gz")), (write_pdf, layout.output(".pdf"))]
+    )
     texts = []
     for run in sorted(state.run_names(), key=lambda r: int(r[1:])):
         log = layout.runs_dir / run / f"{job}.log"

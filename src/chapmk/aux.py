@@ -13,13 +13,15 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from chapmk.texsource import text_lines
+
 _SEG_START = re.compile(r"^\\chapmk@entry\{([UG]\d+)\}")
 _SEG_END = re.compile(r"^\\chapmk@(entry|gexit|unit)\{")
 _BKM = re.compile(r"^\\BKM@entry\{(.*)\}\{([0-9A-Fa-f]*)\}\s*$")
 
 
 def read_lines(path: Path) -> list[str]:
-    return path.read_text(encoding="utf-8", errors="surrogateescape").splitlines()
+    return text_lines(path.read_text(encoding="utf-8", errors="surrogateescape"))
 
 
 def segment_slices(main_aux_lines: list[str]) -> dict[str, list[str]]:

@@ -3,6 +3,7 @@
 Each build asserts §3.3 against ``--full`` (``--check``).
 """
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -12,8 +13,8 @@ from _helpers import EPOCH, build, selections
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
 
 
-def checked(src: Path, capsys: pytest.CaptureFixture[str]) -> dict[str, Any]:
-    rc, rep = build(src, "--check")
+def checked(src: Path, capsys: pytest.CaptureFixture[str], *args: str) -> dict[str, Any]:
+    rc, rep = build(src, "--check", *args)
     out = capsys.readouterr()
     assert rc == 0, out.out + out.err
     assert "PASS" in out.out, out.out
@@ -165,3 +166,40 @@ def test_primitive_marks_fall_back(
     assert rep["mode"] == "full" and [r["name"] for r in rep["runs"]] == ["full"], rep
     assert any("primitive marks" in w for w in rep["warnings"]), rep
     assert (src / ".chapmk" / "main" / "canon" / "full-only.json").is_file()
+
+
+@pytest.mark.parametrize("jobs", ["1", "4"])
+def test_eqparbox_tag_shared_by_chapters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], jobs: str
+) -> None:
+    """C13: an eqparbox tag used in two chapters with different widths. A partial run computes
+    the width from its own boxes only, so a changed width of such a tag means a full build,
+    with the reason; a tag used in one chapter stays incremental."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage{eqparbox}\n\\begin{document}\n"
+        "\\include{a}\n\\include{b}\n\\include{c}\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}\\eqparbox{shared}{a very very wide box}|after\n")
+    (src / "b.tex").write_text("\\chapter{B}\\eqparbox{shared}{narrow}|after\n\nText b.\n")
+    (src / "c.tex").write_text("\\chapter{C}\\eqparbox{own}{only here}|after\n\nText c.\n")
+    for _ in range(2):  # cold build, then an edit of b
+        rep = checked(src, capsys, "-j", jobs)  # §3.3 in any case
+        # which units share a run depends on the run grouping (measured run times): either
+        # the shared tag gave a full build, or a and b were last compiled in one run
+        if rep["mode"] == "full":
+            assert "eqparbox tag 'shared' is used in a, b" in rep["reason"], rep
+            assert any("eqparbox tag 'shared'" in w for w in rep["warnings"]), rep
+        else:
+            state = json.loads((src / ".chapmk" / "main" / "canon" / "state.json").read_text())
+            assert state["segments"]["U1"]["run"] == state["segments"]["U2"]["run"], rep
+        path = src / "b.tex"
+        path.write_text(path.read_text().replace("Text b.", "Txet b."))
+    # the shared tag in one chapter only: incremental again
+    (src / "b.tex").write_text("\\chapter{B}\\eqparbox{bown}{narrow}|after\n\nText b.\n")
+    assert checked(src, capsys)["mode"] == "cold"
+    path = src / "c.tex"
+    path.write_text(path.read_text().replace("Text c.", "Txet c."))
+    assert checked(src, capsys)["mode"] == "incremental"

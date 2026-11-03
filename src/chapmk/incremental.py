@@ -25,7 +25,7 @@ import json
 import re
 import shutil
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -89,6 +89,7 @@ from chapmk.runner import RunSpec, prepare_run_dir, run_batch
 from chapmk.shadow import changed_signatures, external_inputs, read_inputs, stat_signatures
 from chapmk.state import State, UnitInputs, load_state, save_state
 from chapmk.texdist import TexDistribution
+from chapmk.texsource import text_lines
 from chapmk.timing import Timings
 
 MAX_ITERATIONS = 8
@@ -196,7 +197,7 @@ def _check_runtime_support(ctx: Context, run_dir: Path, fmt: FormatInfo) -> None
     loaded: set[str] = set()
     for fls in (fmt.directory / f"{fmt.name}.fls", run_dir / f"{ctx.job}.fls"):
         if fls.is_file():
-            lines = fls.read_text(errors="replace").splitlines()
+            lines = text_lines(fls.read_text(errors="replace"))
             loaded |= {Path(line[6:]).name for line in lines if line.startswith("INPUT ")}
     for pkg in sorted(UNSUPPORTED_PACKAGES):
         if f"{pkg}.sty" in loaded:
@@ -397,6 +398,7 @@ class Fixpoint:
                 add(seg, "aggregate aux data changed (e.g. KOMA autodot)")
         eqp_pre, eqp_post = pre.eqp(), post.eqp()
         tags = sorted({_eqp_tag(k) for k, v in eqp_post.items() if eqp_pre.get(k) != v})
+        self._check_shared_tags(tags)
         if tags:
             # the units that use a changed tag (Q records); unknown owners: all compiled units
             owners = {
@@ -456,6 +458,24 @@ class Fixpoint:
         if changed:
             glue = f"glue sources changed ({_short(changed)})"
         return dirty, glue
+
+    def _check_shared_tags(self, changed: Sequence[str]) -> None:
+        """C13: eqparbox sets all boxes of a tag to the widest one, computed from the boxes
+        of one run. A tag used in several segments whose width changed while these were
+        last compiled in different runs can differ from a full build: full mode."""
+        for tag in changed:
+            owners = [
+                seg
+                for seg in segments(self.a)
+                if tag in self.state.eqp_tags.get(seg, ()) and seg in self.state.segments
+            ]
+            if len({self.state.segments[seg].run for seg in owners}) > 1:
+                names = [self.a.includes[int(s[1:]) - 1].arg if s[0] == "U" else s for s in owners]
+                raise FallbackError(
+                    f"eqparbox tag {tag!r} is used in {', '.join(names)}: its width (the widest "
+                    "box) changed, and a partial run sees only its own boxes (use the tag in one "
+                    "chapter only, or one tag per chapter, to build incrementally)"
+                )
 
     def _warn(self, msg: str) -> None:
         if msg not in self.warnings:
@@ -669,7 +689,7 @@ class Fixpoint:
             state,
             specs[-1].name,
             [s.name for s in specs],
-            complete=any(g is None for g in groups),
+            full_run=next((s.name for s in specs if s.selection is None), None),
         )
         t.lap("tools")
         post = self._view = read_canon(a, canon, state.list_suffixes)
@@ -875,6 +895,9 @@ def _gc(ctx: Context, state: State) -> None:
 
 
 def _full(ctx: Context, epoch: int, reason: str, start: float) -> BuildReport:
+    """Full mode with the epoch of the canonical state if there is one (N4, C11): the same
+    dates as ``--full`` and the ``check`` reference, also for a fallback."""
+    epoch = load_epoch(ctx.layout.canon_dir, epoch)
     ctx.say(f"full build: {reason}")
     result = full_build(
         ctx.analysis,
@@ -924,7 +947,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
     start = time.monotonic()
     canon = ctx.layout.canon_dir
     if full:
-        return _full(ctx, load_epoch(canon, epoch), "--full", start)
+        return _full(ctx, epoch, "--full", start)
     if ctx.analysis.fallback_reasons:
         return _full(ctx, epoch, "; ".join(ctx.analysis.fallback_reasons), start)
     marker = canon / FULL_ONLY_FILE

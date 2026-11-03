@@ -86,3 +86,24 @@ def test_open_conditionals() -> None:
         "\\iftoggle{t}{a}{b}\n",  # etoolbox command, not a conditional
     ]
     assert open_conditional_at_line_starts(lines) == [0, 0, 0, 3, 3, 3, 0]
+
+
+def test_text_lines_only_newlines() -> None:
+    """C12: U+2028 and form feeds stay inside their line; CRLF and a missing final newline
+    are handled."""
+    from chapmk.texsource import text_lines
+
+    assert text_lines("a\u2028b\fc\nd\r\ne") == ["a\u2028b\fc", "d", "e"]
+    assert text_lines("x\n") == ["x"] and text_lines("") == []
+
+
+def test_aux_statement_with_line_separator(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """C12: an aux statement whose argument contains U+2028 (a copy-pasted title) is one line
+    and one statement, written back unchanged."""
+    from chapmk.aux import read_lines, statements
+
+    line = "\\@writefile{toc}{\\contentsline {section}{\\numberline {1}A\u2028B}{1}{}}"
+    aux = tmp_path / "a.aux"
+    aux.write_text("\\relax\n" + line + "\n", encoding="utf-8")
+    assert read_lines(aux) == ["\\relax", line]
+    assert statements(read_lines(aux))[-1] == line

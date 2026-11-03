@@ -362,7 +362,7 @@ Aux files are parsed as brace-balanced statements, not lines: `\@setckpt` and `\
 | `\abx@aux@read@bbl@mdfivesum`, `\abx@aux@read@bblrerun` | main, end | ignored (bookkeeping) |
 | `\gdef\LT@<roman>{\LT@entry…}` (longtable) | unit | *self* |
 | `\pgfsyspdfmark{pgfidN}{x}{y}` (pgf `remember picture`, todonotes) | main, unit slice | *self*, keyed by `pgfidN` |
-| `\expandafter\gdef\csname eqp@(this\|next\|minwd\|maxwd)@<tag>\endcsname{…}` (eqparbox) | main, end of document | *self* per tag. Written only for tags typeset in the run, so they are merged per tag from the latest run that wrote the tag. Owners = the segments that use the tag (`Q` records, M6; without records: the units of that run). A tag shared by several units is computed in a partial run from the included owners only (known limitation; `check` detects it). |
+| `\expandafter\gdef\csname eqp@(this\|next\|minwd\|maxwd)@<tag>\endcsname{…}` (eqparbox) | main, end of document | *self* per tag. Written only for tags typeset in the run, so they are merged per tag from the latest run that wrote the tag. Owners = the segments that use the tag (`Q` records, M6; without records: the units of that run). A tag shared by several units is computed in a partial run from the included owners only: if the width of such a tag changes while its owners were last compiled in different runs, the build falls back to full mode with the reason (C13). |
 | `\global\csname @altsecnumformattrue\endcsname` (KOMA autodot) | main, end of document | OR-aggregate over the typeset segments; attributed to the run's included units; *global* |
 | `\BKM@entry{...}{...}` (bookmark) | main, unit slice | outline record: merge only (§6.11); a change dirties nothing |
 | `\chapmk@bkmlevels{id=level,...}` | main, end | outline levels (§6.4.2); merge only |
@@ -619,6 +619,8 @@ Full mode means plain sequential full runs to a fixpoint inside the build direct
 - unsupported packages (§1 non-goals): detected statically in the preamble, and at runtime from the `.fls` of the format build **and** the run. Packages dumped into the format are not in the run's `.fls`, and classes may load packages, e.g. `bookmark` only at `\begin{document}`.
   - `hyperref` loaded without `bookmark` also counts.
   - Runtime reasons are persistent: the next builds go straight to full mode until the main file changes (`canon/full-only.json`);
+- an eqparbox tag used in several segments whose width changed while they were last compiled in different runs (C13; the warning suggests one tag per chapter);
+- biblatex refsections (option `refsection=` other than `none`, `\begin{refsection}`, `\newrefsection` in the main file or a unit; C10): detected statically, so no build attempt is wasted; citations in a refsection other than 0 found at runtime also fall back;
 - `\documentclass` not before the split line (e.g. on the `\begin{document}` line);
 - format build failure;
 - a merge error (missing destinations, inconsistent SyncTeX header);
@@ -626,6 +628,11 @@ Full mode means plain sequential full runs to a fixpoint inside the build direct
 - missing, truncated or inconsistent records (e.g. a page without a page-map entry or of an unknown segment);
 - primitive marks (§6.4.2, persistent, with a warning);
 - `--full`.
+
+**Runtime self-checks (C14)** compare chapmk's own results with what TeX wrote; a mismatch (`SelfCheckError`: a bug or an unsupported construct) is a fallback:
+- a batch with a run of all units: the patched `.bcf` (citations, datalists) equals that run's `.bcf`;
+- a unit no run of the batch compiled keeps its list-file entries;
+- each merged page's label equals the label hyperref gave it in its run (pages after an extra picture page are skipped).
 
 Each fallback is reported as one warning (`full build: <reason>`). All of these are one exception class, `errors.FallbackError` (records, tool inputs, merges derive from it; D3), handled only by the builder. Persistent reasons are also reported as warnings. Any other exception is a bug: exit code 3 with a one-line `internal error: ...` message, the traceback only with `-v` (C9).
 
@@ -698,7 +705,7 @@ All TeX invocations go through a **distribution adapter** (`texdist.py`) with tw
 - **Paths:** use `pathlib` internally; always pass forward slashes to TeX; reject source paths with spaces under `\include` (TeX limitation) with a clear error.
 - **SyncTeX paths:** normalise case and drive letters on Windows when mapping input tags.
 - **Line endings:** generated files keep the source's line endings; read and write in binary mode, so line numbers are preserved.
-- **Output replacement:** `os.replace` onto `main.pdf` fails on Windows while a viewer locks the file (e.g. Adobe Reader). Retry with backoff for 2 s, then write `main.chapmk.pdf` and warn. SumatraPDF does not lock.
+- **Output replacement:** `os.replace` onto `main.pdf` fails on Windows while a viewer locks the file (e.g. Adobe Reader). Retry with backoff for 2 s, then write `main.chapmk.pdf` and warn. SumatraPDF does not lock. The PDF and the SyncTeX file are both merged into temporary files first and then renamed back to back, SyncTeX first (C16): a viewer sees the old or the new pair. (pdfTeX itself writes the PDF while it runs; its SyncTeX file appears at the end.)
 - **Processes:** use `subprocess` only, no `fork`; the process pool must be spawn-safe.
 - **Watch mode (future):** `watchdog` (cross-platform).
 - **Performance on Windows:** process start-up and antivirus scanning of many small files are slower. Document the recommendation to exclude the build directory from on-access scanning.

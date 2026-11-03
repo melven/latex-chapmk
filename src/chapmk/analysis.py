@@ -232,6 +232,18 @@ def _fallback_reasons(text: str) -> list[str]:
             reasons.append(f"\\{name} is not supported")
     if re.search(r"\\bibliography\s*\{", text):
         reasons.append("BibTeX (\\bibliography) is not supported; use biblatex with biber")
+    # C10: citations outside refsection 0 cannot be patched into the .bcf per run; found
+    # here, no build attempt is wasted (the runtime check stays for other ways to start one)
+    options = " ".join(
+        (m.optional or "") for m in find_macros(text, {"usepackage", "RequirePackage"})
+    ) + " ".join(m.argument or "" for m in find_macros(text, {"ExecuteBibliographyOptions"}))
+    option = re.search(r"\brefsection\s*=\s*(\w+)", options)
+    if (
+        (option and option.group(1) != "none")
+        or re.search(r"\\begin\s*\{refsection\}", text)
+        or re.search(r"\\newrefsection(?![A-Za-z@])", text)
+    ):
+        reasons.append("biblatex refsections are not supported (citations outside refsection 0)")
     return reasons
 
 

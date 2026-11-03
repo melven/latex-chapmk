@@ -1,6 +1,8 @@
 # latex-chapmk
 
 [![ci](https://github.com/melven/latex-chapmk/actions/workflows/ci.yml/badge.svg)](https://github.com/melven/latex-chapmk/actions/workflows/ci.yml)
+[![coverage](https://melven.github.io/latex-chapmk/coverage.svg)](https://melven.github.io/latex-chapmk/)
+[![license](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
 
 `chapmk`: latexmk for books. It rebuilds only the changed `\include`'d chapters of a pdfLaTeX
 document, in parallel, and merges them into one PDF and SyncTeX file that look like a plain
@@ -70,7 +72,8 @@ merged; any case it cannot handle falls back to a plain full build.
 - pdfLaTeX and TeX Live only (MiKTeX, Windows and macOS are not tested yet); biblatex with
   biber only; hyperref needs the `bookmark` package.
 - Full builds (like latexmk, with a warning): `glossaries`, `imakeidx`/`makeidx`, `minted`,
-  `cleveref`, BibTeX, primitive `\mark`, and cases chapmk cannot verify.
+  `cleveref`, BibTeX, biblatex refsections, primitive `\mark`, an `eqparbox` tag used in
+  several chapters whose width changes, and cases chapmk cannot verify.
 - TikZ externalize: chapmk keeps `\tikzexternalize` but makes the figures itself (no shell
   escape); the result equals an externalized build. References hidden in macros inside
   pictures, and label or citation keys built by macros, are not tracked.
