@@ -91,6 +91,10 @@ def test_read_run_records(tmp_path: Path) -> None:
             "include 2",
         ),
         (lambda d: (d / "doc.nlo").write_text("\\nomenclatureentry{x}{1}\n"), "before the first"),
+        # C9: truncated or malformed lines and pages of unknown segments
+        (lambda d: (d / "doc.frec").write_text("P 0 G0 1 i\nP 1 U1\n"), "unreadable records"),
+        (lambda d: (d / "doc.frec").write_text("P 0 G0 x i\n"), "unreadable records"),
+        (lambda d: (d / "doc.frec").write_text("P 0 U7 1 i\n"), "no known segment"),
     ],
 )
 def test_record_errors(tmp_path: Path, change, message: str) -> None:  # type: ignore[no-untyped-def]

@@ -61,3 +61,21 @@ def test_locked_build_dir_no_wait(tmp_path: Path, capsys: pytest.CaptureFixture[
         assert main(["clean", "d.tex", "--no-wait"], cwd=tmp_path) == 2
     assert main(["clean", "d.tex"], cwd=tmp_path) == 0
     assert not (tmp_path / ".chapmk").exists()
+
+
+def test_internal_error_exit_3(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """C9: an unexpected exception is an internal error: exit 3, one line, the traceback only
+    with -v."""
+    import chapmk.cli
+
+    def boom(*_args: object) -> int:
+        raise KeyError("x")
+
+    monkeypatch.setattr(chapmk.cli, "cmd_build", boom)
+    assert main(["build", "d.tex"], cwd=tmp_path) == 3
+    err = capsys.readouterr().err
+    assert "internal error: KeyError" in err and "Traceback" not in err and "-v" in err
+    assert main(["build", "d.tex", "-v"], cwd=tmp_path) == 3
+    assert "Traceback" in capsys.readouterr().err
