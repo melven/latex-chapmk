@@ -97,6 +97,8 @@ def cmd_build(args: argparse.Namespace, cwd: Path) -> int:
     if not config.verbose:
         for warning in result.warnings:
             _say(f"warning: {warning}")
+        for hint in result.hints:
+            _say(f"hint: {hint}")
     if config.verbose:
         pass  # the builder reported mode and reasons already
     elif result.mode == "full" and result.reason and result.reason != "--full":

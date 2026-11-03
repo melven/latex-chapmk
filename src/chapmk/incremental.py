@@ -116,6 +116,8 @@ class BuildReport:
     pdf: str | None = None
     warnings: list[str] = field(default_factory=list)
     timings: dict[str, float] = field(default_factory=dict)  # wall time per phase (M6)
+    # advice that depends on measured times (slow glue), kept apart from the warnings
+    hints: list[str] = field(default_factory=list)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=1)
@@ -949,15 +951,16 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         for r in runs:
             for seg, seconds in r.get("glue_segments", {}).items():
                 slow_glue[seg] = max(slow_glue.get(seg, 0.0), seconds)
-        for hint in glue_hints(
+        hints = glue_hints(
             ctx.analysis.main.name,
             ctx.analysis.lines,
             ctx.analysis.begin_line,
             [inc.line for inc in ctx.analysis.includes],
             slow_glue,
             [*UNIT_HEADINGS, *ctx.config.unit_headings],
-        ):
-            loop._warn(hint)
+        )
+        for hint in hints:
+            ctx.say(f"hint: {hint}")
         if runs:  # a no-op build lints nothing
             (canon / LINT_CACHE).write_text(json.dumps(dict(loop.lint_cache)))
         if runs or not is_published(ctx.layout):
@@ -987,6 +990,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
             str(pdf),
             loop.warnings,
             ctx.timings.as_dict(),
+            hints,
         )
     except (FallbackError, MergeFailedError) as fb:
         if isinstance(fb, FallbackError) and fb.persistent:
