@@ -640,6 +640,8 @@ chapmk graph [MAIN] [--format text|dot|json]   # compilation units and dependenc
 
 **One process per build directory (C6):** `build`, `check` and `clean` hold an exclusive OS file lock on `<build>/lock` (`fcntl.flock` / `msvcrt.locking`; released when the process ends, also when killed). A second process waits with a message, or fails with exit 2 under `--no-wait`. Temporary names of published outputs carry the PID.
 
+**Signals (C8):** every external program runs in its own process group and is registered while it runs. On SIGTERM (editors stop a build when the next save starts one) or SIGINT, chapmk kills all registered process groups (SIGTERM, SIGKILL after 1 s), starts no new ones and exits with 143 / 130. An interrupted commit is redone by the journal (§6.6).
+
 **`chapmk graph`** shows the build structure from the analysis and the last state:
 - the compilation units (§6.1) with their includes;
 - glue segments;
