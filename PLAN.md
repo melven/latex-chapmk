@@ -627,6 +627,11 @@ Full mode means plain sequential full runs to a fixpoint inside the build direct
 - primitive marks (§6.4.2, persistent, with a warning);
 - `--full`.
 
+**Runtime self-checks (C14)** compare chapmk's own results with what TeX wrote; a mismatch (`SelfCheckError`: a bug or an unsupported construct) is a fallback:
+- a batch with a run of all units: the patched `.bcf` (citations, datalists) equals that run's `.bcf`;
+- a unit no run of the batch compiled keeps its list-file entries;
+- each merged page's label equals the label hyperref gave it in its run (pages after an extra picture page are skipped).
+
 Each fallback is reported as one warning (`full build: <reason>`). All of these are one exception class, `errors.FallbackError` (records, tool inputs, merges derive from it; D3), handled only by the builder. Persistent reasons are also reported as warnings. Any other exception is a bug: exit code 3 with a one-line `internal error: ...` message, the traceback only with `-v` (C9).
 
 Each trigger prints a one-line reason.
