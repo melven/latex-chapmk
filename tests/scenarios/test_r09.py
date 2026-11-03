@@ -157,3 +157,11 @@ def test_primitive_marks_fall_back(
     rep = checked(src, capsys)
     assert rep["mode"] == "full" and "primitive marks" in rep["reason"], rep
     assert any("primitive marks" in w for w in rep["warnings"]), rep
+    # persistent (full-only.json): the next build skips the attempt, still with the warning
+    runs = src / ".chapmk" / "main" / "runs"
+    before = sorted(p.name for p in runs.iterdir())
+    rep = checked(src, capsys)
+    assert sorted(p.name for p in runs.iterdir()) == before  # no incremental run
+    assert rep["mode"] == "full" and [r["name"] for r in rep["runs"]] == ["full"], rep
+    assert any("primitive marks" in w for w in rep["warnings"]), rep
+    assert (src / ".chapmk" / "main" / "canon" / "full-only.json").is_file()
