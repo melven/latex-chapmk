@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-xdist>=3", "ruff>=0.6", "mypy>=1.11"]
+dev = ["pytest>=8", "pytest-xdist>=3", "pytest-cov>=5", "ruff>=0.6", "mypy>=1.11"]
 
 [project.scripts]
 chapmk = "chapmk.cli:main"
@@ -52,3 +52,14 @@ markers = [
     "bench: manual benchmarks only",
 ]
 addopts = "-m 'not bench'"
+
+[tool.coverage.run]
+source = ["chapmk"]
+branch = true
+omit = ["*/chapmk/__main__.py"]
+
+[tool.coverage.report]
+# CI floor (T3): the full suite measured 94 % (branch) at 0.9
+fail_under = 90
+show_missing = false
+skip_covered = true

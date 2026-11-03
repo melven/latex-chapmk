@@ -19,7 +19,7 @@ jobs:
             pip install -e .
             ruff check . && ruff format --check .
             mypy --strict src
-            pytest -n auto
+            pytest -n auto --cov --cov-report=term
           '
 
   # M7: add macos-texlive, windows-texlive and windows-miktex (PLAN.md §6.16).
