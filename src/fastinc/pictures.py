@@ -123,8 +123,9 @@ def driver_file(fig_dir: Path | None, cwd: Path, stamp: str, refs: Mapping[str, 
 def store_references(fig_dir: Path, rec: PictureRecord, values: Mapping[str, str]) -> None:
     """Store an exported picture's code and the values of the keys it references."""
     (fig_dir / f"{rec.key}.src").write_text(rec.source, encoding="utf-8", errors="surrogateescape")
-    deps = imports(TokenScan([rec.source]), values)
-    (fig_dir / f"{rec.key}.deps").write_text(json.dumps(deps, sort_keys=True), encoding="utf-8")
+    scan = TokenScan([rec.source])
+    data = {"deps": imports(scan, values), "tokens": sorted(scan.tokens), "text": scan.texts[0]}
+    (fig_dir / f"{rec.key}.deps").write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
 
 
 def stale_figures(fig_dir: Path, values: Mapping[str, str]) -> list[str]:
@@ -137,12 +138,17 @@ def stale_figures(fig_dir: Path, values: Mapping[str, str]) -> list[str]:
         key = src.name[: -len(".src")]
         deps_file = fig_dir / f"{key}.deps"
         try:
-            stored = json.loads(deps_file.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            data = json.loads(deps_file.read_text(encoding="utf-8"))
+            if "tokens" in data:
+                scan = TokenScan.stored(data["tokens"], data["text"])
+                stored = data["deps"]
+            else:  # written by an earlier version: only the referenced values
+                code = src.read_text(encoding="utf-8", errors="surrogateescape")
+                scan, stored = TokenScan([code]), data
+        except (OSError, ValueError, KeyError, TypeError):
             stale.append(key)
             continue
-        code = src.read_text(encoding="utf-8", errors="surrogateescape")
-        if changed_imports(stored, TokenScan([code]), values):
+        if changed_imports(stored, scan, values):
             stale.append(key)
     return stale
 

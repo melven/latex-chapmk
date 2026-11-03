@@ -580,10 +580,14 @@ class Fixpoint:
         if parallel:
             pred, rewrites = self._predictions([g for g in groups if g is not None])
             self.state_before = dict(state.vectors)  # verification uses the vectors predicted from
+        t = ctx.timings
+        t.lap("plan")  # dirty-set planning, groups, predictions
         registers = {n: reg for n, (reg, _) in self._canon_records(canon).counters.items()}
         pre = self._view if self._view is not None else read_canon(a, canon)
         pre_glue = self.glue_inputs(pre)
+        t.lap("canon")
         pictures_text = self.pictures_file(pre)
+        t.lap("pictures")
         specs: list[RunSpec] = []
         compiled_by_run: list[set[str]] = []
         for j, group in enumerate(groups):
@@ -619,8 +623,7 @@ class Fixpoint:
         all_compiled = set().union(*compiled_by_run)
         pre_self = {seg: pre.unit_self(seg) for seg in all_compiled}
         env = ctx.env(state.epoch)
-        t = ctx.timings
-        t.lap("prepare")
+        t.lap("prepare")  # run directories
         results = run_batch(a, ctx.layout, ctx.dist, env, specs, self.fmt.name, len(specs))
         t.lap("tex")
         for r in results:

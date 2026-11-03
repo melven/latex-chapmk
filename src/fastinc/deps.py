@@ -122,6 +122,14 @@ class TokenScan:
             return any(name in text for text in self.texts)
         return name in self.tokens
 
+    @classmethod
+    def stored(cls, tokens: Iterable[str], text: str) -> TokenScan:
+        """A scan from its stored tokens and (label-stripped) text, without scanning again."""
+        scan = cls([])
+        scan.texts = [text]
+        scan.tokens = set(tokens)
+        return scan
+
     def referenced(self, keys: Iterable[str]) -> set[str]:
         """The referenced keys among ``keys`` (namespaced). Same result as filtering with
         :meth:`references`, in time linear in the tokens plus the keys containing a
