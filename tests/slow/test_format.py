@@ -36,7 +36,7 @@ def test_format_build_reuse_and_run(copy_corpus) -> None:  # type: ignore[no-unt
     out.mkdir()
     write_if_changed(out / "main.tex", run_main(a, None).replace("\\usepackage{chapmk}", ""))
     r = run(
-        dist.pdflatex(str(out / "main.tex"), "main", out, fmt=info.name),
+        dist.pdflatex(str(out / "main.tex"), "main", out, fmt=info.path),
         cwd=lay.shadow_dir,
         env=env,
     )

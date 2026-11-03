@@ -19,7 +19,7 @@ from chapmk.shadow import (
     sync_project_shadow,
     sync_shadow,
 )
-from chapmk.texdist import TEX_DIR, TeXLive, detect, deterministic_env, tex_path
+from chapmk.texdist import TEX_DIR, MiKTeX, TeXLive, detect, deterministic_env, tex_path
 
 
 def test_run_captures_output_and_errors(tmp_path: Path) -> None:
@@ -44,7 +44,7 @@ def test_run_captures_output_and_errors(tmp_path: Path) -> None:
 
 def test_texlive_command_lines(tmp_path: Path) -> None:
     tl = TeXLive(which=lambda _: "/usr/bin/x")
-    argv = tl.pdflatex("\\input{a.tex}", "thesis", tmp_path / "out", fmt="pre")
+    argv = tl.pdflatex("\\input{a.tex}", "thesis", tmp_path / "out", fmt=tmp_path / "pre.fmt")
     assert argv[:2] == ["pdflatex", "-fmt=pre"]
     assert f"-output-directory={(tmp_path / 'out').as_posix()}" in argv
     assert {"-synctex=1", "-recorder", "-halt-on-error", "-jobname=thesis"} <= set(argv)
@@ -81,11 +81,56 @@ def test_texlive_environment(tmp_path: Path) -> None:
 def test_check_tools_and_detect() -> None:
     with pytest.raises(ToolError, match="biber, makeindex"):
         TeXLive(which=lambda t: None if t in ("biber", "makeindex") else "/bin/t").check_tools()
-    with pytest.raises(ToolError, match="MiKTeX"):
-        detect(which=lambda _: "C:/Program Files/MiKTeX/bin/pdflatex.exe")
+    texlive = "pdfTeX 3.141592653-2.6-1.40.29 (TeX Live 2026)"
+    miktex = "MiKTeX-pdfTeX 4.27 (MiKTeX 26.5)"
     with pytest.raises(ToolError, match="not found"):
         detect(which=lambda _: None)
-    assert isinstance(detect(which=lambda _: "/usr/bin/pdflatex"), TeXLive)
+    assert type(detect(lambda _: "/usr/bin/pdflatex", lambda _: texlive)) is TeXLive
+    # by the path (Windows) or by the banner: on Linux MiKTeX's pdflatex is /usr/local/bin (S11)
+    win = "C:/Program Files/MiKTeX/miktex/bin/x64/pdflatex.exe"
+    assert isinstance(detect(lambda _: win, lambda _: miktex), MiKTeX)
+    assert isinstance(detect(lambda _: "/usr/local/bin/pdflatex", lambda _: miktex), MiKTeX)
+
+
+def test_miktex_command_lines(tmp_path: Path) -> None:
+    """S11: format by --undump (TEXFORMATS is ignored), --max-print-line on every TeX call
+    (the environment variable is ignored), SyncTeX paths without /./ and absolute queries."""
+    mk = MiKTeX(which=lambda _: "/usr/local/bin/x", config_value=lambda _: "1")
+    argv = mk.pdflatex("chapmk-run.tex", "thesis", tmp_path / "out", fmt=tmp_path / "f/pre.fmt")
+    assert argv[:3] == [
+        "pdflatex",
+        f"--undump={(tmp_path / 'f/pre.fmt').as_posix()}",
+        "--max-print-line=10000",
+    ]
+    assert {"-synctex=1", "-recorder", "-halt-on-error", "-jobname=thesis"} <= set(argv)
+    assert argv[-1] == "chapmk-run.tex"
+    assert not any(a.startswith(("-fmt", "--undump")) for a in mk.pdflatex("x", "j", tmp_path))
+    fb = mk.format_build(tmp_path / "pre.tex", "pre", tmp_path)
+    assert fb[:3] == ["pdflatex", "--max-print-line=10000", "-ini"]
+    assert fb[-2:] == ["mylatexformat.ltx", tex_path(tmp_path / "pre.tex")]
+    assert mk.biber("t", tmp_path) == TeXLive().biber("t", tmp_path)
+    assert mk.environment(1, {}) == TeXLive().environment(1, {})
+    src = Path("/doc")
+    assert mk.synctex_input(src, "main.tex") == "/doc/main.tex"
+    assert mk.synctex_query(src, "ch/a.tex") == "/doc/ch/a.tex"
+    tl = TeXLive()
+    assert tl.synctex_input(src, "main.tex") == "/doc/./main.tex"
+    assert tl.synctex_query(src, "ch/a.tex") == "ch/a.tex"
+
+
+@pytest.mark.parametrize(("value", "ok"), [("0", True), ("1", True), ("2", False), ("", False)])
+def test_miktex_on_the_fly_installation_must_not_prompt(value: str, ok: bool) -> None:
+    """§6.16: 'ask' would prompt or block parallel runs; never (0) and always (1) are fine."""
+    mk = MiKTeX(which=lambda _: "/bin/t", config_value=lambda _: value)
+    if ok:
+        mk.check_tools()
+    else:
+        with pytest.raises(ToolError, match="AutoInstall"):
+            mk.check_tools()
+    with pytest.raises(ToolError, match="initexmf"):
+        MiKTeX(
+            which=lambda t: None if t == "initexmf" else "/bin/t", config_value=lambda _: "1"
+        ).check_tools()
 
 
 def project(tmp_path: Path) -> Config:

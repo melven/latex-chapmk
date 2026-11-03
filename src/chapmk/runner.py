@@ -82,15 +82,15 @@ def run_one(
     dist: TexDistribution,
     env: Mapping[str, str],
     spec: RunSpec,
-    fmt_name: str,
+    fmt: Path,
 ) -> RunResult:
-    """Run pdflatex with the format in a prepared run directory (cwd = shadow tree).
-    ``env`` must contain the format directory in ``TEXFORMATS``."""
+    """Run pdflatex with the format file ``fmt`` in a prepared run directory (cwd = shadow
+    tree). ``env`` comes from :meth:`TexDistribution.environment` with the format directory."""
     run_dir = layout.runs_dir / spec.name
     job = analysis.jobname
     run_env = dict(env)
     run_env["TEXINPUTS"] = f"{run_dir}{os.pathsep}{env.get('TEXINPUTS', '')}"
-    argv = dist.pdflatex(RUN_MAIN, job, run_dir, fmt=fmt_name)
+    argv = dist.pdflatex(RUN_MAIN, job, run_dir, fmt=fmt)
     result = run(argv, cwd=layout.shadow_dir, env=run_env, log_path=run_dir / "pdflatex.out")
     log = run_dir / f"{job}.log"
     # a run without pages (glue-only run of a document whose glue ships none) writes no PDF
@@ -114,16 +114,14 @@ def run_batch(
     dist: TexDistribution,
     env: Mapping[str, str],
     specs: Sequence[RunSpec],
-    fmt_name: str,
+    fmt: Path,
     jobs: int,
 ) -> list[RunResult]:
     """Run prepared runs with at most ``jobs`` parallel pdflatex processes (N2). Results are
     returned in the order of ``specs``. Threads only wait for subprocesses (no fork)."""
     pool = ThreadPoolExecutor(max_workers=max(1, jobs))
     try:
-        futures = [
-            pool.submit(run_one, analysis, layout, dist, env, spec, fmt_name) for spec in specs
-        ]
+        futures = [pool.submit(run_one, analysis, layout, dist, env, spec, fmt) for spec in specs]
         return [f.result() for f in futures]
     except BaseException:  # a signal in the main thread: stop the workers' processes (C8)
         terminate_all()

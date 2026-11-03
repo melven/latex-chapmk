@@ -1,7 +1,9 @@
 """TeX distribution adapter (PLAN §6.16). The only module that knows engine flags.
 
-Every TeX, biber and makeindex command line and the TeX environment come from here, so a
-MiKTeX implementation (M7) can be added without touching the driver logic.
+Every TeX, biber and makeindex command line, the TeX environment and the distribution's
+path conventions (SyncTeX input paths) come from here. Two implementations: :class:`TeXLive`
+and :class:`MiKTeX` (S11: format via ``--undump``, ``--max-print-line``, SyncTeX paths without
+``/./``, on-the-fly installation must not prompt).
 """
 
 from __future__ import annotations
@@ -48,7 +50,7 @@ class TexDistribution(Protocol):
     ) -> dict[str, str]: ...
 
     def pdflatex(
-        self, tex_input: str, jobname: str, outdir: Path, fmt: str | None = None
+        self, tex_input: str, jobname: str, outdir: Path, fmt: Path | None = None
     ) -> list[str]: ...
 
     def format_build(self, source: Path, jobname: str, outdir: Path) -> list[str]: ...
@@ -56,6 +58,15 @@ class TexDistribution(Protocol):
     def biber(self, jobname: str, outdir: Path) -> list[str]: ...
 
     def makeindex(self, input_name: str, output_name: str, style: str | None) -> list[str]: ...
+
+    def synctex_input(self, cwd: Path, relative: str) -> str:
+        """How a run records an input file found relative to its working directory in the
+        SyncTeX file (the merge writes the main file in this form)."""
+        ...
+
+    def synctex_query(self, cwd: Path, relative: str) -> str:
+        """The file name to pass to ``synctex view`` for such a file."""
+        ...
 
 
 class TeXLive:
@@ -92,14 +103,22 @@ class TeXLive:
         return env
 
     def pdflatex(
-        self, tex_input: str, jobname: str, outdir: Path, fmt: str | None = None
+        self, tex_input: str, jobname: str, outdir: Path, fmt: Path | None = None
     ) -> list[str]:
-        """pdflatex run (§6.5). ``fmt`` is a format *name* found via ``TEXFORMATS``: an
-        absolute ``-fmt`` path breaks ``-recorder`` (S1)."""
-        argv = ["pdflatex"]
-        if fmt is not None:
-            argv.append(f"-fmt={fmt}")
-        argv += [
+        """pdflatex run (§6.5). ``fmt`` is the format file; TeX Live finds it by its *name*
+        via ``TEXFORMATS`` (:meth:`environment`): an absolute ``-fmt`` path breaks
+        ``-recorder`` (S1)."""
+        return [
+            "pdflatex",
+            *self._format_options(fmt),
+            *self._run_options(tex_input, jobname, outdir),
+        ]
+
+    def _format_options(self, fmt: Path | None) -> list[str]:
+        return [] if fmt is None else [f"-fmt={fmt.stem}"]
+
+    def _run_options(self, tex_input: str, jobname: str, outdir: Path) -> list[str]:
+        return [
             "-interaction=nonstopmode",
             "-halt-on-error",
             "-file-line-error",
@@ -109,7 +128,6 @@ class TeXLive:
             f"-jobname={jobname}",
             tex_input,
         ]
-        return argv
 
     def format_build(self, source: Path, jobname: str, outdir: Path) -> list[str]:
         """mylatexformat format build of ``source`` (§6.3.1)."""
@@ -128,7 +146,7 @@ class TeXLive:
         ]
 
     def biber(self, jobname: str, outdir: Path) -> list[str]:
-        """biber, run with cwd = source/shadow tree; reads the .bcf from ``outdir`` (P1)."""
+        """biber, run with cwd = source/shadow tree; reads the .bcf from ``outdir`` (§6.10)."""
         return ["biber", "--output-directory", str(outdir), jobname]
 
     def makeindex(self, input_name: str, output_name: str, style: str | None) -> list[str]:
@@ -137,12 +155,86 @@ class TeXLive:
         opts = ["-s", style] if style is not None else []
         return ["makeindex", *opts, "-o", output_name, input_name]
 
+    def synctex_input(self, cwd: Path, relative: str) -> str:
+        """``<cwd>/./<relative>``: unresolved, with ``/./`` (S2, S10)."""
+        return f"{tex_path(cwd)}/./{relative}"
 
-def detect(which: Callable[[str], str | None] = shutil.which) -> TexDistribution:
-    """The installed distribution. MiKTeX is recognised and rejected until M7."""
+    def synctex_query(self, cwd: Path, relative: str) -> str:
+        """The relative name: ``synctex view`` matches it via the ``/./`` (S10)."""
+        return relative
+
+
+class MiKTeX(TeXLive):
+    """MiKTeX (S11). Differences to TeX Live: ``TEXFORMATS`` is ignored, so the format is
+    passed as ``--undump=<absolute path>`` (``-recorder`` stays complete); the environment
+    variable ``max_print_line`` is ignored, so ``--max-print-line`` is passed; SyncTeX records
+    ``<cwd>/<relative>`` without ``/./``, so ``synctex view`` needs absolute names; on-the-fly
+    package installation must not prompt (§6.16)."""
+
+    name = "MiKTeX"
+
+    def __init__(
+        self,
+        which: Callable[[str], str | None] = shutil.which,
+        config_value: Callable[[str], str] | None = None,
+    ) -> None:
+        super().__init__(which)
+        self._config_value = config_value or _initexmf_value
+
+    def check_tools(self) -> None:
+        """Required programs, and on-the-fly installation set to never (0) or always (1):
+        "ask" would prompt or block parallel runs."""
+        missing = [t for t in (*REQUIRED_TOOLS, "initexmf") if self._which(t) is None]
+        if missing:
+            raise ToolError("required programs not found on PATH: " + ", ".join(missing))
+        value = self._config_value("[MPM]AutoInstall").strip()
+        if value not in ("0", "1"):
+            raise ToolError(
+                "MiKTeX may ask before installing missing packages "
+                f"([MPM]AutoInstall = {value or 'unset'}), which blocks unattended and "
+                "parallel runs. Choose 'always' or 'never', e.g. "
+                "'initexmf --set-config-value [MPM]AutoInstall=1' "
+                "(MiKTeX Console: Settings, 'Always install missing packages on-the-fly')"
+            )
+
+    def _format_options(self, fmt: Path | None) -> list[str]:
+        return [] if fmt is None else [f"--undump={tex_path(fmt)}"]
+
+    def _run_options(self, tex_input: str, jobname: str, outdir: Path) -> list[str]:
+        return ["--max-print-line=10000", *super()._run_options(tex_input, jobname, outdir)]
+
+    def format_build(self, source: Path, jobname: str, outdir: Path) -> list[str]:
+        argv = super().format_build(source, jobname, outdir)
+        return [argv[0], "--max-print-line=10000", *argv[1:]]
+
+    def synctex_input(self, cwd: Path, relative: str) -> str:
+        return f"{tex_path(cwd)}/{relative}"
+
+    def synctex_query(self, cwd: Path, relative: str) -> str:
+        return self.synctex_input(cwd, relative)
+
+
+def _initexmf_value(name: str) -> str:
+    """A MiKTeX configuration value (effective for the current user)."""
+    result = run(["initexmf", "--show-config-value", name], cwd=Path.cwd(), env=dict(os.environ))
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    return lines[-1] if result.ok and lines else ""
+
+
+def _banner(pdflatex: str) -> str:
+    result = run([pdflatex, "--version"], cwd=Path.cwd(), env=dict(os.environ))
+    return result.output.splitlines()[0] if result.output else ""
+
+
+def detect(
+    which: Callable[[str], str | None] = shutil.which,
+    banner: Callable[[str], str] = _banner,
+) -> TexDistribution:
+    """The installed distribution, from the version banner of ``pdflatex`` (S11: on Linux
+    MiKTeX's ``pdflatex`` is ``/usr/local/bin/pdflatex``, so the path does not tell)."""
     pdflatex = which("pdflatex")
     if pdflatex is None:
         raise ToolError("pdflatex not found on PATH")
-    if re.search(r"miktex", pdflatex, re.IGNORECASE):
-        raise ToolError("MiKTeX is not supported yet (planned for milestone M7)")
+    if re.search(r"miktex", pdflatex, re.IGNORECASE) or "MiKTeX" in banner(pdflatex):
+        return MiKTeX(which)
     return TeXLive(which)

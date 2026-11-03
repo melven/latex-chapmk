@@ -20,6 +20,7 @@ from chapmk.runner import RUN_MAIN
 from chapmk.state import State
 from chapmk.synctex import SyncTexError
 from chapmk.synctex import merge as merge_synctex
+from chapmk.texdist import TexDistribution
 from chapmk.timing import Timings
 
 if TYPE_CHECKING:
@@ -54,9 +55,16 @@ def failed_run(analysis: Analysis, layout: Layout, run_dir: Path, err: TexError)
 
 
 def publish_state(
-    analysis: Analysis, layout: Layout, state: State, timings: Timings | None = None
+    analysis: Analysis,
+    layout: Layout,
+    state: State,
+    timings: Timings | None = None,
+    *,
+    dist: TexDistribution,
 ) -> Path:
-    """Merge the canonical segments into the published PDF, SyncTeX file and log."""
+    """Merge the canonical segments into the published PDF, SyncTeX file and log. The run
+    main maps to the user's main file in the form the distribution records for an input in
+    the working directory (as a full build of the main file would: S10, S11)."""
     from chapmk.merge_pdf import MergeError, OutlineEntry, PageSource, merge_pdf  # pikepdf
 
     t = timings or Timings()
@@ -101,7 +109,7 @@ def publish_state(
 
     pdf = publish(write_pdf, layout.output(".pdf"))
     t.lap("merge_pdf")
-    main_name = f"{analysis.source_dir}/./{analysis.main.name}"
+    main_name = dist.synctex_input(analysis.source_dir, analysis.main.name)
 
     prefixes = [(old + "/", new) for old, new in layout.path_map()]
 

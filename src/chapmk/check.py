@@ -225,7 +225,9 @@ def compare_synctex(
 ) -> Report:
     """§3.3 item 4: ``synctex view`` at up to ``samples`` lines per source file (evenly spread
     over the lines that have records in the reference) and ``synctex edit`` at the resulting
-    positions. ``sources`` are paths relative to ``cwd``, as an editor would pass them."""
+    positions. ``sources`` are relative to ``cwd`` or absolute, in the form ``synctex view``
+    matches for the distribution (:meth:`TexDistribution.synctex_query`). No record found for
+    any source is a difference: the comparison would otherwise pass without comparing (S11)."""
     report = report or Report()
     ref_views: list[list[str]] = []
     got_views: list[list[str]] = []
@@ -250,4 +252,8 @@ def compare_synctex(
                 break
     report.compare("synctex view", ref_views, got_views)
     report.compare("synctex edit", ref_edits, got_edits)
+    if sources and not ref_views:
+        report.differences.append(
+            Difference("synctex view", "no records found in the reference for any source file")
+        )
     return report
