@@ -50,6 +50,7 @@ from chapmk.fmt import (
 from chapmk.fullbuild import full_build
 from chapmk.layout import Layout
 from chapmk.lint import LintHit, glue_hints, lint_files
+from chapmk.logs import short_list
 from chapmk.outputs import (
     failed_run,
     is_published,
@@ -218,11 +219,6 @@ def _eqp_tag(key: str) -> str:
     return m.group(1) if m else key
 
 
-def _short(items: list[str], limit: int = 3) -> str:
-    shown = ", ".join(items[:limit])
-    return shown if len(items) <= limit else f"{shown}, ... (+{len(items) - limit})"
-
-
 def _lists_now(stored: str, view: CanonView) -> str:
     """The current value of a unit's stored list dependency (``.bbl,.toc=<hash>``, or the
     hash of all list files)."""
@@ -370,11 +366,11 @@ class Fixpoint:
                 continue
             changed = _changed(self.ctx, self.state.segment_files.get(seg, {}))
             if changed:
-                dirty.setdefault(seg, []).append(f"sources changed ({_short(changed)})")
+                dirty.setdefault(seg, []).append(f"sources changed ({short_list(changed)})")
         glue = self.state.glue_pending
         changed = self._glue_sources_changed()
         if changed:
-            glue = f"glue sources changed ({_short(changed)})"
+            glue = f"glue sources changed ({short_list(changed)})"
         return dirty, glue
 
     def after_run(
@@ -389,7 +385,7 @@ class Fixpoint:
         g_pre, g_post = pre.of_class(GLOBAL), post.of_class(GLOBAL)
         if g_pre != g_post:
             names = sorted({command_name(s) for s in set(g_pre) ^ set(g_post)})
-            msg = f"unclassified aux data changed ({_short(names)})"
+            msg = f"unclassified aux data changed ({short_list(names)})"
             self._warn(f"{msg}: all units are recompiled; please report these macros")
             for seg in self.units:
                 add(seg, msg)
@@ -408,7 +404,7 @@ class Fixpoint:
             if not set(tags) <= known:
                 owners |= compiled
             for seg in sorted(owners, key=lambda x: int(x[1:])):
-                add(seg, f"eqparbox widths changed ({_short(tags)})")
+                add(seg, f"eqparbox widths changed ({short_list(tags)})")
         for seg in self.units:
             info = self.state.units.get(seg)
             if info is None:
@@ -416,7 +412,7 @@ class Fixpoint:
                 continue
             if seg in compiled and not info.self_stable:
                 names = self.self_changes.get(seg, [])
-                add(seg, f"self data unstable ({_short(names) if names else 'rerun'})")
+                add(seg, f"self data unstable ({short_list(names) if names else 'rerun'})")
             if seg not in compiled and seg in recs.entries:
                 entry = recs.entry_state(seg)
                 counter = self.a.includes[int(seg[1:]) - 1].resets
@@ -428,15 +424,15 @@ class Fixpoint:
                 )
                 if regs:
                     shown = [self.register_names.get(r, f"\\count{r}") for r in regs]
-                    add(seg, f"entry state changed ({_short(shown)})")
+                    add(seg, f"entry state changed ({short_list(shown)})")
             keys = changed_imports(info.imports, self.scan(seg), post.values)
             if keys:
-                add(seg, f"imports changed ({_short(keys)})")
+                add(seg, f"imports changed ({short_list(keys)})")
             if info.lists is not None and info.lists != _lists_now(info.lists, post):
                 add(seg, "list files changed")
             changed = _changed(self.ctx, self.state.segment_files.get(seg, {}))
             if changed:
-                add(seg, f"sources changed ({_short(changed)})")
+                add(seg, f"sources changed ({short_list(changed)})")
         # tail run (§6.9.2, no prediction in M4): recompiling a unit whose entry changed may
         # change its exit, so all later units are compiled with it, in one run
         moved = [
@@ -456,7 +452,7 @@ class Fixpoint:
             glue = f"glue inputs changed ({', '.join(parts)})"
         changed = self._glue_sources_changed()
         if changed:
-            glue = f"glue sources changed ({_short(changed)})"
+            glue = f"glue sources changed ({short_list(changed)})"
         return dirty, glue
 
     def _check_shared_tags(self, changed: Sequence[str]) -> None:
@@ -789,7 +785,7 @@ class Fixpoint:
                 self.mispredicted[seg] = self.mispredicted.get(seg, 0) + 1
                 names = [self.register_names.get(r, f"\\count{r}") for r in regs]
                 arg = self.a.includes[k - 1].arg
-                reason = f"misprediction: exit of {arg} ({_short(names)})"
+                reason = f"misprediction: exit of {arg} ({short_list(names)})"
                 self.ctx.say(reason)
                 # predict again from the actual exit: later runs were compiled with a wrong
                 # entry only if the corrected chain changes their start entries (a later
@@ -931,14 +927,14 @@ def _cold_reason(ctx: Context, state: State | None, stamp: str) -> str | None:
     changed_dist = changed_signatures(state.dist_files)
     if changed_dist:
         names = [Path(p).name for p in changed_dist]
-        return f"TeX distribution files changed ({_short(names)})"
+        return f"TeX distribution files changed ({short_list(names)})"
     if state.fingerprints != asdict(ctx.analysis.fingerprints):
         return "main file changed (preamble or body)"
     if state.includes != [inc.arg for inc in ctx.analysis.includes]:
         return "list of includes changed"
     changed = _changed(ctx, state.global_files)
     if changed:
-        return f"global inputs changed ({_short(changed)})"
+        return f"global inputs changed ({short_list(changed)})"
     return None
 
 

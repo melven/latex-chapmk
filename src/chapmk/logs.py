@@ -24,3 +24,9 @@ def first_error(log: str) -> str | None:
         if line.startswith("! ") or _FILE_LINE_ERROR.match(line):
             return line.rstrip()
     return None
+
+
+def short_list(items: Sequence[str], limit: int = 3) -> str:
+    """``a, b, c, ... (+12 more)``: at most ``limit`` items of a list in a message."""
+    shown = ", ".join(items[:limit])
+    return shown if len(items) <= limit else f"{shown}, ... (+{len(items) - limit} more)"

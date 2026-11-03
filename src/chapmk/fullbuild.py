@@ -23,7 +23,7 @@ from chapmk.files import digest, write_atomic
 from chapmk.fmt import format_stamp, internal_dirs
 from chapmk.gensrc import full_mode_input
 from chapmk.layout import Layout
-from chapmk.logs import first_error, map_paths
+from chapmk.logs import first_error, map_paths, short_list
 from chapmk.pictures import (
     PICS_FILE,
     check_inputs,
@@ -70,12 +70,6 @@ class FullBuildResult:
     log: Path
     passes: int
     tool_runs: tuple[str, ...] = field(default=())
-
-
-def _names(names: list[str], limit: int = 5) -> str:
-    """``a, b, c, ... (+12 more)`` for progress messages."""
-    shown = ", ".join(names[:limit])
-    return shown if len(names) <= limit else f"{shown}, ... (+{len(names) - limit} more)"
 
 
 def _snapshot(outdir: Path) -> dict[Path, str]:
@@ -174,7 +168,7 @@ def converge(
             for p in read_inputs(outdir / f"{job}.fls", cwd, outdir)
             if not p.name.endswith(_NOT_INPUTS) and before.get(p) != digest(p)
         )
-        why = [f"changed {_names(changed)}"] if changed else []
+        why = [f"changed {short_list(changed, 5)}"] if changed else []
         if result.rerun is not None:
             why.append(result.rerun)
         report(f"pass {n}: " + ("; ".join(why) if why else "stable"))
