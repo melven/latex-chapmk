@@ -24,8 +24,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # the image is about 7.6 GB packed and 11 GB unpacked; a runner has about 14 GB free
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af
+          df -h /
       - name: Build MiKTeX image
         run: docker build -f Dockerfile.miktex -t chapmk-miktex .
+      - name: Smoke test (corpora with latexmk, biber, makeindex, synctex, mylatexformat)
+        run: docker run --rm -v "$PWD":/work:ro chapmk-miktex bash /work/tests/miktex-smoke.sh
       - name: Lint, type-check, unit tests, tool versions
         run: |
           docker run --rm -v "$PWD":/work -w /work --user root chapmk-miktex bash -c '
@@ -34,7 +42,6 @@ jobs:
             ruff check . && ruff format --check .
             mypy --strict src
             pytest -m "not slow"
-            pdflatex --version | head -1; biber --version; kpsewhich mylatexformat.ltx
           '
 
   windows-miktex:
