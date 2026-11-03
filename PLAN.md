@@ -226,7 +226,8 @@ Requirements:
    - The *state vector* (S4) is:
      - the LaTeX counters in the kernel checkpoint list (`\cl@@ckpt`),
      - plus all `\count` registers allocated **after the kernel**, i.e. with an index above `\count10` at `\documentclass` (recorded by `chapmk-ini.sty`). Allocation is linear in `\count10`, with a jump to 266 when the classic range is exhausted.
-     - minus a deny list of **run-local** registers, which number objects created in the current run: `Hy@abspage`, `BKM@id`, plus config `[state] ignore`.
+     - minus a deny list of **run-local** registers, which number objects created in the current run: `Hy@abspage`, `BKM@id`, plus config `[state] ignore`;
+     - plus one pseudo register per mark class of the kernel (`\NewMarkClass`: `2e-left`, `2e-right`, `2e-right-nonempty`, and those of packages; R0.9): number `100000 + <\marks register of the class>`, value 0 for an empty last mark of the `page` region, else a 28-bit digest of its text as an aux file gives it back. Running heads of the first pages of a unit (e.g. the blank page before a chapter under `openright`) show the last marks of the preceding unit. A segment that sets a mark of a class has it in its absolute set (prediction). At its end, a unit writes the texts of its `page` and `column` regions (`top`, `first`, `last`) as `\chapmk@mk` records into its unit aux; an excluded unit restores those of the pseudo registers its checkpoint lists, after the counters. Primitive marks (`\mark`, `\marks` registers of no class) cannot be restored: their use (`K primitive <n>` in `.frec`) is a persistent full-mode fallback with a warning. Mark ids (`\IfMarksEqual`) are run-local and not restored.
      Kernel registers are scratch, absolute (shipout counters) or float-box insert counts; they are neither compared nor restored. Package scratch registers need no deny list: after the restore (3) they equal the full run (S4). The number↔name map comes from the allocation lines `\<name>=\count<n>` in the format and run logs. The deny list is re-evaluated against real documents (`chapmk check` on the benchmark document); a run-local register missing from it breaks the run (fallback) or shows up in acceptance tests.
    - At `\begin{document}` (end of the `AtBeginDocument` hooks), write a baseline `\chapmk@base{...}` to the main aux (`\immediate\write\@mainaux`), as a sparse vector `n=v,...`.
    - At each segment start, write `\chapmk@entry{<seg>}{<sparse vector vs base>}` to the main aux. This happens in every run, for selected and excluded units alike. For excluded units it is written **before** their checkpoints are restored. `include/excluded` runs after the kernel restore (S3), so the entry is recorded by wrapping `\@setckpt` (an aux handler): `\cp@<unit>` becomes `<record entry><original checkpoint>`. A unit without a checkpoint (never compiled) records no entry; it is dirty anyway (§6.9.1 f).
@@ -866,7 +867,7 @@ Each test starts from a built state, applies an edit, runs `chapmk build`, asser
 | Risk | Mitigation |
 |---|---|
 | mylatexformat incompatibility with a package | Deny list and config `split_before`; S1 |
-| Partial-run differences not captured by the count-register vector (marks, dimens/skips, `\everypar` state, …) | Acceptance tests on every scenario; extend vectors to `\dimen`/`\skip` if needed; S7 |
+| Partial-run differences not captured by the count-register vector (dimens/skips, `\everypar` state, …; marks of the kernel's mark classes are in the vector since R0.9) | Acceptance tests on every scenario; extend vectors to `\dimen`/`\skip` if needed; S7 |
 | Read-order issues with `-output-directory` | Shadow tree (§6.5) excludes stale build files; S2 |
 | Text-scan import misses (keys built by macros) | Accepted for v1; `check` detects; config option to mark keys global |
 | PDF merge subtleties (OpenAction, forms, OCGs) | Copy rules §6.11.6; fallback on unknown catalog entries |
@@ -920,6 +921,8 @@ Each test starts from a built state, applies an edit, runs `chapmk build`, asser
 | counters (M4) | main aux, header | `\chapmk@counters{<name>=<register>:<child>/<child>/;...}`: register and `\cl@<name>` reset list of each checkpointed counter |
 | layout (M5) | main aux, header | `\chapmk@layout{twoside=0|1,openright=0|1}` |
 | unit start layout | `.frec` | `O <seg> 0\|1` (twoside and openright at the unit start) |
+| mark classes (R0.9) | `.frec` | `K <pseudo register> <class>` per class; `K primitive <n>` for a `\marks` register of no class holding a mark (unit end, `\end{document}`) |
+| unit marks (R0.9) | unit aux, before `\chapmk@ckpt` | `\chapmk@mk{<pseudo register>}{<class>}{<region>_<top\|first\|last>}{<text>}` for the `page` and `column` regions |
 | unit start (M5) | unit aux, first statement | `\chapmk@ustart{U<k>}`: at `\end{document}` writes `\chapmk@lmark{U<k>}` into the open list files; `\chapmk@entry{<seg>}` writes `\chapmk@lmark{/<seg>}` |
 | page map | `<job>.frec` | `P <shipout#> <seg> <\c@page> <\thepage text>` per line |
 | elapsed time (M6) | `<job>.frec` | `T <point> <\pdfelapsedtime>`: points `load`, `begin`, each segment id, `end`, `picture+`/`picture-` around every `\pgfpicture` |
