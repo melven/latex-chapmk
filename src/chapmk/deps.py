@@ -15,6 +15,7 @@ from pathlib import Path
 
 from chapmk.aux import normalize_statement, statements
 from chapmk.facts import LIST_COMMANDS
+from chapmk.texsource import text_lines
 
 UNDEFINED = "-"
 _NEWLABEL = re.compile(r"^\\newlabel\{(.+?)\}\{(.*)\}\s*$", re.DOTALL)
@@ -85,7 +86,7 @@ def _bbl_blocks(bbl: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     key: str | None = None
     block: list[str] = []
-    for line in bbl.read_text(encoding="utf-8", errors="surrogateescape").splitlines():
+    for line in text_lines(bbl.read_text(encoding="utf-8", errors="surrogateescape")):
         m = _BBL_ENTRY.match(line)
         if m:
             key, block = m.group(1), [line]

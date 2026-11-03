@@ -89,6 +89,7 @@ from chapmk.runner import RunSpec, prepare_run_dir, run_batch
 from chapmk.shadow import changed_signatures, external_inputs, read_inputs, stat_signatures
 from chapmk.state import State, UnitInputs, load_state, save_state
 from chapmk.texdist import TexDistribution
+from chapmk.texsource import text_lines
 from chapmk.timing import Timings
 
 MAX_ITERATIONS = 8
@@ -196,7 +197,7 @@ def _check_runtime_support(ctx: Context, run_dir: Path, fmt: FormatInfo) -> None
     loaded: set[str] = set()
     for fls in (fmt.directory / f"{fmt.name}.fls", run_dir / f"{ctx.job}.fls"):
         if fls.is_file():
-            lines = fls.read_text(errors="replace").splitlines()
+            lines = text_lines(fls.read_text(errors="replace"))
             loaded |= {Path(line[6:]).name for line in lines if line.startswith("INPUT ")}
     for pkg in sorted(UNSUPPORTED_PACKAGES):
         if f"{pkg}.sty" in loaded:

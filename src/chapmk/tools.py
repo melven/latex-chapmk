@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from chapmk.aux import segment_slices
 from chapmk.errors import FallbackError
 from chapmk.records import NLO_MARKER
+from chapmk.texsource import text_lines
 
 _CITEKEY = re.compile(r'^(\s*)<bcf:citekey order="(\d+)"( intorder="\d+")?(.*)$')
 _SECTION = re.compile(r'<bcf:section number="(\d+)">')
@@ -21,7 +22,7 @@ def citekey_lines(bcf: str) -> list[str]:
     """``<bcf:citekey ...>`` lines of the ``.bcf`` in order (section 0 only, S5)."""
     lines: list[str] = []
     section = "0"
-    for line in bcf.splitlines():
+    for line in text_lines(bcf):
         m = _SECTION.search(line)
         if m:
             section = m.group(1)
@@ -64,7 +65,7 @@ def patch_bcf(bcf: str, elements: Sequence[tuple[str, str]]) -> str:
         renumbered.append(f'{m.group(1)}<bcf:citekey order="{order}"{m.group(3) or ""}{m.group(4)}')
     out: list[str] = []
     inserted = False
-    for line in bcf.splitlines():
+    for line in text_lines(bcf):
         if _CITEKEY.match(line):
             if not inserted:
                 out += renumbered
@@ -87,7 +88,7 @@ def datalists(bcf: str) -> dict[str, str]:
     excludes the bibliography's unit lacks it."""
     blocks: dict[str, str] = {}
     current: list[str] | None = None
-    for line in bcf.splitlines():
+    for line in text_lines(bcf):
         if current is None and line.lstrip().startswith("<bcf:datalist"):
             current = []
         if current is not None:
@@ -106,7 +107,7 @@ def with_datalists(bcf: str, blocks: Mapping[str, str]) -> str:
     place of the first datalist, else before ``</bcf:controlfile>``)."""
     out: list[str] = []
     inside, placed = False, False
-    lines = bcf.splitlines()
+    lines = text_lines(bcf)
     for line in lines:
         if not inside and line.lstrip().startswith("<bcf:datalist"):
             inside = True

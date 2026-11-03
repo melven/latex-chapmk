@@ -37,6 +37,7 @@ from chapmk.proc import run
 from chapmk.records import RunRecords, read_nomenclature
 from chapmk.state import SegmentArtifact, State
 from chapmk.texdist import TexDistribution
+from chapmk.texsource import split_lines
 from chapmk.tools import (
     citations_by_segment,
     datalists,
@@ -224,7 +225,7 @@ def unit_sections(text: str) -> dict[str, list[str]]:
     (the contributions of unit ``U<k>``, written while its aux file was read)."""
     out: dict[str, list[str]] = {}
     current: str | None = None
-    for line in text.splitlines(keepends=True):
+    for line in split_lines(text):
         m = _LMARK.match(line)
         if m:
             current = m.group(2) if not m.group(1) and m.group(2).startswith("U") else None
@@ -242,7 +243,7 @@ def splice_list(base: str, sections: Mapping[str, list[str]]) -> str | None:
     out: list[str] = []
     skipping: str | None = None
     done: set[str] = set()
-    for line in base.splitlines(keepends=True):
+    for line in split_lines(base):
         m = _LMARK.match(line)
         if skipping is not None:
             if m and m.group(1) == "/" and m.group(2) == skipping:

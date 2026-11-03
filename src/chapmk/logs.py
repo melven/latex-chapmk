@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
+from chapmk.texsource import text_lines
+
 _FILE_LINE_ERROR = re.compile(r"^(?P<file>[^\s:][^:]*):(?P<line>\d+): (?P<msg>.*)$")
 
 
@@ -18,7 +20,7 @@ def map_paths(text: str, mapping: Sequence[tuple[str, str]]) -> str:
 def first_error(log: str) -> str | None:
     """First error of a TeX log: a ``file:line: message`` line (``-file-line-error``) or a
     ``! message`` line, whichever comes first."""
-    for line in log.splitlines():
+    for line in text_lines(log):
         if line.startswith("! ") or _FILE_LINE_ERROR.match(line):
             return line.rstrip()
     return None

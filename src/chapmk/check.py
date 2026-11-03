@@ -20,6 +20,7 @@ import pikepdf
 from chapmk.errors import ToolError
 from chapmk.files import digest
 from chapmk.proc import run
+from chapmk.texsource import text_lines
 
 DPI = 150
 SYNCTEX_SAMPLES = 8
@@ -207,7 +208,7 @@ def compare_pdfs(ref: Path, got: Path, *, dpi: int = DPI, report: Report | None 
 
 def _synctex(args: list[str], cwd: Path) -> list[str]:
     r = run(["synctex", *args], cwd=cwd, env=dict(os.environ))
-    return [line for line in r.output.splitlines() if _SYNCTEX_KEYS.match(line)]
+    return [line for line in text_lines(r.output) if _SYNCTEX_KEYS.match(line)]
 
 
 def _first(result: list[str], key: str) -> str:
