@@ -1,10 +1,10 @@
-// Dev container for fastinc (TeX Live full + Python venv).
-// Private benchmark: set FASTINC_BENCH_DOC_DIR (host directory of your real
-// document) and FASTINC_BENCH_DOC_MAIN (main file name) on the host before opening.
+// Dev container for chapmk (TeX Live full + Python venv).
+// Private benchmark: set CHAPMK_BENCH_DOC_DIR (host directory of your real
+// document) and CHAPMK_BENCH_DOC_MAIN (main file name) on the host before opening.
 // If you don't use a benchmark document, delete the "mounts" entry (an unset
 // source path makes the container start fail).
 {
-  "name": "fastinc",
+  "name": "chapmk",
   "build": {
     "dockerfile": "../Dockerfile",
     "context": ".."
@@ -12,10 +12,10 @@
   "workspaceFolder": "/work",
   "workspaceMount": "source=${localWorkspaceFolder},target=/work,type=bind",
   "mounts": [
-    "source=${localEnv:FASTINC_BENCH_DOC_DIR},target=/bench,type=bind,readonly"
+    "source=${localEnv:CHAPMK_BENCH_DOC_DIR},target=/bench,type=bind,readonly"
   ],
   "containerEnv": {
-    "FASTINC_BENCH_DOC": "/bench/${localEnv:FASTINC_BENCH_DOC_MAIN}"
+    "CHAPMK_BENCH_DOC": "/bench/${localEnv:CHAPMK_BENCH_DOC_MAIN}"
   },
   "postCreateCommand": "if [ -f pyproject.toml ]; then pip install -e .; fi",
   "customizations": {
