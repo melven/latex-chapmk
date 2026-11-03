@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-`fastinc`: an incremental, parallel pdfLaTeX build driver (Python) plus two small LaTeX packages.
+`chapmk` (distribution `latex-chapmk`, formerly `fastinc`): an incremental, parallel pdfLaTeX build driver (Python) plus two small LaTeX packages. Historical documents (`docs/spikes/`, `docs/review/`, spike corpora) keep the old name.
 **`PLAN.md` is the specification. Read it completely before any work.**
 
 ## Workflow
@@ -25,33 +25,33 @@
 Run everything inside the dev container (TeX Live full, Python venv, poppler, synctex):
 
 ```
-docker build -t fastinc-dev .
-docker run --rm -it -v "$PWD":/work -w /work fastinc-dev bash
+docker build -t chapmk-dev .
+docker run --rm -it -v "$PWD":/work -w /work chapmk-dev bash
 ```
 
 or open the repository as a devcontainer (`.devcontainer/devcontainer.json`).
 
 Behind a proxy: pass it as build args (`--build-arg HTTPS_PROXY=...`, `--network host` for a local proxy); if it intercepts TLS, add `--secret id=ca,src=<CA bundle incl. public CAs>`.
 
-**Private benchmark document:** the environment variable `FASTINC_BENCH_DOC` points to the user's real main `.tex` file (mounted read-only). Use it only for `fastinc check` and benchmarks. Never commit or copy its content, file names or output into the repository. Report numbers only.
+**Private benchmark document:** the environment variable `CHAPMK_BENCH_DOC` points to the user's real main `.tex` file (mounted read-only). Use it only for `chapmk check` and benchmarks. Never commit or copy its content, file names or output into the repository. Report numbers only.
 
 ## Rules
 
 **User sources and the build:**
-- Never modify user sources. All generated files go into the build directory (`.fastinc/`).
+- Never modify user sources. All generated files go into the build directory (`.chapmk/`).
 - All TeX runs use the deterministic environment (`PLAN.md` N4) and go through `texdist.py` (no hard-coded engine flags elsewhere).
 
 **Correctness:**
 - Correctness first. Every optimisation needs a verification step or a fallback to a full build (`PLAN.md` §6.14).
 - Do not weaken, skip or `xfail` acceptance or scenario tests to make them pass. If a test is wrong, explain why in the commit message.
 
-**LaTeX packages** (`src/fastinc/tex/`):
+**LaTeX packages** (`src/chapmk/tex/`):
 - LaTeX2e plus kernel hooks; expl3 is allowed where it simplifies.
-- Internal prefix `\fastinc@`.
+- Internal prefix `\chapmk@`.
 - Records and hooks only, no logic. Keep the version string in sync with the driver.
 
 **Module maps (for agents):**
-- `src/fastinc/CLAUDE.md` lists every module with its purpose and public API, and the layering; `src/fastinc/tex/CLAUDE.md` does the same for the LaTeX packages.
+- `src/chapmk/CLAUDE.md` lists every module with its purpose and public API, and the layering; `src/chapmk/tex/CLAUDE.md` does the same for the LaTeX packages.
 - Read them before adding code, and reuse what is listed instead of duplicating it.
 - Update them in the same commit as any new, removed or changed module or public function.
 
@@ -79,5 +79,5 @@ pytest -m acceptance -n auto          # scenario tests with the PLAN.md §3.3 co
 - Markers: `slow` (runs TeX), `acceptance` (compares against a reference build), `bench` (manual only).
 - References (the `--full` build of `--check`, latexmk in the acceptance tests) are cached in `.test-cache/` by a hash of the source files (`tests/conftest.py`). After a TeX update or an intended change of the `--full` output: `rm -rf .test-cache`. CI starts without it.
 - Tests must be xdist-safe: no shared paths outside `tmp_path`/`tmp_path_factory`, no global state beyond the process. Session fixtures (e.g. the built thesis state) run once per worker.
-- Scenario tests (`PLAN.md` §8.2) assert both §3.3 equality and the expected set of compiled units, from `fastinc build --report json`.
+- Scenario tests (`PLAN.md` §8.2) assert both §3.3 equality and the expected set of compiled units, from `chapmk build --report json`.
 - Windows/macOS/MiKTeX are tested only in CI (`.github/workflows/ci.yml`, extended in M9).

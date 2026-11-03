@@ -3,9 +3,9 @@
 `python tests/bench/run.py --out DIR --chapters 20 --scale 3 --jobs 4` in the dev container,
 4 cores. Corpus: thesis generator with 20 chapters, each 3× as long (319 pages, 22
 `\include`s). latexmk with the same environment and a nomencl rule. Each edit starts from the
-built state. The private document (`FASTINC_BENCH_DOC`) was not available.
+built state. The private document (`CHAPMK_BENCH_DOC`) was not available.
 
-| scenario | latexmk | fastinc -j 1 | fastinc -j 4 |
+| scenario | latexmk | chapmk -j 1 | chapmk -j 4 |
 |---|---|---|---|
 | T16 cold | 64.2 s | 50.2 s (3 runs) | 30.3 s (9 runs, 3 batches) |
 | T1 typo in ch10 | 16.5 s | 7.2 s (2 runs) | 7.5 s (2 runs) |
