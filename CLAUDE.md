@@ -31,6 +31,15 @@ docker run --rm -it -v "$PWD":/work -w /work chapmk-dev bash
 
 or open the repository as a devcontainer (`.devcontainer/devcontainer.json`).
 
+**MiKTeX backend (M9):** `Dockerfile.miktex` (Ubuntu 24.04, complete MiKTeX from a pinned CTAN mirror, on-the-fly installation off), devcontainer `.devcontainer/miktex/`:
+
+```
+docker build -f Dockerfile.miktex -t chapmk-miktex .
+docker run --rm -it -v "$PWD":/work -w /work chapmk-miktex bash
+```
+
+Windows/MiKTeX runs in GitHub Actions only (`.github/workflows/miktex.yml`, manual trigger).
+
 Behind a proxy: pass it as build args (`--build-arg HTTPS_PROXY=...`, `--network host` for a local proxy); if it intercepts TLS, add `--secret id=ca,src=<CA bundle incl. public CAs>`.
 
 **Private benchmark document:** the environment variable `CHAPMK_BENCH_DOC` points to the user's real main `.tex` file (mounted read-only). Use it only for `chapmk check` and benchmarks. Never commit or copy its content, file names or output into the repository. Report numbers only.
