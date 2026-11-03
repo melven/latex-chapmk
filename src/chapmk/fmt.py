@@ -90,6 +90,23 @@ def _current(source_dir: Path, inputs: Mapping[str, str]) -> bool:
     )
 
 
+def _lost_state(log: str) -> str | None:
+    """What the format part did that a dump loses (S13), from the probes of the format source
+    and pdfTeX's warning; None if nothing. Reserved \\pdfobj objects are kept."""
+    m = re.search(r"chapmk-pdf-objects:(\d+),(\d+),(\d+)", log)
+    if m and (int(m.group(2)) or int(m.group(3))):
+        return f"creates PDF form xobjects or images ({m.group(2)}/{m.group(3)})"
+    if "dangling objects discarded" in log:
+        return "writes PDF objects immediately (e.g. the cmap package's ToUnicode maps)"
+    m = re.search(r"chapmk-pdf-colorstacks:(\d+)", log)
+    if m and int(m.group(1)) > 1:
+        return f"creates colour stacks ({int(m.group(1)) - 1}, \\pdfcolorstackinit)"
+    m = re.search(r"chapmk-pdf-unrecorded:(\S+)", log)
+    if m:
+        return f"calls \\{m.group(1)} without a braced argument"
+    return None
+
+
 def ensure_format(
     analysis: Analysis, layout: Layout, dist: TexDistribution, env: Mapping[str, str]
 ) -> FormatInfo:
@@ -127,16 +144,15 @@ def ensure_format(
         log = log_file.read_text(errors="replace") if log_file.is_file() else result.output
         err = first_error(map_paths(log, layout.path_map()))
         raise TexError("format build failed", log=log_file, first_error=err)
-    m = re.search(r"chapmk-pdf-objects:(\d+),(\d+),(\d+)", log_file.read_text(errors="replace"))
-    if m and (int(m.group(2)) or int(m.group(3))):  # objects are dumped fine, xforms/images not
+    lost = _lost_state(log_file.read_text(errors="replace"))
+    if lost:
         fmt_file.unlink(missing_ok=True)
         raise TexError(
             "format build failed",
             log=log_file,
             first_error=(
-                f"the preamble before line {analysis.split_line} creates PDF form xobjects or "
-                f"images ({m.group(2)}/{m.group(3)}), which a format cannot hold; "
-                "move that code after the split point (chapmk.toml: split.before)"
+                f"the preamble before line {analysis.split_line} {lost}, which a format cannot "
+                "keep; move that code after the split point (chapmk.toml: format.split_before)"
             ),
         )
     shadow = Path(layout.shadow_dir).absolute()
