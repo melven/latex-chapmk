@@ -17,7 +17,7 @@ from chapmk.config import Config, load_config
 from chapmk.errors import ChapmkError, ConfigError, TexError
 from chapmk.fullbuild import full_build
 from chapmk.incremental import Context, build, load_epoch
-from chapmk.layout import Layout, make_layout
+from chapmk.layout import DEFAULT_BUILD_DIR, Layout, make_layout
 from chapmk.shadow import sync_project_shadow
 from chapmk.texdist import TexDistribution, detect
 from chapmk.timing import Timings
@@ -34,7 +34,7 @@ def _parser() -> argparse.ArgumentParser:
     b.add_argument("main", nargs="?", type=Path, help="main .tex file (or 'main' in chapmk.toml)")
     b.add_argument("--full", action="store_true", help="plain full build (reference mode)")
     b.add_argument("-j", "--jobs", type=int, help="parallel pdflatex processes (0 = CPU count)")
-    b.add_argument("--build-dir", type=Path, help="build directory (default: .chapmk)")
+    b.add_argument("--build-dir", type=Path, help="build directory (default: .chapmk/<jobname>)")
     b.add_argument("--out-dir", type=Path, help="output directory (default: next to MAIN)")
     b.add_argument("--keep-runs", action="store_true", help="keep run directories")
     b.add_argument(
@@ -146,6 +146,9 @@ def cmd_clean(args: argparse.Namespace, cwd: Path) -> int:
         raise ConfigError(f"refusing to delete {layout.build_dir}: not a chapmk build directory")
     shutil.rmtree(layout.build_dir)
     _say(f"removed {layout.build_dir}")
+    root = layout.build_dir.parent
+    if root.name == DEFAULT_BUILD_DIR and not any(root.iterdir()):
+        root.rmdir()  # the default build root holds no other job
     return 0
 
 

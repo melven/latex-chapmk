@@ -65,7 +65,9 @@ class Layout:
 
 
 def make_layout(config: Config, analysis: Analysis) -> Layout:
-    """Layout from the configuration (build/out directories) and the analysed main file."""
-    build_dir = config.build_dir or analysis.source_dir / DEFAULT_BUILD_DIR
+    """Layout from the configuration (build/out directories) and the analysed main file. The
+    default build directory is per job, ``<source>/.chapmk/<jobname>``: several main files in
+    one directory keep their own format, state and caches."""
+    build_dir = config.build_dir or analysis.source_dir / DEFAULT_BUILD_DIR / analysis.jobname
     out_dir = config.out_dir or analysis.source_dir
     return Layout(analysis.source_dir, build_dir, out_dir, analysis.jobname)

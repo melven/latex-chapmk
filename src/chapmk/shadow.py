@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from chapmk.analysis import Analysis
+from chapmk.layout import DEFAULT_BUILD_DIR
 
 ALWAYS_SKIPPED_DIRS = frozenset({".git", ".hg", ".svn"})
 
@@ -167,10 +168,11 @@ def sync_shadow(
 
 
 def sync_project_shadow(analysis: Analysis, shadow_dir: Path, build_dir: Path) -> ShadowStats:
-    """:func:`sync_shadow` for an analysed project; the build directory is skipped."""
+    """:func:`sync_shadow` for an analysed project; the build directory and the default build
+    root (the build directories of all jobs) are skipped."""
     return sync_shadow(
         analysis.source_dir,
         shadow_dir,
-        skip_dirs=[build_dir],
+        skip_dirs=[build_dir, analysis.source_dir / DEFAULT_BUILD_DIR],
         excluded=build_output_filter(analysis),
     )
