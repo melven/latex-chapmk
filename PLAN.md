@@ -1,6 +1,6 @@
 # chapmk — incremental, parallel pdfLaTeX builds
 
-Implementation plan and specification. Name: `latex-chapmk` (distribution), `chapmk` (command, package, macros); formerly `fastinc` (renamed in R0.9, `docs/review/M8.md` R13).
+Implementation plan and specification. Name: `latex-chapmk` (distribution), `chapmk` (command, package, macros); formerly `fastinc` (renamed in R0.9, `docs/review/M8.md` R13). The default build directory is `.chapmk/<jobname>/` (C17); paths such as `.chapmk/fmt` below are relative to it.
 
 ---
 

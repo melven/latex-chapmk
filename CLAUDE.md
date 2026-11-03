@@ -38,7 +38,7 @@ Behind a proxy: pass it as build args (`--build-arg HTTPS_PROXY=...`, `--network
 ## Rules
 
 **User sources and the build:**
-- Never modify user sources. All generated files go into the build directory (`.chapmk/`).
+- Never modify user sources. All generated files go into the build directory (`.chapmk/<jobname>/`).
 - All TeX runs use the deterministic environment (`PLAN.md` N4) and go through `texdist.py` (no hard-coded engine flags elsewhere).
 
 **Correctness:**

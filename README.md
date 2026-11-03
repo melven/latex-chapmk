@@ -15,7 +15,7 @@ chapmk graph [MAIN] [--format text|dot|json]   # compilation units and dependenc
 chapmk clean [MAIN]
 ```
 
-- Generated files go to `.chapmk/`; only `<main>.pdf`, `.synctex.gz` and `.log` are
+- Generated files go to `.chapmk/<jobname>/`; only `<main>.pdf`, `.synctex.gz` and `.log` are
   written next to `MAIN`. Plain latexmk builds in the same directory do not interfere.
 - `-j N`: parallel pdflatex runs (default: CPU count). `--report`: JSON with the runs, the
   reason each unit was recompiled and the time per phase.
