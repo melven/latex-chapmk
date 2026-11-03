@@ -126,6 +126,10 @@ def _check(
     ref_layout = replace(layout, out_dir=layout.build_dir / "check")
     ref_epoch = load_epoch(layout.canon_dir, epoch)
     _say("check: building the --full reference")
+    # a fresh picture cache: the reference is a fresh externalized build, so a stale figure of
+    # a persistent cache cannot be on both sides
+    fresh_figs = layout.build_dir / "check-fig"
+    shutil.rmtree(fresh_figs, ignore_errors=True)
     full_build(
         analysis,
         ref_layout,
@@ -133,6 +137,7 @@ def _check(
         dist.environment(ref_epoch, os.environ),
         report=ctx.say,
         picture_cache=ctx.config.picture_cache,
+        fig_dir=fresh_figs,
     )
     ref, got = ref_layout.output(".pdf"), layout.output(".pdf")
     rep = compare_pdfs(ref, got)
