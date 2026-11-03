@@ -46,12 +46,15 @@ RUN --mount=type=secret,id=ca,required=false \
     rm -f /usr/local/share/ca-certificates/build-proxy.crt; update-ca-certificates --fresh; \
     rm -rf /var/lib/apt/lists/*
 
-# Complete MiKTeX (several GB from the pinned mirror)
+# Complete MiKTeX without documentation and source files (*__doc, *__source packages): with
+# them the layer has 11.5 GB, too large for the disk of a GitHub runner
 RUN --mount=type=secret,id=ca,required=false \
     set -e; \
     if [ -s /run/secrets/ca ]; then \
       cp /run/secrets/ca /usr/local/share/ca-certificates/build-proxy.crt; update-ca-certificates; \
     fi; \
+    initexmf --admin --set-config-value "[MPM]InstallDocFiles=0"; \
+    initexmf --admin --set-config-value "[MPM]InstallSourceFiles=0"; \
     mpm --admin --verbose --package-level=complete --upgrade; \
     mpm --admin --update; \
     d=/opt/texmf-system/tex/latex/gnuplot-lua-tikz; mkdir -p "$d"; \
