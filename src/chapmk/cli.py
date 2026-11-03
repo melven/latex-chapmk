@@ -19,6 +19,7 @@ from chapmk.fullbuild import full_build
 from chapmk.incremental import Context, build, load_epoch
 from chapmk.layout import DEFAULT_BUILD_DIR, Layout, make_layout
 from chapmk.shadow import sync_project_shadow
+from chapmk.state import load_state
 from chapmk.texdist import TexDistribution, detect
 from chapmk.timing import Timings
 
@@ -89,7 +90,9 @@ def cmd_build(args: argparse.Namespace, cwd: Path) -> int:
     dist.check_tools()
     timings.lap("analysis")
     epoch = int(os.environ.get("SOURCE_DATE_EPOCH", int(time.time())))
-    sync_project_shadow(analysis, layout.shadow_dir, layout.build_dir)
+    state = load_state(layout.canon_dir)  # list files found earlier: excluded too
+    suffixes = state.list_suffixes if state is not None else ()
+    sync_project_shadow(analysis, layout.shadow_dir, layout.build_dir, suffixes)
     timings.lap("shadow")
     report = _say if config.verbose else (lambda _msg: None)
     ctx = Context(analysis, layout, dist, config, os.environ, report, timings)

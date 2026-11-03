@@ -76,7 +76,7 @@ from chapmk.records import (
     register_names,
     tex_phases,
 )
-from chapmk.runner import DERIVED_SUFFIXES, RunSpec, prepare_run_dir, run_batch
+from chapmk.runner import RunSpec, derived_suffixes, prepare_run_dir, run_batch
 from chapmk.shadow import read_inputs
 from chapmk.state import State, UnitInputs, load_state, save_state
 from chapmk.texdist import TexDistribution
@@ -595,7 +595,7 @@ class Fixpoint:
         t = ctx.timings
         t.lap("plan")  # dirty-set planning, groups, predictions
         registers = {n: reg for n, (reg, _) in self._canon_records(canon).counters.items()}
-        pre = self._view if self._view is not None else read_canon(a, canon)
+        pre = self._view if self._view is not None else read_canon(a, canon, state.list_suffixes)
         pre_glue = self.glue_inputs(pre)
         t.lap("canon")
         pictures_text = self.pictures_file(pre)
@@ -619,6 +619,7 @@ class Fixpoint:
                 spec,
                 canon_dir=canon if canon.is_dir() else None,
                 deny_names=ctx.config.state_ignore,
+                list_suffixes=state.list_suffixes,
             )
             main_aux = run_dir / f"{ctx.job}.aux"
             if main_aux.is_file():
@@ -643,6 +644,9 @@ class Fixpoint:
                 err = TexError("pdflatex failed", first_error=r.first_error)
                 raise failed_run(a, ctx.layout, r.directory, err)
         all_recs = [_records(ctx, r.directory) for r in results]
+        for recs in all_recs:  # list files with other extensions: stored and spliced from now on
+            for suffix in sorted(recs.list_suffixes - set(state.list_suffixes)):
+                state.list_suffixes.append(suffix)
         for r in results:
             _check_runtime_support(ctx, r.directory, self.fmt)
         if not self.register_names:
@@ -661,7 +665,7 @@ class Fixpoint:
                     state.openright[seg] = recs.openright[seg]
         exported = self._pictures(specs, compiled_by_run, pre)
         t.lap("commit")
-        lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name)
+        lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name, [s.name for s in specs])
         t.lap("lists")
         try:
             tools = run_tools(
@@ -677,8 +681,8 @@ class Fixpoint:
         except ToolInputError as err:
             raise FallbackError(str(err)) from err
         t.lap("tools")
-        post = self._view = read_canon(a, canon)
-        derived = tuple(f"{ctx.job}{x}" for x in DERIVED_SUFFIXES)
+        post = self._view = read_canon(a, canon, state.list_suffixes)
+        derived = tuple(f"{ctx.job}{x}" for x in derived_suffixes(state.list_suffixes))
         for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
             for seg in compiled:
                 scan = self.scan(seg)

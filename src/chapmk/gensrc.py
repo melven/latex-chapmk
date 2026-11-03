@@ -37,13 +37,17 @@ def format_source(analysis: Analysis) -> str:
 
 
 def run_main(
-    analysis: Analysis, selection: Sequence[str] | None, deny_names: Sequence[str] = ()
+    analysis: Analysis,
+    selection: Sequence[str] | None,
+    deny_names: Sequence[str] = (),
+    list_suffixes: Sequence[str] = (),
 ) -> str:
     """Per-run main file for a run with the format.
 
     Lines ``1..s-1`` become empty lines (they are in the format). Line ``s-1`` gets
     ``\\csname endofdump\\endcsname``, the driver parameters for chapmk.sty (extra run-local
-    register names ``deny_names``, config ``[state] ignore``), ``\\usepackage{chapmk}`` and, if
+    register names ``deny_names``, config ``[state] ignore``; the list files ``list_suffixes`` that
+    get unit markers), ``\\usepackage{chapmk}`` and, if
     ``selection`` is not ``None``, ``\\includeonly{...}`` (an empty selection gives a glue-only
     run). The rest is verbatim, so line numbers equal the user's main file.
     """
@@ -53,6 +57,9 @@ def run_main(
     if deny_names:
         names = ",".join(deny_names)
         prefix += f"\\expandafter\\def\\csname chapmk@denynames\\endcsname{{{names}}}"
+    if list_suffixes:
+        exts = ",".join(s.lstrip(".") for s in list_suffixes)
+        prefix += f"\\expandafter\\def\\csname chapmk@listexts\\endcsname{{{exts}}}"
     prefix += f"\\usepackage{{{RUNTIME_PACKAGE}}}"
     if selection is not None:
         prefix += "\\includeonly{" + ",".join(selection) + "}"

@@ -183,6 +183,8 @@ class RunRecords:
     layout: dict[str, int] = field(default_factory=dict)
     #: per compiled unit: starts under twoside+openright (``O`` records)
     openright: dict[str, bool] = field(default_factory=dict)
+    #: suffixes of the list files read by ``\\@starttoc`` (``L`` records)
+    list_suffixes: set[str] = field(default_factory=set)
 
     def reset_registers(self, counter: str) -> set[int]:
         """Registers of the counters reset, directly or transitively, when ``counter`` is
@@ -251,6 +253,8 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
         elif line.startswith("F "):
             seg, _, name = line[2:].partition(" ")
             recs.files.append((seg, name))
+        elif line.startswith("L "):
+            recs.list_suffixes.add("." + line[2:].strip())
         elif line.startswith("O "):
             seg, _, flag = line[2:].partition(" ")
             recs.openright[seg] = flag.strip() == "1"

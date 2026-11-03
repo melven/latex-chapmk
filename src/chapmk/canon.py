@@ -34,7 +34,7 @@ from chapmk.layout import Layout
 from chapmk.predict import SegmentVectors, normalized
 from chapmk.proc import run
 from chapmk.records import RunRecords, read_nomenclature
-from chapmk.runner import DERIVED_SUFFIXES
+from chapmk.runner import DEFAULT_LIST_SUFFIXES, derived_suffixes
 from chapmk.state import SegmentArtifact, State
 from chapmk.texdist import TexDistribution
 from chapmk.tools import (
@@ -46,7 +46,7 @@ from chapmk.tools import (
 )
 
 #: list files written by every run (glue typesets them); .bbl and .nls come from the tools
-LIST_SUFFIXES = tuple(s for s in DERIVED_SUFFIXES if s not in (".bbl", ".nls"))
+LIST_SUFFIXES = DEFAULT_LIST_SUFFIXES  # the defaults; a document's are in State.list_suffixes
 
 
 def segments(analysis: Analysis) -> list[str]:
@@ -119,7 +119,9 @@ class CanonView:
         ]
 
 
-def read_canon(analysis: Analysis, canon: Path) -> CanonView:
+def read_canon(
+    analysis: Analysis, canon: Path, list_suffixes: Sequence[str] = DEFAULT_LIST_SUFFIXES
+) -> CanonView:
     job = analysis.jobname
     main_path = canon / f"{job}.aux"
     main = statements(read_lines(main_path)) if main_path.is_file() else []
@@ -131,7 +133,7 @@ def read_canon(analysis: Analysis, canon: Path) -> CanonView:
     values.update(cite_values(canon / f"{job}.bbl", main))
     h = hashlib.sha256()
     digests = {}
-    for suffix in DERIVED_SUFFIXES:
+    for suffix in derived_suffixes(list_suffixes):
         digests[suffix] = _digest(canon / f"{job}{suffix}")
         h.update(f"{suffix}:{digests[suffix]}\n".encode())
     return CanonView(main, unit_aux, values, h.hexdigest()[:16], digests)
@@ -258,13 +260,21 @@ def splice_list(base: str, sections: Mapping[str, list[str]]) -> str | None:
     return "".join(out)
 
 
-def commit_lists(analysis: Analysis, layout: Layout, state: State, last_run: str) -> bool:
-    """Canonical list files: the last run's, with each unit's section from the run that
-    committed the unit (a parallel batch: no run read all new contributions). Returns False
-    if markers are missing (the list files then come from the last run unchanged)."""
+def commit_lists(
+    analysis: Analysis,
+    layout: Layout,
+    state: State,
+    last_run: str,
+    batch_runs: Sequence[str] = (),
+) -> bool:
+    """Canonical list files: the last run's, with the section of each unit committed by
+    another run of the batch (``batch_runs``) from that run (a parallel batch: no run read
+    all new contributions). The sections of the other units are right in the last run: it
+    wrote them from their canonical aux. Returns False if markers are missing (the list
+    files then come from the last run unchanged)."""
     canon, job = layout.canon_dir, analysis.jobname
     complete = True
-    for suffix in LIST_SUFFIXES:
+    for suffix in state.list_suffixes:
         src, dst = layout.runs_dir / last_run / f"{job}{suffix}", canon / f"{job}{suffix}"
         if not src.is_file():
             dst.unlink(missing_ok=True)
@@ -273,7 +283,7 @@ def commit_lists(analysis: Analysis, layout: Layout, state: State, last_run: str
         sections: dict[str, list[str]] = {}
         for k in range(1, len(analysis.includes) + 1):
             run = state.segments[f"U{k}"].run
-            if run == last_run:
+            if run == last_run or run not in batch_runs:
                 continue
             other = layout.runs_dir / run / f"{job}{suffix}"
             found = (
@@ -292,11 +302,13 @@ def commit_lists(analysis: Analysis, layout: Layout, state: State, last_run: str
     return complete
 
 
-def list_files(directory: Path, job: str) -> dict[str, bytes | None]:
+def list_files(
+    directory: Path, job: str, suffixes: Sequence[str] = DEFAULT_LIST_SUFFIXES
+) -> dict[str, bytes | None]:
     """Contents of the run-written list files (``.toc`` ...) in ``directory``."""
     return {
         s: (directory / f"{job}{s}").read_bytes() if (directory / f"{job}{s}").is_file() else None
-        for s in LIST_SUFFIXES
+        for s in suffixes
     }
 
 

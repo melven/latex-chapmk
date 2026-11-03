@@ -8,8 +8,9 @@ files) are left out, so they can never be read by a run (F11).
 from __future__ import annotations
 
 import os
+import re
 import shutil
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -71,14 +72,20 @@ class ShadowStats:
     total: int
 
 
-def build_output_filter(analysis: Analysis) -> Callable[[PurePosixPath], bool]:
+def build_output_filter(
+    analysis: Analysis, list_suffixes: Sequence[str] = ()
+) -> Callable[[PurePosixPath], bool]:
     """Predicate for files to leave out: build outputs ``<jobname><suffix>`` in the top
     directory (:data:`BUILD_OUTPUT_SUFFIXES`) and the aux files of all includes."""
-    outputs = {f"{analysis.jobname}{suffix}" for suffix in BUILD_OUTPUT_SUFFIXES}
+    outputs = {f"{analysis.jobname}{suffix}" for suffix in (*BUILD_OUTPUT_SUFFIXES, *list_suffixes)}
     unit_aux = {inc.aux_name for inc in analysis.includes}
 
+    # list files of any list (.loa, .loe, tocbasic's \DeclareNewTOC ...): the extension of a
+    # new kind is recorded only by the first run, which must not read a stale one already
+    lists = re.compile(re.escape(analysis.jobname) + r"\.lo[a-z0-9]*")
+
     def excluded(rel: PurePosixPath) -> bool:
-        if len(rel.parts) == 1 and rel.name in outputs:
+        if len(rel.parts) == 1 and (rel.name in outputs or lists.fullmatch(rel.name)):
             return True
         return rel.as_posix() in unit_aux
 
@@ -167,14 +174,16 @@ def sync_shadow(
     return ShadowStats(created, removed, len(wanted_files))
 
 
-def sync_project_shadow(analysis: Analysis, shadow_dir: Path, build_dir: Path) -> ShadowStats:
+def sync_project_shadow(
+    analysis: Analysis, shadow_dir: Path, build_dir: Path, list_suffixes: Sequence[str] = ()
+) -> ShadowStats:
     """:func:`sync_shadow` for an analysed project; the build directory and the default build
     root (the build directories of all jobs) are skipped."""
     return sync_shadow(
         analysis.source_dir,
         shadow_dir,
         skip_dirs=[build_dir, analysis.source_dir / DEFAULT_BUILD_DIR],
-        excluded=build_output_filter(analysis),
+        excluded=build_output_filter(analysis, list_suffixes),
     )
 
 

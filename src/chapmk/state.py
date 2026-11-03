@@ -9,6 +9,7 @@ from typing import Any
 
 from chapmk.errors import ChapmkError
 from chapmk.predict import SegmentVectors
+from chapmk.runner import DEFAULT_LIST_SUFFIXES
 
 STATE_VERSION = 3
 STATE_FILE = "state.json"
@@ -71,6 +72,8 @@ class State:
     eqp_tags: dict[str, list[str]] = field(default_factory=dict)
     pictures: dict[str, list[str]] = field(default_factory=dict)  # figure keys per segment
     openright: dict[str, bool] = field(default_factory=dict)  # unit starts on an odd page
+    # list files of the document: the defaults plus those recorded (L records)
+    list_suffixes: list[str] = field(default_factory=lambda: list(DEFAULT_LIST_SUFFIXES))
     version: int = STATE_VERSION
 
     def run_names(self) -> set[str]:
@@ -151,6 +154,7 @@ def load_state(canon_dir: Path) -> State | None:
             eqp_tags={k: list(v) for k, v in data.get("eqp_tags", {}).items()},
             pictures={k: list(v) for k, v in data.get("pictures", {}).items()},
             openright={k: bool(v) for k, v in data.get("openright", {}).items()},
+            list_suffixes=list(data.get("list_suffixes", DEFAULT_LIST_SUFFIXES)),
         )
     except (ValueError, KeyError, TypeError) as err:
         raise ChapmkError(f"{path}: corrupt state ({err}); run 'chapmk clean'") from err

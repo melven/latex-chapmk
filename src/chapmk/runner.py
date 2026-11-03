@@ -21,8 +21,19 @@ from chapmk.texdist import TexDistribution
 #: only this fixed name and the file is found via ``TEXINPUTS`` (run directory first).
 RUN_MAIN = "chapmk-run.tex"
 
-#: Derived files copied from the canonical state into a run directory (read by the glue).
-DERIVED_SUFFIXES = (".toc", ".lof", ".lot", ".loalg", ".lol", ".tdo", ".bbl", ".nls")
+#: List files LaTeX writes for the usual lists; further ones are recorded at runtime (``L``
+#: records of ``\\@starttoc``) and kept in the state.
+DEFAULT_LIST_SUFFIXES = (".toc", ".lof", ".lot", ".loalg", ".lol", ".tdo")
+#: Derived files written by the tools (biber, makeindex for nomencl).
+TOOL_SUFFIXES = (".bbl", ".nls")
+#: Derived files of a document with the default lists.
+DERIVED_SUFFIXES = (*DEFAULT_LIST_SUFFIXES, *TOOL_SUFFIXES)
+
+
+def derived_suffixes(list_suffixes: Sequence[str]) -> tuple[str, ...]:
+    """Derived files copied from the canonical state into a run directory (read by the glue):
+    the list files plus the tool outputs."""
+    return (*list_suffixes, *TOOL_SUFFIXES)
 
 
 @dataclass(frozen=True)
@@ -53,6 +64,7 @@ def prepare_run_dir(
     *,
     canon_dir: Path | None = None,
     deny_names: Sequence[str] = (),
+    list_suffixes: Sequence[str] = DEFAULT_LIST_SUFFIXES,
 ) -> Path:
     """Create an empty run directory with the canonical aux files, derived files, include
     subdirectories (S2) and the generated run main :data:`RUN_MAIN` (§6.2)."""
@@ -62,7 +74,7 @@ def prepare_run_dir(
     run_dir.mkdir(parents=True)
     job = analysis.jobname
     names = [f"{job}.aux", *(inc.aux_name for inc in analysis.includes)]
-    names += [f"{job}{suffix}" for suffix in DERIVED_SUFFIXES]
+    names += [f"{job}{suffix}" for suffix in derived_suffixes(list_suffixes)]
     for inc in analysis.includes:
         (run_dir / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
     if canon_dir is not None:
@@ -70,7 +82,9 @@ def prepare_run_dir(
             src = canon_dir / name
             if src.is_file():
                 shutil.copyfile(src, run_dir / name)
-    write_if_changed(run_dir / RUN_MAIN, run_main(analysis, spec.selection, deny_names))
+    write_if_changed(
+        run_dir / RUN_MAIN, run_main(analysis, spec.selection, deny_names, list_suffixes)
+    )
     return run_dir
 
 

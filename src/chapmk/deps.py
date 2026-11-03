@@ -42,7 +42,6 @@ _LIST_FILES = {
     "minitoc": ".toc",
     "listoffigures": ".lof",
     "listoftables": ".lot",
-    "listofalgorithms": ".loalg",
     "listoftodos": ".tdo",
     "printbibliography": ".bbl",
     "bibliography": ".bbl",
