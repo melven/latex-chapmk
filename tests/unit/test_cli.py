@@ -80,3 +80,16 @@ def test_internal_error_exit_3(
     assert "internal error: KeyError" in err and "Traceback" not in err and "-v" in err
     assert main(["build", "d.tex", "-v"], cwd=tmp_path) == 3
     assert "Traceback" in capsys.readouterr().err
+
+
+def test_check_tools_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """R2: check names its missing programs before any build."""
+    import shutil
+
+    from chapmk.check import check_tools
+    from chapmk.errors import ToolError
+
+    real = shutil.which
+    monkeypatch.setattr(shutil, "which", lambda t: None if t == "pdftoppm" else real(t))
+    with pytest.raises(ToolError, match="pdftoppm"):
+        check_tools()
