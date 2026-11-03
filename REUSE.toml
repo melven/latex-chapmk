@@ -1,0 +1,31 @@
+# Licensing of every file (REUSE, https://reuse.software; R9). Checked with `reuse lint`.
+version = 1
+
+# own work: driver, LaTeX packages, tests, own corpora (thesis, pictures, minimal; the thesis
+# preamble was supplied by its author for this purpose), documentation, configuration
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Melven Roehrig-Zoellner"
+SPDX-License-Identifier = "BSD-3-Clause"
+
+# pgf/TikZ manual (doc/generic/pgf of pgf 3.1.12), unmodified: the documentation licence of
+# the PGF package (upstream/licenses/LICENSE)
+[[annotations]]
+path = "tests/corpus/pgfmanual/upstream/**"
+precedence = "override"
+SPDX-FileCopyrightText = "Till Tantau and the PGF/TikZ contributors"
+SPDX-License-Identifier = "GFDL-1.2-only OR LPPL-1.3c"
+
+# hgb corpus: derived from the HagenbergThesis template (https://github.com/Digital-Media/
+# HagenbergThesis, README: "CC BY 4.0; exception: the texts in hgbaiusage-cognisance.sty are
+# licensed under CC BY-SA 4.0"; that file is not used here). Changes: anonymised, adapted for
+# chapmk (see the comment in main.tex); the changes are under the same licence.
+[[annotations]]
+path = "tests/corpus/hgb/**"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "Wilhelm Burger and the HagenbergThesis contributors",
+    "2026 Melven Roehrig-Zoellner",
+]
+SPDX-License-Identifier = "CC-BY-4.0"

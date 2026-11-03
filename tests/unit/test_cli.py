@@ -2,13 +2,14 @@ from pathlib import Path
 
 import pytest
 
+import chapmk
 from chapmk.cli import main
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit):
         main(["--version"])
-    assert "chapmk 0.1.0" in capsys.readouterr().out
+    assert f"chapmk {chapmk.__version__}" in capsys.readouterr().out
 
 
 def test_config_errors_exit_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -79,3 +80,16 @@ def test_internal_error_exit_3(
     assert "internal error: KeyError" in err and "Traceback" not in err and "-v" in err
     assert main(["build", "d.tex", "-v"], cwd=tmp_path) == 3
     assert "Traceback" in capsys.readouterr().err
+
+
+def test_check_tools_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """R2: check names its missing programs before any build."""
+    import shutil
+
+    from chapmk.check import check_tools
+    from chapmk.errors import ToolError
+
+    real = shutil.which
+    monkeypatch.setattr(shutil, "which", lambda t: None if t == "pdftoppm" else real(t))
+    with pytest.raises(ToolError, match="pdftoppm"):
+        check_tools()

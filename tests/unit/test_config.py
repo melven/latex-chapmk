@@ -44,6 +44,8 @@ def test_file_values_and_cli_override(tmp_path: Path) -> None:
         ('[format]\nsplit_before = ["("]', "invalid regular expression"),
         ('[lint]\nallow = "x"', "list of strings"),
         ("main = [", "Invalid|Expected|expected"),
+        ('[aux]\nself = ["x"]', "'aux.self' removed in 0.9"),  # E3
+        ("[aux]\nignore = []", "'aux.ignore' removed in 0.9"),
     ],
 )
 def test_invalid_files(tmp_path: Path, text: str, message: str) -> None:

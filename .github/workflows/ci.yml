@@ -5,6 +5,27 @@ on:
   pull_request:
 
 jobs:
+  # unit tests (no TeX) on every supported Python (R1); the slow suite runs in the image
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      - run: pytest -n auto tests/unit
+
+  # licence and copyright information of every file (R9)
+  reuse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: fsfe/reuse-action@v5
+
   linux-texlive:
     runs-on: ubuntu-latest
     steps:
@@ -19,7 +40,19 @@ jobs:
             pip install -e .
             ruff check . && ruff format --check .
             mypy --strict src
-            pytest -n auto
+            pytest -n auto --cov --cov-report=term
+          '
+      - name: Wheel smoke test
+        # the built wheel installs into a clean venv, runs and ships the LaTeX packages (R3)
+        run: |
+          docker run --rm -v "$PWD":/work:ro -w /tmp --user root chapmk-dev bash -c '
+            set -e
+            cp -r /work /tmp/src && cd /tmp/src && rm -rf build dist *.egg-info
+            pip wheel --no-deps -q -w /tmp/dist .
+            python -m venv /tmp/v && /tmp/v/bin/pip install -q /tmp/dist/*.whl
+            /tmp/v/bin/chapmk --version
+            test -f /tmp/v/lib/python3*/site-packages/chapmk/tex/chapmk.sty
+            test -f /tmp/v/lib/python3*/site-packages/chapmk/tex/chapmk-ini.sty
           '
 
   # M7: add macos-texlive, windows-texlive and windows-miktex (PLAN.md §6.16).

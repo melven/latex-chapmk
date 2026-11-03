@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -67,7 +68,7 @@ class Report:
 Target = tuple[Any, ...]
 
 
-def _resolve(pdf: pikepdf.Pdf, pages: dict[tuple[int, int], int], dest: Any) -> Target:
+def _resolve(pdf: pikepdf.Pdf, pages: dict[Any, int], dest: Any) -> Target:
     """Named or explicit destination → (page index, view type, rounded coordinates)."""
     if isinstance(dest, (pikepdf.String, str)):
         names = pdf.Root.get("/Names")
@@ -169,6 +170,21 @@ def _texts(pdf: Path, workdir: Path) -> list[str]:
     run(["pdftotext", "-layout", str(pdf), str(out)], cwd=workdir, env=dict(os.environ))
     pages = out.read_text(errors="replace").split("\f")
     return pages[:-1] if pages and not pages[-1].strip() else pages
+
+
+#: programs ``chapmk check`` needs (poppler-utils; synctex from TeX Live)
+CHECK_TOOLS = ("pdfinfo", "pdftoppm", "pdftotext", "synctex")
+
+
+def check_tools() -> None:
+    """Raise :class:`ToolError` naming the missing programs, before any build starts."""
+    missing = [tool for tool in CHECK_TOOLS if shutil.which(tool) is None]
+    if missing:
+        raise ToolError(
+            "chapmk check needs programs not found on PATH: "
+            + ", ".join(missing)
+            + " (poppler-utils; synctex comes with TeX Live)"
+        )
 
 
 def compare_pdfs(ref: Path, got: Path, *, dpi: int = DPI, report: Report | None = None) -> Report:

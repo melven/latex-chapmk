@@ -4,17 +4,12 @@ from __future__ import annotations
 
 import os
 import re
-import sys
+import tomllib
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 from chapmk.errors import ConfigError
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:  # pragma: no cover
-    import tomli as tomllib
 
 CONFIG_NAME = "chapmk.toml"
 
@@ -31,8 +26,6 @@ class Config:
     lint_allow: tuple[str, ...] = ()
     lint_verbatim: tuple[str, ...] = ()
     lint_shortverb: tuple[str, ...] = ()
-    aux_self: tuple[str, ...] = ()
-    aux_ignore: tuple[str, ...] = ()
     state_ignore: tuple[str, ...] = ()
     unit_headings: tuple[str, ...] = ()
     picture_cache: bool = True
@@ -56,11 +49,16 @@ _SCHEMA: dict[str, tuple[str, str]] = {
     "lint.allow": ("lint_allow", "strings"),
     "lint.verbatim": ("lint_verbatim", "strings"),
     "lint.shortverb": ("lint_shortverb", "strings"),
-    "aux.self": ("aux_self", "regexes"),
-    "aux.ignore": ("aux_ignore", "regexes"),
     "state.ignore": ("state_ignore", "strings"),
     "units.heading": ("unit_headings", "strings"),
     "pictures.cache": ("picture_cache", "bool"),
+}
+
+
+#: settings of earlier versions, with the reason they are gone
+_REMOVED: dict[str, str] = {
+    "aux.self": "removed in 0.9: it had no effect (aux data is classified by its command)",
+    "aux.ignore": "removed in 0.9: it had no effect (aux data is classified by its command)",
 }
 
 
@@ -107,6 +105,8 @@ def parse_config_file(path: Path) -> Config:
         raise ConfigError(f"{path}: {err}") from err
     values: dict[str, Any] = {}
     for key, value in _flatten(data).items():
+        if key in _REMOVED:
+            raise ConfigError(f"{path}: setting {key!r} {_REMOVED[key]}")
         if key not in _SCHEMA:
             raise ConfigError(f"{path}: unknown setting {key!r}")
         name, kind = _SCHEMA[key]

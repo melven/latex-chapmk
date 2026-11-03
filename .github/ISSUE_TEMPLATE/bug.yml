@@ -1,0 +1,52 @@
+name: Bug report
+description: A wrong result, an error or a crash of chapmk
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Privacy:** the `-v` output and `--report` JSON contain file, label and macro names of
+        your document. Review or anonymise them before posting. Never attach the PDF, logs or
+        sources of a private document; a small document that shows the problem is best.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Command line
+      placeholder: chapmk build thesis.tex -j 4
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `chapmk --version`, the first line of `pdflatex --version`, OS and Python version.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: Output of `chapmk check`
+      description: The summary printed on stdout (PASS/FAIL and the differences).
+      render: text
+  - type: textarea
+    id: verbose
+    attributes:
+      label: Output with `-v`
+      render: text
+  - type: textarea
+    id: report
+    attributes:
+      label: Report (`--report report.json`)
+      render: json
+  - type: textarea
+    id: example
+    attributes:
+      label: Minimal document
+      description: Ideally a main file and one or two `\include`d files that reproduce the problem.
