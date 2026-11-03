@@ -55,6 +55,12 @@ class TexDistribution(Protocol):
 
     def format_build(self, source: Path, jobname: str, outdir: Path) -> list[str]: ...
 
+    def run_input(self, cwd: Path, run_main: Path) -> str:
+        """The command-line input naming ``run_main`` (in a directory on ``TEXINPUTS``) for a
+        run with working directory ``cwd``. TeX reads the command line with the catcodes of
+        the format, so it must not contain user path characters such as ``_`` (§6.5)."""
+        ...
+
     def biber(self, jobname: str, outdir: Path) -> list[str]: ...
 
     def makeindex(self, input_name: str, output_name: str, style: str | None) -> list[str]: ...
@@ -155,6 +161,10 @@ class TeXLive:
         opts = ["-s", style] if style is not None else []
         return ["makeindex", *opts, "-o", output_name, input_name]
 
+    def run_input(self, cwd: Path, run_main: Path) -> str:
+        """The bare file name, found via ``TEXINPUTS`` (§6.5)."""
+        return run_main.name
+
     def synctex_input(self, cwd: Path, relative: str) -> str:
         """``<cwd>/./<relative>``: unresolved, with ``/./`` (S2, S10)."""
         return f"{tex_path(cwd)}/./{relative}"
@@ -167,7 +177,9 @@ class TeXLive:
 class MiKTeX(TeXLive):
     """MiKTeX (S11). Differences to TeX Live: ``TEXFORMATS`` is ignored, so the format is
     passed as ``--undump=<absolute path>`` (``-recorder`` stays complete); the environment
-    variable ``max_print_line`` is ignored, so ``--max-print-line`` is passed; SyncTeX records
+    variable ``max_print_line`` is ignored, so ``--max-print-line`` is passed; a command-line
+    input found via ``TEXINPUTS`` becomes an absolute path, so the run main is given relative to
+    the working directory; SyncTeX records
     ``<cwd>/<relative>`` without ``/./``, so ``synctex view`` needs absolute names; on-the-fly
     package installation must not prompt (§6.16)."""
 
@@ -206,6 +218,12 @@ class MiKTeX(TeXLive):
     def format_build(self, source: Path, jobname: str, outdir: Path) -> list[str]:
         argv = super().format_build(source, jobname, outdir)
         return [argv[0], "--max-print-line=10000", *argv[1:]]
+
+    def run_input(self, cwd: Path, run_main: Path) -> str:
+        """The path relative to ``cwd`` (``../runs/r1/chapmk-run.tex``: only chapmk's own
+        directory names): MiKTeX replaces a name found via ``TEXINPUTS`` by its absolute path,
+        which may contain ``_`` (active with ``underscore``, S11)."""
+        return Path(os.path.relpath(run_main, cwd)).as_posix()
 
     def synctex_input(self, cwd: Path, relative: str) -> str:
         return f"{tex_path(cwd)}/{relative}"

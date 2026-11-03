@@ -16,7 +16,7 @@ from chapmk.layout import Layout
 from chapmk.logs import map_paths
 from chapmk.publish import publish, text_writer
 from chapmk.records import RunRecords, read_run_records
-from chapmk.runner import RUN_MAIN
+from chapmk.runner import RUN_MAIN, run_path_map
 from chapmk.state import State
 from chapmk.synctex import SyncTexError
 from chapmk.synctex import merge as merge_synctex
@@ -36,12 +36,7 @@ class MergeFailedError(FallbackError):
 
 def map_run_paths(analysis: Analysis, layout: Layout, run_dir: Path, text: str) -> str:
     """Map run-directory and shadow paths in ``text`` to the user's paths (§6.13)."""
-    mapping = [
-        (str(run_dir / RUN_MAIN), str(analysis.main)),
-        *layout.path_map(),
-        (RUN_MAIN, analysis.main.name),
-    ]
-    return map_paths(text, mapping)
+    return map_paths(text, run_path_map(analysis, layout, run_dir))
 
 
 def failed_run(analysis: Analysis, layout: Layout, run_dir: Path, err: TexError) -> TexError:

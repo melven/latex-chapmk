@@ -45,6 +45,19 @@ class RunResult:
     log: Path
 
 
+def run_path_map(analysis: Analysis, layout: Layout, run_dir: Path) -> list[tuple[str, str]]:
+    """Substitutions from a run's paths to the user's (§6.13): the run main (absolute, relative
+    to the shadow tree as MiKTeX gets it, bare name) to the main file, the shadow tree to the
+    source directory."""
+    main = run_dir / RUN_MAIN
+    return [
+        (str(main), str(analysis.main)),
+        (Path(os.path.relpath(main, layout.shadow_dir)).as_posix(), str(analysis.main)),
+        *layout.path_map(),
+        (RUN_MAIN, analysis.main.name),
+    ]
+
+
 def prepare_run_dir(
     analysis: Analysis,
     layout: Layout,
@@ -90,7 +103,9 @@ def run_one(
     job = analysis.jobname
     run_env = dict(env)
     run_env["TEXINPUTS"] = f"{run_dir}{os.pathsep}{env.get('TEXINPUTS', '')}"
-    argv = dist.pdflatex(RUN_MAIN, job, run_dir, fmt=fmt)
+    argv = dist.pdflatex(
+        dist.run_input(layout.shadow_dir, run_dir / RUN_MAIN), job, run_dir, fmt=fmt
+    )
     result = run(argv, cwd=layout.shadow_dir, env=run_env, log_path=run_dir / "pdflatex.out")
     log = run_dir / f"{job}.log"
     # a run without pages (glue-only run of a document whose glue ships none) writes no PDF
@@ -99,12 +114,7 @@ def run_one(
     err = None
     if not ok:
         text = log.read_text(errors="replace") if log.is_file() else result.output
-        mapping = [
-            (str(run_dir / RUN_MAIN), str(analysis.main)),
-            *layout.path_map(),
-            (RUN_MAIN, analysis.main.name),
-        ]
-        err = first_error(map_paths(text, mapping))
+        err = first_error(map_paths(text, run_path_map(analysis, layout, run_dir)))
     return RunResult(spec, run_dir, ok, result.seconds, err, log)
 
 
