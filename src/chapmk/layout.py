@@ -7,6 +7,7 @@ from pathlib import Path
 
 from chapmk.analysis import Analysis
 from chapmk.config import Config
+from chapmk.errors import ConfigError
 
 DEFAULT_BUILD_DIR = ".chapmk"
 
@@ -64,10 +65,20 @@ class Layout:
         return [(str(self.shadow_dir), str(self.source_dir))]
 
 
+def build_dir_of(config: Config) -> Path:
+    """The build directory: ``build_dir`` of the configuration, else per job,
+    ``<source>/.chapmk/<jobname>`` (several main files in one directory keep their own
+    format, state and caches). Needs no analysis, so ``clean`` works for a document that
+    cannot be analysed (E7)."""
+    if config.build_dir is not None:
+        return config.build_dir
+    if config.main is None:
+        raise ConfigError("no main file (give MAIN or set 'main' in chapmk.toml)")
+    return config.main.parent / DEFAULT_BUILD_DIR / config.main.stem
+
+
 def make_layout(config: Config, analysis: Analysis) -> Layout:
-    """Layout from the configuration (build/out directories) and the analysed main file. The
-    default build directory is per job, ``<source>/.chapmk/<jobname>``: several main files in
-    one directory keep their own format, state and caches."""
-    build_dir = config.build_dir or analysis.source_dir / DEFAULT_BUILD_DIR / analysis.jobname
+    """Layout from the configuration (build/out directories) and the analysed main file."""
+    build_dir = build_dir_of(config)
     out_dir = config.out_dir or analysis.source_dir
     return Layout(analysis.source_dir, build_dir, out_dir, analysis.jobname)

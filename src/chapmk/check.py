@@ -168,7 +168,9 @@ def _rasters(pdf: Path, workdir: Path, dpi: int, chunk: int = 25) -> list[str]:
 
 def _texts(pdf: Path, workdir: Path) -> list[str]:
     out = workdir / "text.txt"
-    run(["pdftotext", "-layout", str(pdf), str(out)], cwd=workdir, env=dict(os.environ))
+    r = run(["pdftotext", "-layout", str(pdf), str(out)], cwd=workdir, env=dict(os.environ))
+    if not r.ok or not out.is_file():
+        raise ToolError(f"pdftotext failed on {pdf}: {r.output.strip()[-300:]}")
     pages = out.read_text(errors="replace").split("\f")
     return pages[:-1] if pages and not pages[-1].strip() else pages
 
@@ -212,7 +214,10 @@ def _synctex(args: list[str], cwd: Path) -> list[str]:
 
 
 def _first(result: list[str], key: str) -> str:
-    return next(line.split(":", 1)[1] for line in result if line.startswith(f"{key}:"))
+    found = next((line.split(":", 1)[1] for line in result if line.startswith(f"{key}:")), None)
+    if found is None:
+        raise ToolError(f"synctex: no {key!r} in its output: {' | '.join(result)[:300]}")
+    return found
 
 
 def compare_synctex(

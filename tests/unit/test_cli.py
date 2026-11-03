@@ -93,3 +93,18 @@ def test_check_tools_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(shutil, "which", lambda t: None if t == "pdftoppm" else real(t))
     with pytest.raises(ToolError, match="pdftoppm"):
         check_tools()
+
+
+def test_clean_a_document_that_cannot_be_analysed(tmp_path: Path) -> None:
+    """E7: clean needs only the configuration, not a successful analysis."""
+    (tmp_path / "d.tex").write_text(
+        "\\documentclass{book}\\begin{document}\\include{a}\\end{document}\n"
+    )
+    (tmp_path / "a.tex").write_text("\\include{nested}\n")  # nested \\include: analysis fails
+    build = tmp_path / ".chapmk" / "d"
+    build.mkdir(parents=True)
+    (build / ".chapmk-build-dir").touch()
+    (build / "canon").mkdir()
+    assert main(["build", "d.tex"], cwd=tmp_path) == 2
+    assert main(["clean", "d.tex"], cwd=tmp_path) == 0
+    assert not (tmp_path / ".chapmk").exists()
