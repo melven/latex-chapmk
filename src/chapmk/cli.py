@@ -18,6 +18,7 @@ from chapmk.errors import ChapmkError, ConfigError, TexError
 from chapmk.fullbuild import full_build
 from chapmk.incremental import Context, build, load_epoch
 from chapmk.layout import DEFAULT_BUILD_DIR, Layout, make_layout
+from chapmk.lock import LOCK_FILE, build_lock
 from chapmk.shadow import sync_project_shadow
 from chapmk.state import load_state
 from chapmk.texdist import TexDistribution, detect
@@ -25,6 +26,9 @@ from chapmk.timing import Timings
 
 #: Marker file proving that a directory is a chapmk build directory (``clean`` safety).
 BUILD_DIR_MARKER = ".chapmk-build-dir"
+
+
+_NO_WAIT = "fail instead of waiting while another chapmk process uses the build directory"
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -45,14 +49,17 @@ def _parser() -> argparse.ArgumentParser:
     )
     b.add_argument("--report", type=Path, help="write a JSON report of the build to this file")
     b.add_argument("-v", "--verbose", action="store_true")
+    b.add_argument("--no-wait", action="store_true", help=_NO_WAIT)
     k = sub.add_parser("check", help="build, build with --full, compare the results (§3.3)")
     k.add_argument("main", nargs="?", type=Path)
     k.add_argument("--build-dir", type=Path)
     k.add_argument("--out-dir", type=Path)
     k.add_argument("-v", "--verbose", action="store_true")
+    k.add_argument("--no-wait", action="store_true", help=_NO_WAIT)
     c = sub.add_parser("clean", help="remove the build directory")
     c.add_argument("main", nargs="?", type=Path)
     c.add_argument("--build-dir", type=Path)
+    c.add_argument("--no-wait", action="store_true", help=_NO_WAIT)
     g = sub.add_parser("graph", help="compilation units and dependencies of the last build")
     g.add_argument("main", nargs="?", type=Path)
     g.add_argument("--build-dir", type=Path)
@@ -86,6 +93,18 @@ def cmd_build(args: argparse.Namespace, cwd: Path) -> int:
     )
     timings = Timings()
     analysis, layout = _prepare(config)
+    with build_lock(layout.build_dir, wait=not args.no_wait, say=_say):
+        return _build_locked(args, cwd, config, timings, analysis, layout)
+
+
+def _build_locked(
+    args: argparse.Namespace,
+    cwd: Path,
+    config: Config,
+    timings: Timings,
+    analysis: Analysis,
+    layout: Layout,
+) -> int:
     dist = detect()
     dist.check_tools()
     timings.lap("analysis")
@@ -154,7 +173,16 @@ def cmd_clean(args: argparse.Namespace, cwd: Path) -> int:
         return 0
     if not (layout.build_dir / BUILD_DIR_MARKER).is_file():
         raise ConfigError(f"refusing to delete {layout.build_dir}: not a chapmk build directory")
-    shutil.rmtree(layout.build_dir)
+    with build_lock(layout.build_dir, wait=not args.no_wait, say=_say):
+        for entry in layout.build_dir.iterdir():  # the open lock file last (Windows)
+            if entry.name == LOCK_FILE:
+                continue
+            if entry.is_dir() and not entry.is_symlink():
+                shutil.rmtree(entry)
+            else:
+                entry.unlink()
+    (layout.build_dir / LOCK_FILE).unlink(missing_ok=True)
+    layout.build_dir.rmdir()
     _say(f"removed {layout.build_dir}")
     root = layout.build_dir.parent
     if root.name == DEFAULT_BUILD_DIR and not any(root.iterdir()):

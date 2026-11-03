@@ -23,7 +23,7 @@ def publish(
     the file is published as ``<stem>.chapmk<suffixes>`` instead. Returns the path written.
     """
     target.parent.mkdir(parents=True, exist_ok=True)
-    tmp = target.with_name(f".{target.name}.chapmk-tmp")
+    tmp = target.with_name(f".{target.name}.{os.getpid()}.chapmk-tmp")  # per process (C6)
     write(tmp)
     deadline = time.monotonic() + retry_seconds
     while True:
