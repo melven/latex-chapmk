@@ -23,7 +23,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 # The optional proxy CA is added to the system store for one RUN and removed at its end (apt
 # downloads as user _apt, which cannot read the secret itself). Ubuntu's own archive is http.
 # poppler-utils: pdftoppm/pdftotext for the §3.3 comparison; perl: latexmk (acceptance tests);
-# gnuplot-data: gnuplot-lua-tikz.sty (thesis corpus), registered as a MiKTeX root below.
+# gnuplot-data: gnuplot-lua-tikz.sty (thesis corpus). Debian puts it directly into
+# /usr/share/texmf/tex/, which MiKTeX does not search for LaTeX files; it is linked into
+# tex/latex/ of a separate MiKTeX root below (as in the TeX Live image).
 RUN --mount=type=secret,id=ca,required=false \
     set -e; \
     apt-get update; \
@@ -52,7 +54,9 @@ RUN --mount=type=secret,id=ca,required=false \
     fi; \
     mpm --admin --verbose --package-level=complete --upgrade; \
     mpm --admin --update; \
-    initexmf --admin --register-root=/usr/share/texmf; \
+    d=/opt/texmf-system/tex/latex/gnuplot-lua-tikz; mkdir -p "$d"; \
+    ln -s /usr/share/texmf/tex/*gnuplot-lua-tikz* "$d"/; \
+    initexmf --admin --register-root=/opt/texmf-system; \
     initexmf --admin --update-fndb; \
     initexmf --admin --mkmaps; \
     rm -f /usr/local/share/ca-certificates/build-proxy.crt; update-ca-certificates --fresh
