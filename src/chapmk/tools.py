@@ -6,14 +6,14 @@ import re
 from collections.abc import Mapping, Sequence
 
 from chapmk.aux import segment_slices
-from chapmk.errors import ChapmkError
+from chapmk.errors import FallbackError
 from chapmk.records import NLO_MARKER
 
 _CITEKEY = re.compile(r'^(\s*)<bcf:citekey order="(\d+)"( intorder="\d+")?(.*)$')
 _SECTION = re.compile(r'<bcf:section number="(\d+)">')
 
 
-class ToolInputError(ChapmkError):
+class ToolInputError(FallbackError):
     """The tool inputs cannot be assembled (e.g. several refsections with citations)."""
 
 

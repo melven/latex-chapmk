@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from chapmk.analysis import Analysis
 from chapmk.aux import parse_bookmark, read_lines, segment_slices
 from chapmk.canon import segments
-from chapmk.errors import ChapmkError, TexError
+from chapmk.errors import FallbackError, TexError
 from chapmk.files import digest, write_atomic
 from chapmk.layout import Layout
 from chapmk.logs import map_paths
@@ -29,7 +29,7 @@ PUBLISHED_FILE = "published.json"
 _OUTPUTS = (".pdf", ".synctex.gz", ".log")
 
 
-class MergeFailedError(ChapmkError):
+class MergeFailedError(FallbackError):
     """The PDF or SyncTeX merge failed (falls back to full mode, §6.14)."""
 
 
@@ -80,6 +80,8 @@ def publish_state(
         run_dir = layout.runs_dir / art.run
         by_index = {p.index: p for p in recs.pages}
         for i in art.pages:
+            if i not in by_index:
+                raise MergeFailedError(f"page {i} of run {art.run} has no page record")
             pages.append(
                 PageSource(run_dir / f"{job}.pdf", i, by_index[i].value, by_index[i].label)
             )

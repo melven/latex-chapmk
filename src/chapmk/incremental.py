@@ -36,7 +36,7 @@ from chapmk.aux import AGGREGATE, GLOBAL, command_name, read_lines, run_input_ma
 from chapmk.canon import CanonView, commit_lists, commit_run, read_canon, run_tools, segments
 from chapmk.config import Config
 from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
-from chapmk.errors import ChapmkError, TexError
+from chapmk.errors import FallbackError, TexError
 from chapmk.files import digest, write_atomic
 from chapmk.fmt import (
     FormatInfo,
@@ -50,7 +50,6 @@ from chapmk.fullbuild import full_build
 from chapmk.layout import Layout
 from chapmk.lint import LintHit, glue_hints, lint_files
 from chapmk.outputs import (
-    MergeFailedError,
     failed_run,
     is_published,
     mark_published,
@@ -78,7 +77,6 @@ from chapmk.predict import (
     rewrite_checkpoint,
 )
 from chapmk.records import (
-    RecordError,
     RunRecords,
     glue_times,
     read_main_records,
@@ -91,7 +89,6 @@ from chapmk.shadow import changed_signatures, external_inputs, read_inputs, stat
 from chapmk.state import State, UnitInputs, load_state, save_state
 from chapmk.texdist import TexDistribution
 from chapmk.timing import Timings
-from chapmk.tools import ToolInputError
 
 MAX_ITERATIONS = 8
 #: Packages that force full mode when loaded at all (also by the class; seen in the .fls).
@@ -105,15 +102,6 @@ RUNTIME_UNSUPPORTED = (
 FULL_ONLY_FILE = "full-only.json"
 #: present in ``canon/`` while a batch commits (C7)
 JOURNAL_FILE = ".in-progress"
-
-
-class FallbackError(ChapmkError):
-    """The incremental machinery cannot handle this build; use full mode (§6.14).
-    ``persistent``: the reason holds until the main file changes (skip the attempt next time)."""
-
-    def __init__(self, message: str, persistent: bool = False):
-        super().__init__(message)
-        self.persistent = persistent
 
 
 @dataclass
@@ -224,13 +212,6 @@ def _check_runtime_support(ctx: Context, run_dir: Path, fmt: FormatInfo) -> None
         raise FallbackError(
             "hyperref without the bookmark package (outline via .out is phase 2)", True
         )
-
-
-def _records(ctx: Context, run_dir: Path) -> RunRecords:
-    try:
-        return read_run_records(run_dir, ctx.analysis)
-    except RecordError as err:
-        raise FallbackError(f"records: {err}") from err
 
 
 def _write(path: Path, stmts: list[str]) -> None:
@@ -652,7 +633,7 @@ class Fixpoint:
             if not r.ok:
                 err = TexError("pdflatex failed", first_error=r.first_error)
                 raise failed_run(a, ctx.layout, r.directory, err)
-        all_recs = [_records(ctx, r.directory) for r in results]
+        all_recs = [read_run_records(r.directory, ctx.analysis) for r in results]
         for recs in all_recs:  # list files with other extensions: stored and spliced from now on
             for suffix in sorted(recs.list_suffixes - set(state.list_suffixes)):
                 state.list_suffixes.append(suffix)
@@ -678,10 +659,7 @@ class Fixpoint:
         # interrupted commit leaves the marker, and the next build is cold
         write_atomic(canon / JOURNAL_FILE, " ".join(s.name for s in specs))
         for spec, recs, compiled in zip(specs, all_recs, compiled_by_run, strict=True):
-            try:
-                commit_run(a, ctx.layout, state, spec.name, recs, compiled)
-            except ToolInputError as err:
-                raise FallbackError(str(err)) from err
+            commit_run(a, ctx.layout, state, spec.name, recs, compiled)
             self._attribute(recs, compiled, ctx.layout.runs_dir / spec.name)
             for seg in compiled:
                 if seg in recs.openright:
@@ -690,19 +668,16 @@ class Fixpoint:
         t.lap("commit")
         lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name, [s.name for s in specs])
         t.lap("lists")
-        try:
-            tools = run_tools(
-                a,
-                ctx.layout,
-                ctx.dist,
-                env,
-                state,
-                specs[-1].name,
-                [s.name for s in specs],
-                complete=any(g is None for g in groups),
-            )
-        except ToolInputError as err:
-            raise FallbackError(str(err)) from err
+        tools = run_tools(
+            a,
+            ctx.layout,
+            ctx.dist,
+            env,
+            state,
+            specs[-1].name,
+            [s.name for s in specs],
+            complete=any(g is None for g in groups),
+        )
         t.lap("tools")
         post = self._view = read_canon(a, canon, state.list_suffixes)
         derived = tuple(f"{ctx.job}{x}" for x in derived_suffixes(state.list_suffixes))
@@ -965,10 +940,16 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
     marker = canon / FULL_ONLY_FILE
     # keyed by the version too: an upgrade may support what forced full mode
     stamp_data = {"fingerprints": asdict(ctx.analysis.fingerprints), "chapmk": chapmk.__version__}
-    if marker.is_file():
-        data = json.loads(marker.read_text())
-        if all(data.get(k) == v for k, v in stamp_data.items()):
-            return _full(ctx, epoch, data["reason"], start, warn=True)
+    try:
+        data = json.loads(marker.read_text()) if marker.is_file() else {}
+    except (OSError, ValueError):
+        data = {}  # unreadable: ignored (attempt the incremental build)
+    if (
+        isinstance(data, dict)
+        and "reason" in data
+        and all(data.get(k) == v for k, v in stamp_data.items())
+    ):
+        return _full(ctx, epoch, data["reason"], start, warn=True)
     try:
         state = load_state(canon)
         stamp = format_stamp(ctx.analysis, ctx.dist.version)
@@ -1044,8 +1025,8 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
             ctx.timings.as_dict(),
             hints,
         )
-    except (FallbackError, MergeFailedError) as fb:
-        persistent = isinstance(fb, FallbackError) and fb.persistent
+    except FallbackError as fb:
+        persistent = fb.persistent
         if persistent:
             canon.mkdir(parents=True, exist_ok=True)
             write_atomic(marker, json.dumps({**stamp_data, "reason": str(fb)}))

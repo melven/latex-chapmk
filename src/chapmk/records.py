@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from chapmk.analysis import Analysis
-from chapmk.errors import ChapmkError
+from chapmk.errors import FallbackError
 
 Vector = dict[int, int]
 
@@ -18,8 +18,8 @@ _REC = re.compile(
 NLO_MARKER = "%chapmk-seg "
 
 
-class RecordError(ChapmkError):
-    """Records are missing or inconsistent (falls back to a full build)."""
+class RecordError(FallbackError):
+    """Records are missing, truncated or inconsistent (falls back to a full build)."""
 
 
 def parse_vector(text: str) -> Vector:
@@ -292,6 +292,13 @@ def read_run_records(run_dir: Path, analysis: Analysis) -> RunRecords:
     Raises :class:`RecordError` if records are missing: no baseline, a page without segment,
     or a unit record that does not match the include order of the analysis.
     """
+    try:
+        return _read_run_records(run_dir, analysis)
+    except (ValueError, IndexError) as err:  # truncated or malformed record lines
+        raise RecordError(f"{run_dir}: unreadable records ({err})") from err
+
+
+def _read_run_records(run_dir: Path, analysis: Analysis) -> RunRecords:
     job = analysis.jobname
     recs = RunRecords()
     main_aux = run_dir / f"{job}.aux"
@@ -317,6 +324,10 @@ def read_run_records(run_dir: Path, analysis: Analysis) -> RunRecords:
             raise RecordError(f"{main_aux}: no record for include {k} ({inc.arg})")
         if name and _unit_name(name) != inc.arg:
             raise RecordError(f"{main_aux}: include {k} is {name!r}, expected {inc.arg!r}")
+    known = {"G0"} | {f"{p}{k}" for k in range(1, len(analysis.includes) + 1) for p in "UG"}
+    for page in recs.pages:
+        if page.segment not in known:
+            raise RecordError(f"{frec}: page {page.index} has no known segment ({page.segment!r})")
     return recs
 
 

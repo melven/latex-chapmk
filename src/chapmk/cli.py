@@ -9,6 +9,7 @@ import signal
 import sys
 import threading
 import time
+import traceback
 from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
@@ -16,7 +17,7 @@ from pathlib import Path
 import chapmk
 from chapmk.analysis import Analysis, analyse
 from chapmk.config import Config, load_config
-from chapmk.errors import ChapmkError, ConfigError, TexError
+from chapmk.errors import ChapmkError, ConfigError, InternalError, TexError
 from chapmk.fullbuild import full_build
 from chapmk.incremental import Context, build, load_epoch
 from chapmk.layout import DEFAULT_BUILD_DIR, Layout, make_layout
@@ -217,8 +218,8 @@ def _on_sigterm(_signum: int, _frame: object) -> None:
 
 
 def main(argv: Sequence[str] | None = None, cwd: Path | None = None) -> int:
-    """Run the CLI; returns the exit code (0 ok, 1 TeX error, 2 other errors, 130/143 after
-    SIGINT/SIGTERM: all child processes are killed first, C8)."""
+    """Run the CLI; returns the exit code: 0 ok, 1 TeX error, 2 other errors, 3 internal error
+    (C9), 130/143 after SIGINT/SIGTERM (all child processes are killed first, C8)."""
     args = _parser().parse_args(argv)
     workdir = cwd or Path.cwd()
     main_thread = threading.current_thread() is threading.main_thread()
@@ -249,3 +250,9 @@ def _main(args: argparse.Namespace, workdir: Path) -> int:
             if err.log:
                 _say(f"see {err.log}")
         return err.exit_code
+    except Exception as err:  # a bug: no traceback unless -v (C9)
+        if getattr(args, "verbose", False):
+            traceback.print_exc()
+        hint = "" if getattr(args, "verbose", False) else "; rerun with -v for the traceback"
+        _say(f"internal error: {type(err).__name__}: {err} (please report it{hint})")
+        return InternalError.exit_code
