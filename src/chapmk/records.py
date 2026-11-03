@@ -185,6 +185,12 @@ class RunRecords:
     openright: dict[str, bool] = field(default_factory=dict)
     #: suffixes of the list files read by ``\\@starttoc`` (``L`` records)
     list_suffixes: set[str] = field(default_factory=set)
+    #: pseudo registers of the kernel's mark classes (running heads) -> class name
+    #: (``K <id> <class>``; values: digests of the last mark's text)
+    mark_classes: dict[int, str] = field(default_factory=dict)
+    #: ``\\marks`` registers outside the kernel's classes that hold marks (``\\mark`` is 0;
+    #: ``K primitive <n>``): they cannot be restored for excluded units
+    primitive_marks: set[int] = field(default_factory=set)
 
     def reset_registers(self, counter: str) -> set[int]:
         """Registers of the counters reset, directly or transitively, when ``counter`` is
@@ -258,6 +264,11 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
         elif line.startswith("O "):
             seg, _, flag = line[2:].partition(" ")
             recs.openright[seg] = flag.strip() == "1"
+        elif line.startswith("K primitive "):
+            recs.primitive_marks.add(int(line[12:]))
+        elif line.startswith("K "):
+            reg, _, name = line[2:].partition(" ")
+            recs.mark_classes[int(reg)] = name.strip()
 
 
 def read_nomenclature(path: Path) -> dict[str, list[str]]:

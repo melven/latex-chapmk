@@ -660,10 +660,21 @@ class Fixpoint:
                 state.list_suffixes.append(suffix)
         for r in results:
             _check_runtime_support(ctx, r.directory, self.fmt)
+        for recs in all_recs:
+            if recs.primitive_marks:
+                regs = ", ".join(f"\\marks{n}" for n in sorted(recs.primitive_marks))
+                raise FallbackError(
+                    f"running heads use primitive marks ({regs}; e.g. \\mark in a package): "
+                    "excluded units cannot restore them, so every build is a full build "
+                    "(supported: the kernel's mark classes, \\markboth, \\markright, \\InsertMark)",
+                    True,
+                )
         if not self.register_names:
             self.register_names = register_names(
                 [self.fmt.directory / f"{self.fmt.name}.log", results[0].log]
             )
+            for reg, name in all_recs[0].mark_classes.items():
+                self.register_names[reg] = f"marks {name}"
         t.lap("records")
         for spec, recs, compiled in zip(specs, all_recs, compiled_by_run, strict=True):
             try:
@@ -893,7 +904,11 @@ def _gc(ctx: Context, state: State) -> None:
             shutil.rmtree(d)
 
 
-def _full(ctx: Context, epoch: int, reason: str, start: float) -> BuildReport:
+def _full(
+    ctx: Context, epoch: int, reason: str, start: float, *, warn: bool = False
+) -> BuildReport:
+    """Full mode; ``warn``: the reason is a limitation the user should see (a persistent
+    fallback), also reported as a warning."""
     ctx.say(f"full build: {reason}")
     result = full_build(
         ctx.analysis,
@@ -911,6 +926,7 @@ def _full(ctx: Context, epoch: int, reason: str, start: float) -> BuildReport:
         [inc.arg for inc in ctx.analysis.includes],
         time.monotonic() - start,
         str(result.pdf),
+        warnings=[f"full build: {reason}"] if warn else [],
         timings=ctx.timings.as_dict(),
     )
 
@@ -948,7 +964,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
     if marker.is_file():
         data = json.loads(marker.read_text())
         if all(data.get(k) == v for k, v in stamp_data.items()):
-            return _full(ctx, epoch, data["reason"], start)
+            return _full(ctx, epoch, data["reason"], start, warn=True)
     try:
         state = load_state(canon)
         stamp = format_stamp(ctx.analysis, ctx.dist.version)
@@ -1025,10 +1041,11 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
             hints,
         )
     except (FallbackError, MergeFailedError) as fb:
-        if isinstance(fb, FallbackError) and fb.persistent:
+        persistent = isinstance(fb, FallbackError) and fb.persistent
+        if persistent:
             canon.mkdir(parents=True, exist_ok=True)
             marker.write_text(json.dumps({**stamp_data, "reason": str(fb)}))
-        return _full(ctx, epoch, str(fb), start)
+        return _full(ctx, epoch, str(fb), start, warn=persistent)
 
 
 def load_epoch(canon_dir: Path, default: int) -> int:
