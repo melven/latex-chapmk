@@ -7,4 +7,7 @@
   \hgb@SetBrand[28mm]{example-image.pdf}{Beispielinstitut}{Example Institute}
 \else
   \renewcommand{\hgb@LogoFile}{example-image.pdf}
+  % the old class calls \DocumentMetadata at \begin{document}, which the LaTeX kernel of
+  % 2026 rejects; current versions set the PDF metadata with \hypersetup instead
+  \AddToHook{begindocument/before}{\def\hgb@SetDocumentMetadata{}}
 \fi
