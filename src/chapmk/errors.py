@@ -22,6 +22,14 @@ class FallbackError(ChapmkError):
         self.persistent = persistent
 
 
+class SelfCheckError(FallbackError):
+    """A runtime self-check found an inconsistency between chapmk's own result and what TeX
+    wrote (C14): a bug or an unsupported construct. The build falls back to full mode."""
+
+    def __init__(self, message: str):
+        super().__init__(f"self-check failed: {message} (please report this)")
+
+
 class InternalError(ChapmkError):
     """An unexpected exception (a bug): exit code 3."""
 

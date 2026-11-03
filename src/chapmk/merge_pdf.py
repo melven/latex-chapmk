@@ -11,7 +11,7 @@ from typing import Any
 import pikepdf
 from pikepdf import Array, Dictionary, Name, String
 
-from chapmk.errors import FallbackError
+from chapmk.errors import FallbackError, SelfCheckError
 
 _DUMMY = re.compile(r"name\{([^}]*)\} has been referenced but does not exist")
 
@@ -22,12 +22,15 @@ class MergeError(FallbackError):
 
 @dataclass(frozen=True)
 class PageSource:
-    """A page to take: the run's PDF, 0-based page index, ``\\c@page`` and ``\\thepage``."""
+    """A page to take: the run's PDF, 0-based page index, ``\\c@page`` and ``\\thepage``.
+    ``check_label``: the run's own page labels index its pages (no extra picture pages
+    before this one, which hyperref does not count), so they can verify the merged label."""
 
     pdf: Path
     index: int
     value: int
     label: str
+    check_label: bool = True
 
 
 @dataclass(frozen=True)
@@ -205,6 +208,7 @@ def merge_pdf(
         _normalize_font_descriptors(merged)
         _write_outline(merged, outline)
         merged.Root.PageLabels = Dictionary(Nums=page_labels([(p.value, p.label) for p in pages]))
+        _check_page_labels(merged, pages, sources)
         cat = sources.get(catalog_from)
         for key in ("/PageMode", "/PageLayout", "/ViewerPreferences"):
             if key in cat.Root:
@@ -221,6 +225,22 @@ def merge_pdf(
     finally:
         merged.close()
         sources.close()
+
+
+def _check_page_labels(merged: pikepdf.Pdf, pages: Sequence[PageSource], sources: _Sources) -> None:
+    """Self-check (C14): each merged page shows the label hyperref gave it in its run (runs
+    without ``/PageLabels`` are not checked)."""
+    for i, src in enumerate(pages):
+        pdf = sources.get(src.pdf)
+        if not src.check_label or "/PageLabels" not in pdf.Root:
+            continue
+        expected = pikepdf.Page(pdf.pages[src.index]).label
+        got = pikepdf.Page(merged.pages[i]).label
+        if got != expected:
+            raise SelfCheckError(
+                f"page {i + 1}: merged page label {got!r}, the run wrote {expected!r} "
+                f"({src.pdf.parent.name})"
+            )
 
 
 def _font_name(desc: Any) -> str:
