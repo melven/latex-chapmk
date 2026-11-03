@@ -692,7 +692,7 @@ All TeX invocations go through a **distribution adapter** (`texdist.py`) with tw
 - **Paths:** use `pathlib` internally; always pass forward slashes to TeX; reject source paths with spaces under `\include` (TeX limitation) with a clear error.
 - **SyncTeX paths:** normalise case and drive letters on Windows when mapping input tags.
 - **Line endings:** generated files keep the source's line endings; read and write in binary mode, so line numbers are preserved.
-- **Output replacement:** `os.replace` onto `main.pdf` fails on Windows while a viewer locks the file (e.g. Adobe Reader). Retry with backoff for 2 s, then write `main.chapmk.pdf` and warn. SumatraPDF does not lock.
+- **Output replacement:** `os.replace` onto `main.pdf` fails on Windows while a viewer locks the file (e.g. Adobe Reader). Retry with backoff for 2 s, then write `main.chapmk.pdf` and warn. SumatraPDF does not lock. The PDF and the SyncTeX file are both merged into temporary files first and then renamed back to back, SyncTeX first (C16): a viewer sees the old or the new pair. (pdfTeX itself writes the PDF while it runs; its SyncTeX file appears at the end.)
 - **Processes:** use `subprocess` only, no `fork`; the process pool must be spawn-safe.
 - **Watch mode (future):** `watchdog` (cross-platform).
 - **Performance on Windows:** process start-up and antivirus scanning of many small files are slower. Document the recommendation to exclude the build directory from on-access scanning.
