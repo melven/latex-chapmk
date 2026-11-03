@@ -36,6 +36,21 @@ _LIST_READERS = re.compile(
 )
 
 
+#: list commands with a known derived file (others: all list files)
+_LIST_FILES = {
+    "tableofcontents": ".toc",
+    "minitoc": ".toc",
+    "listoffigures": ".lof",
+    "listoftables": ".lot",
+    "listofalgorithms": ".loalg",
+    "listoftodos": ".tdo",
+    "printbibliography": ".bbl",
+    "bibliography": ".bbl",
+    "printnomenclature": ".nls",
+}
+_STARTTOC_ARG = re.compile(r"\s*\{([A-Za-z]+)\}")
+
+
 def short_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8", "surrogateescape")).hexdigest()[:16]
 
@@ -138,6 +153,25 @@ class TokenScan:
         found = {k for t in self.tokens for k in (f"L:{t}", f"C:{t}") if k in keys}
         found |= {k for k in keys if _HAS_DELIM.search(k, 2) and self.references(k)}
         return found
+
+    def list_reads(self) -> set[str] | None:
+        """Suffixes of the derived list files the texts typeset (``\\printbibliography`` →
+        ``.bbl``, ``\\tableofcontents`` → ``.toc``, ...); None if a list command of unknown
+        file is used (then all list files count)."""
+        out: set[str] = set()
+        for text in self.texts:
+            for m in _LIST_READERS.finditer(text):
+                name = m.group(1)
+                if name == "@starttoc":
+                    arg = _STARTTOC_ARG.match(text, m.end())
+                    if arg is None:
+                        return None
+                    out.add(f".{arg.group(1)}")
+                elif name in _LIST_FILES:
+                    out.add(_LIST_FILES[name])
+                else:
+                    return None
+        return out
 
     def reads_lists(self) -> bool:
         """Whether the texts typeset a derived list (ToC, bibliography, nomenclature, ...)."""

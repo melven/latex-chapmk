@@ -237,6 +237,15 @@ def _short(items: list[str], limit: int = 3) -> str:
     return shown if len(items) <= limit else f"{shown}, ... (+{len(items) - limit})"
 
 
+def _lists_now(stored: str, view: CanonView) -> str:
+    """The current value of a unit's stored list dependency (``.bbl,.toc=<hash>``, or the
+    hash of all list files)."""
+    if "=" not in stored:
+        return view.lists
+    names = stored.split("=", 1)[0]
+    return view.lists_key(names.split(",") if names else [])
+
+
 class _UsedCache(dict[str, list[list[Any]]]):
     """A cache that looks up ``old`` entries and holds only the entries used or added (saved
     after the build, so it does not grow with every edit)."""
@@ -435,7 +444,7 @@ class Fixpoint:
             keys = changed_imports(info.imports, self.scan(seg), post.values)
             if keys:
                 add(seg, f"imports changed ({_short(keys)})")
-            if info.lists is not None and info.lists != post.lists:
+            if info.lists is not None and info.lists != _lists_now(info.lists, post):
                 add(seg, "list files changed")
             changed = _changed(self.ctx, self.state.segment_files.get(seg, {}))
             if changed:
@@ -652,7 +661,16 @@ class Fixpoint:
         lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name)
         t.lap("lists")
         try:
-            tools = run_tools(a, ctx.layout, ctx.dist, env, state, specs[-1].name)
+            tools = run_tools(
+                a,
+                ctx.layout,
+                ctx.dist,
+                env,
+                state,
+                specs[-1].name,
+                [s.name for s in specs],
+                complete=any(g is None for g in groups),
+            )
         except ToolInputError as err:
             raise FallbackError(str(err)) from err
         t.lap("tools")
@@ -661,13 +679,18 @@ class Fixpoint:
         for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
             for seg in compiled:
                 scan = self.scan(seg)
-                reads = scan.reads_lists() or any(
-                    s == seg and f.endswith(derived) for s, f in recs.files
-                )
+                # the list files it typesets (by command) and reads (F records)
+                reads = scan.list_reads()
+                if reads is not None:
+                    reads |= {
+                        f[f.rindex(ctx.job) + len(ctx.job) :]
+                        for s, f in recs.files
+                        if s == seg and f.endswith(derived)
+                    }
                 state.units[seg] = UnitInputs(
                     entry=recs.entry_state(seg),
                     imports=imports(scan, pre.values),
-                    lists=pre.lists if reads else None,
+                    lists=pre.lists_key(reads) if reads is None or reads else None,
                     self_stable=pre_self[seg] == post.unit_self(seg),
                 )
                 changed = set(pre_self[seg]) ^ set(post.unit_self(seg))
