@@ -876,6 +876,9 @@ def _gc(ctx: Context, state: State) -> None:
 
 
 def _full(ctx: Context, epoch: int, reason: str, start: float) -> BuildReport:
+    """Full mode with the epoch of the canonical state if there is one (N4, C11): the same
+    dates as ``--full`` and the ``check`` reference, also for a fallback."""
+    epoch = load_epoch(ctx.layout.canon_dir, epoch)
     ctx.say(f"full build: {reason}")
     result = full_build(
         ctx.analysis,
@@ -925,7 +928,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
     start = time.monotonic()
     canon = ctx.layout.canon_dir
     if full:
-        return _full(ctx, load_epoch(canon, epoch), "--full", start)
+        return _full(ctx, epoch, "--full", start)
     if ctx.analysis.fallback_reasons:
         return _full(ctx, epoch, "; ".join(ctx.analysis.fallback_reasons), start)
     marker = canon / FULL_ONLY_FILE
