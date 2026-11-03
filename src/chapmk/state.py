@@ -11,7 +11,7 @@ from chapmk.errors import ChapmkError
 from chapmk.predict import SegmentVectors
 from chapmk.runner import DEFAULT_LIST_SUFFIXES
 
-STATE_VERSION = 3
+STATE_VERSION = 4
 STATE_FILE = "state.json"
 
 
@@ -51,7 +51,10 @@ class State:
     units with reasons and ``glue_pending`` why the glue is invalid, if the last build did not
     reach the fixpoint (e.g. a TeX error). ``vectors`` holds entry, exit and absolute set of
     each segment from its committing run (prediction, §6.9.3); ``eqp_tags`` the eqparbox tags
-    each segment used in its committing run (M6).
+    each segment used in its committing run (M6). ``dist_files`` holds the stat signatures
+    of the distribution files read by the format build and the runs (C4): a change (e.g. a
+    ``tlmgr`` update) forces a cold build, so reused pages and new runs never mix package
+    versions.
     """
 
     epoch: int
@@ -74,6 +77,7 @@ class State:
     openright: dict[str, bool] = field(default_factory=dict)  # unit starts on an odd page
     # list files of the document: the defaults plus those recorded (L records)
     list_suffixes: list[str] = field(default_factory=lambda: list(DEFAULT_LIST_SUFFIXES))
+    dist_files: dict[str, str] = field(default_factory=dict)  # path -> "size:mtime_ns"
     version: int = STATE_VERSION
 
     def run_names(self) -> set[str]:
@@ -151,10 +155,11 @@ def load_state(canon_dir: Path) -> State | None:
                 )
                 for seg, v in data["vectors"].items()
             },
-            eqp_tags={k: list(v) for k, v in data.get("eqp_tags", {}).items()},
-            pictures={k: list(v) for k, v in data.get("pictures", {}).items()},
-            openright={k: bool(v) for k, v in data.get("openright", {}).items()},
-            list_suffixes=list(data.get("list_suffixes", DEFAULT_LIST_SUFFIXES)),
+            eqp_tags={k: list(v) for k, v in data["eqp_tags"].items()},
+            pictures={k: list(v) for k, v in data["pictures"].items()},
+            openright={k: bool(v) for k, v in data["openright"].items()},
+            list_suffixes=list(data["list_suffixes"]),
+            dist_files={str(k): str(v) for k, v in data["dist_files"].items()},
         )
     except (ValueError, KeyError, TypeError) as err:
         raise ChapmkError(f"{path}: corrupt state ({err}); run 'chapmk clean'") from err

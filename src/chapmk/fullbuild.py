@@ -19,22 +19,25 @@ from chapmk.analysis import Analysis
 from chapmk.aux import read_lines
 from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import TexError, ToolError
+from chapmk.fmt import format_stamp, internal_dirs
 from chapmk.gensrc import full_mode_input
 from chapmk.layout import Layout
 from chapmk.logs import first_error, map_paths
 from chapmk.pictures import (
     PICS_FILE,
+    check_inputs,
     collect_garbage,
     driver_file,
     export_figures,
     read_pictures,
+    record_inputs,
     remove_figures,
     stale_figures,
     store_references,
 )
 from chapmk.proc import run
 from chapmk.publish import copy_bytes, publish
-from chapmk.shadow import read_inputs
+from chapmk.shadow import external_inputs, read_inputs, stat_signatures
 from chapmk.synctex import rewrite_paths
 from chapmk.texdist import TexDistribution
 
@@ -208,7 +211,11 @@ def full_build(
         (out / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
     argv = dist.pdflatex(full_mode_input(analysis), job, out)
     fig_dir = (fig_dir or layout.full_fig_dir) if picture_cache else None
-    stamp = short_hash(dist.version + json.dumps(asdict(analysis.fingerprints), sort_keys=True))
+    # format stamp: distribution, chapmk-ini.sty, chapmk.sty, driver version, preamble
+    stamp = short_hash(
+        format_stamp(analysis, dist.version)
+        + json.dumps(asdict(analysis.fingerprints), sort_keys=True)
+    )
 
     def run_pass() -> PassResult:
         # key part for references in pictures: all label and citation values of the last pass
@@ -216,7 +223,8 @@ def full_build(
         values = label_values(read_lines(p) for p in auxes)
         values.update(cite_values(out / f"{job}.bbl"))
         refs = short_hash(json.dumps(sorted(values.items())))
-        if fig_dir is not None:  # figures whose files (tables, inputs, images) changed
+        if fig_dir is not None:  # package updates; files (tables, inputs, images) changed
+            check_inputs(fig_dir)
             remove_figures(fig_dir, stale_figures(fig_dir, None, analysis.source_dir))
         text = driver_file(fig_dir, layout.shadow_dir, stamp, {"-": refs})
         (out / PICS_FILE).write_text(text, encoding="utf-8")
@@ -229,6 +237,10 @@ def full_build(
                 for p in pictures:
                     if p.exported:
                         store_references(fig_dir, p, {}, analysis.source_dir)
+                if exported:
+                    fls = out / f"{job}.fls"
+                    dist_files = external_inputs(fls, layout.shadow_dir, internal_dirs(layout))
+                    record_inputs(fig_dir, stat_signatures(dist_files))
                 collect_garbage(fig_dir, {p.key for p in pictures})
             return PassResult(True, None, f"{exported} pictures exported" if exported else None)
         log = out / f"{job}.log"

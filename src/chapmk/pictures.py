@@ -15,6 +15,8 @@ citations) are checked by the driver: an exported figure stores its code (``<key
 the values of the keys it referenced and the digests of the source files it read
 (``<key>.deps``: recorded ``\\input``/graphics files plus files named in the code, e.g.
 pgfplots tables); :func:`stale_figures` finds figures whose references or files changed.
+``inputs.json`` holds the stat signatures of the distribution files read by the runs that
+exported into the cache; a change (package update) empties the cache (:func:`check_inputs`).
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from chapmk.deps import TokenScan, changed_imports, imports
+from chapmk.shadow import changed_signatures
 from chapmk.texdist import tex_path
 
 #: driver parameters, read by chapmk-ini.sty at ``\begin{document}`` (run or output directory)
@@ -39,6 +42,8 @@ _RECORD = re.compile(
 )
 _SOURCE = "chapmk-picture: s "
 _FILE = re.compile(r"^chapmk-picture: f ([0-9A-F]{32}) (.+?)\s*$", re.MULTILINE)
+#: distribution files of the exporting runs (C4)
+INPUTS_FILE = "inputs.json"
 #: TeX breaks log lines at ``max_print_line`` (texdist.deterministic_env)
 _MAX_PRINT_LINE = 10000
 
@@ -194,6 +199,39 @@ def stale_figures(
     return stale
 
 
+def record_inputs(fig_dir: Path, signatures: Mapping[str, str]) -> None:
+    """Add the distribution files read by an exporting run (stat signatures) to the cache."""
+    path = fig_dir / INPUTS_FILE
+    try:
+        old = json.loads(path.read_text())
+    except (OSError, ValueError):
+        old = {}
+    data = {**(old if isinstance(old, dict) else {}), **signatures}
+    if data != old:
+        fig_dir.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
+
+
+def check_inputs(fig_dir: Path) -> bool:
+    """Empty the cache if a distribution file read by an exporting run changed (or the
+    record is unreadable): figures of old package versions are never embedded. True if
+    emptied."""
+    path = fig_dir / INPUTS_FILE
+    if not path.is_file():
+        return False
+    try:
+        data = json.loads(path.read_text())
+        valid = isinstance(data, dict) and not changed_signatures(data)
+    except (OSError, ValueError):
+        valid = False
+    if valid:
+        return False
+    for f in fig_dir.iterdir():
+        if f.is_file():
+            f.unlink()
+    return True
+
+
 def remove_figures(fig_dir: Path, keys: Iterable[str]) -> None:
     for key in keys:
         for suffix in (".pdf", ".dpth", ".src", ".deps"):
@@ -205,5 +243,5 @@ def collect_garbage(fig_dir: Path, keep: set[str]) -> None:
     if not fig_dir.is_dir():
         return
     for path in fig_dir.iterdir():
-        if path.is_file() and path.name.split(".", 1)[0] not in keep:
+        if path.is_file() and path.name != INPUTS_FILE and path.name.split(".", 1)[0] not in keep:
             path.unlink()

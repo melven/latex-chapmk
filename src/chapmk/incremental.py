@@ -31,13 +31,21 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+import chapmk
 from chapmk.analysis import UNIT_HEADINGS, Analysis
 from chapmk.aux import AGGREGATE, GLOBAL, command_name, read_lines, run_input_main_aux, statements
 from chapmk.canon import CanonView, commit_lists, commit_run, read_canon, run_tools, segments
 from chapmk.config import Config
 from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
 from chapmk.errors import ChapmkError, TexError
-from chapmk.fmt import FormatInfo, ensure_format, format_inputs, format_stamp
+from chapmk.fmt import (
+    FormatInfo,
+    ensure_format,
+    format_dist_inputs,
+    format_inputs,
+    format_stamp,
+    internal_dirs,
+)
 from chapmk.fullbuild import full_build
 from chapmk.layout import Layout
 from chapmk.lint import LintHit, glue_hints, lint_files
@@ -50,10 +58,12 @@ from chapmk.outputs import (
 )
 from chapmk.pictures import (
     PICS_FILE,
+    check_inputs,
     collect_garbage,
     driver_file,
     export_figures,
     read_pictures,
+    record_inputs,
     remove_figures,
     stale_figures,
     store_references,
@@ -77,7 +87,7 @@ from chapmk.records import (
     tex_phases,
 )
 from chapmk.runner import RunSpec, derived_suffixes, prepare_run_dir, run_batch
-from chapmk.shadow import read_inputs
+from chapmk.shadow import changed_signatures, external_inputs, read_inputs, stat_signatures
 from chapmk.state import State, UnitInputs, load_state, save_state
 from chapmk.texdist import TexDistribution
 from chapmk.timing import Timings
@@ -361,6 +371,7 @@ class Fixpoint:
         if not ctx.config.picture_cache:
             return driver_file(None, ctx.layout.shadow_dir, "", {})
         fig = ctx.layout.fig_dir
+        check_inputs(fig)  # package updates
         remove_figures(fig, stale_figures(fig, view.values, self.a.source_dir))
         stamp = short_hash(
             self.state.format_stamp + json.dumps(self.state.fingerprints, sort_keys=True)
@@ -818,6 +829,8 @@ class Fixpoint:
                 if p.exported:
                     store_references(fig, p, pre.values, self.a.source_dir)
                     exported[p.segment] = exported.get(p.segment, 0) + 1
+        if exported:
+            record_inputs(fig, state.dist_files)
         return exported
 
     def _attribute(self, recs: RunRecords, compiled: set[str], run_dir: Path) -> None:
@@ -839,6 +852,11 @@ class Fixpoint:
             }.items()
             if n not in attributed
         }
+        fls = run_dir / f"{ctx.job}.fls"
+        state.dist_files.update(format_dist_inputs(ctx.layout))
+        state.dist_files.update(
+            stat_signatures(external_inputs(fls, ctx.layout.shadow_dir, internal_dirs(ctx.layout)))
+        )
 
     def _canon_records(self, canon: Path) -> RunRecords:
         """Header records of the canonical main aux (counters, layout)."""
@@ -901,7 +919,11 @@ def _cold_reason(ctx: Context, state: State | None, stamp: str) -> str | None:
     if state is None:
         return "no previous state"
     if state.format_stamp != stamp:
-        return "preamble (format part) or TeX installation changed"
+        return "preamble (format part), TeX installation or chapmk version changed"
+    changed_dist = changed_signatures(state.dist_files)
+    if changed_dist:
+        names = [Path(p).name for p in changed_dist]
+        return f"TeX distribution files changed ({_short(names)})"
     if state.fingerprints != asdict(ctx.analysis.fingerprints):
         return "main file changed (preamble or body)"
     if state.includes != [inc.arg for inc in ctx.analysis.includes]:
@@ -921,10 +943,11 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
     if ctx.analysis.fallback_reasons:
         return _full(ctx, epoch, "; ".join(ctx.analysis.fallback_reasons), start)
     marker = canon / FULL_ONLY_FILE
-    stamp_data = {"fingerprints": asdict(ctx.analysis.fingerprints)}
+    # keyed by the version too: an upgrade may support what forced full mode
+    stamp_data = {"fingerprints": asdict(ctx.analysis.fingerprints), "chapmk": chapmk.__version__}
     if marker.is_file():
         data = json.loads(marker.read_text())
-        if data.get("fingerprints") == stamp_data["fingerprints"]:
+        if all(data.get(k) == v for k, v in stamp_data.items()):
             return _full(ctx, epoch, data["reason"], start)
     try:
         state = load_state(canon)

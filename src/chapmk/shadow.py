@@ -10,7 +10,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -210,3 +210,41 @@ def read_inputs(fls: Path, cwd: Path, within: Path) -> set[Path]:
             if (root / rel).is_file():
                 found.add(root / rel)
     return found
+
+
+def external_inputs(fls: Path, cwd: Path, internal: Iterable[Path]) -> set[Path]:
+    """Files read by a run (``INPUT`` lines) outside the ``internal`` directories (shadow
+    tree, build and source directory): the TeX distribution, ``TEXMFHOME``, ``TEXINPUTS``.
+    Absolute, normalised paths of existing files."""
+    if not fls.is_file():
+        return set()
+    roots = [Path(d).absolute() for d in internal]
+    roots += [r.resolve() for r in roots]
+    found: set[Path] = set()
+    for line in fls.read_text(errors="surrogateescape").split("\n"):
+        if line.startswith("INPUT "):
+            p = Path(line[6:].rstrip("\r"))
+            p = Path(os.path.normpath(p if p.is_absolute() else Path(cwd).absolute() / p))
+            if any(p.is_relative_to(r) for r in roots) or not p.is_file():
+                continue
+            if not any(p.resolve().is_relative_to(r) for r in roots):
+                found.add(p)
+    return found
+
+
+def _stat(path: Path) -> str:
+    try:
+        st = path.stat()
+    except OSError:
+        return ""
+    return f"{st.st_size}:{st.st_mtime_ns}"
+
+
+def stat_signatures(paths: Iterable[Path]) -> dict[str, str]:
+    """``{path: "size:mtime_ns"}``: cheap change detection for distribution files (C4)."""
+    return {p.as_posix(): _stat(p) for p in paths}
+
+
+def changed_signatures(signatures: Mapping[str, str]) -> list[str]:
+    """Paths whose size or mtime changed since :func:`stat_signatures` (or that vanished)."""
+    return [p for p, s in signatures.items() if _stat(Path(p)) != s]
