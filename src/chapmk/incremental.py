@@ -361,7 +361,7 @@ class Fixpoint:
         if not ctx.config.picture_cache:
             return driver_file(None, ctx.layout.shadow_dir, "", {})
         fig = ctx.layout.fig_dir
-        remove_figures(fig, stale_figures(fig, view.values))
+        remove_figures(fig, stale_figures(fig, view.values, self.a.source_dir))
         stamp = short_hash(
             self.state.format_stamp + json.dumps(self.state.fingerprints, sort_keys=True)
         )
@@ -816,7 +816,7 @@ class Fixpoint:
                 state.pictures[seg] = sorted({p.key for p in pics if p.segment == seg})
             for p in pics:
                 if p.exported:
-                    store_references(fig, p, pre.values)
+                    store_references(fig, p, pre.values, self.a.source_dir)
                     exported[p.segment] = exported.get(p.segment, 0) + 1
         return exported
 

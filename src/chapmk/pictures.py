@@ -8,15 +8,18 @@ reruns the segment. Records (log lines, written by ``\\chapmk@picrec``)::
     chapmk-picture: x <key> <0-based PDF page> <depth> <segment>   exported
     chapmk-picture: u <key> <segment>                              figure used
     chapmk-picture: s <key> <picture code>                         code of an exported one
+    chapmk-picture: f <key> <file>                                 file read while exporting
 
 The key covers the code and the state at the picture. References inside the code (labels,
 citations) are checked by the driver: an exported figure stores its code (``<key>.src``) and
-the values of the keys it referenced (``<key>.deps``); :func:`stale_figures` finds figures
-whose references changed.
+the values of the keys it referenced and the digests of the source files it read
+(``<key>.deps``: recorded ``\\input``/graphics files plus files named in the code, e.g.
+pgfplots tables); :func:`stale_figures` finds figures whose references or files changed.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -35,6 +38,7 @@ _RECORD = re.compile(
     re.MULTILINE,
 )
 _SOURCE = "chapmk-picture: s "
+_FILE = re.compile(r"^chapmk-picture: f ([0-9A-F]{32}) (.+?)\s*$", re.MULTILINE)
 #: TeX breaks log lines at ``max_print_line`` (texdist.deterministic_env)
 _MAX_PRINT_LINE = 10000
 
@@ -49,6 +53,7 @@ class PictureRecord:
     page: int = -1
     depth: str = ""
     source: str = ""  # picture code (exported pictures)
+    files: tuple[str, ...] = ()  # files read while it was exported (as TeX recorded them)
 
 
 def read_pictures(log: Path) -> list[PictureRecord]:
@@ -66,6 +71,9 @@ def read_pictures(log: Path) -> list[PictureRecord]:
                 j += 1
                 body.append(lines[j])
             sources[line[len(_SOURCE) : len(_SOURCE) + 32]] = "".join(body)
+    files: dict[str, list[str]] = {}
+    for m in _FILE.finditer(text):
+        files.setdefault(m.group(1), []).append(m.group(2))
     out = []
     for m in _RECORD.finditer(text):
         if m.group("xkey"):
@@ -78,6 +86,7 @@ def read_pictures(log: Path) -> list[PictureRecord]:
                     int(m.group("page")),
                     m.group("depth"),
                     sources.get(key, ""),
+                    tuple(files.get(key, ())),
                 )
             )
         else:
@@ -120,17 +129,42 @@ def driver_file(fig_dir: Path | None, cwd: Path, stamp: str, refs: Mapping[str, 
     return text
 
 
-def store_references(fig_dir: Path, rec: PictureRecord, values: Mapping[str, str]) -> None:
-    """Store an exported picture's code and the values of the keys it references."""
+def _source_name(recorded: str, source_dir: Path) -> str | None:
+    """A file name as TeX recorded it, relative to the source directory, if it is a source."""
+    name = recorded.strip().lstrip("/")
+    name = name[2:] if name.startswith("./") else name
+    return name if name and (source_dir / name).is_file() else None
+
+
+def _sha(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def store_references(
+    fig_dir: Path, rec: PictureRecord, values: Mapping[str, str], source_dir: Path
+) -> None:
+    """Store an exported picture's code, the values of the keys it references and the
+    digests of the source files it read or names (tables, inputs, images)."""
     (fig_dir / f"{rec.key}.src").write_text(rec.source, encoding="utf-8", errors="surrogateescape")
     scan = TokenScan([rec.source])
-    data = {"deps": imports(scan, values), "tokens": sorted(scan.tokens), "text": scan.texts[0]}
+    names = {_source_name(f, source_dir) for f in rec.files}
+    names |= {_source_name(t, source_dir) for t in scan.tokens if "." in t or "/" in t}
+    files = {n: _sha(source_dir / n) for n in sorted(n for n in names if n)}
+    data = {
+        "deps": imports(scan, values),
+        "tokens": sorted(scan.tokens),
+        "text": scan.texts[0],
+        "files": files,
+    }
     (fig_dir / f"{rec.key}.deps").write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
 
 
-def stale_figures(fig_dir: Path, values: Mapping[str, str]) -> list[str]:
+def stale_figures(
+    fig_dir: Path, values: Mapping[str, str] | None, source_dir: Path | None = None
+) -> list[str]:
     """Keys of figures whose code references a label or citation whose value changed (or
-    that became defined or undefined) since the figure was exported."""
+    that became defined or undefined) since the figure was exported (``values``; None: not
+    checked, full mode has the references in the key), or one of whose files changed."""
     stale: list[str] = []
     if not fig_dir.is_dir():
         return stale
@@ -148,7 +182,14 @@ def stale_figures(fig_dir: Path, values: Mapping[str, str]) -> list[str]:
         except (OSError, ValueError, KeyError, TypeError):
             stale.append(key)
             continue
-        if changed_imports(stored, scan, values):
+        files = data.get("files", {}) if isinstance(data, dict) else {}
+        if (values is not None and changed_imports(stored, scan, values)) or (
+            source_dir is not None
+            and any(
+                not (source_dir / n).is_file() or _sha(source_dir / n) != d
+                for n, d in files.items()
+            )
+        ):
             stale.append(key)
     return stale
 

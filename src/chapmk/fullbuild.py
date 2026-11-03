@@ -28,6 +28,9 @@ from chapmk.pictures import (
     driver_file,
     export_figures,
     read_pictures,
+    remove_figures,
+    stale_figures,
+    store_references,
 )
 from chapmk.proc import run
 from chapmk.publish import copy_bytes, publish
@@ -187,12 +190,14 @@ def full_build(
     report: Callable[[str], None] = lambda _msg: None,
     max_passes: int = MAX_PASSES,
     picture_cache: bool = True,
+    fig_dir: Path | None = None,
 ) -> FullBuildResult:
     """Full mode: pdflatex on the unmodified sources (with chapmk-ini) to a fixpoint, then
     publish the results.
 
-    With the user's TikZ externalize, pictures are exported into ``layout.full_fig_dir`` and
-    embedded in a further pass (§6.17), so the result equals an externalized build.
+    With the user's TikZ externalize, pictures are exported into ``fig_dir`` (default
+    ``layout.full_fig_dir``) and embedded in a further pass (§6.17), so the result equals an
+    externalized build.
 
     On a TeX error the previous published PDF is kept, the failing log is published and a
     :class:`TexError` is raised. The shadow tree must be up to date.
@@ -202,7 +207,7 @@ def full_build(
     for inc in analysis.includes:  # \include writes <arg>.aux into the output directory (S2)
         (out / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
     argv = dist.pdflatex(full_mode_input(analysis), job, out)
-    fig_dir = layout.full_fig_dir if picture_cache else None
+    fig_dir = (fig_dir or layout.full_fig_dir) if picture_cache else None
     stamp = short_hash(dist.version + json.dumps(asdict(analysis.fingerprints), sort_keys=True))
 
     def run_pass() -> PassResult:
@@ -211,6 +216,8 @@ def full_build(
         values = label_values(read_lines(p) for p in auxes)
         values.update(cite_values(out / f"{job}.bbl"))
         refs = short_hash(json.dumps(sorted(values.items())))
+        if fig_dir is not None:  # figures whose files (tables, inputs, images) changed
+            remove_figures(fig_dir, stale_figures(fig_dir, None, analysis.source_dir))
         text = driver_file(fig_dir, layout.shadow_dir, stamp, {"-": refs})
         (out / PICS_FILE).write_text(text, encoding="utf-8")
         result = run(argv, cwd=layout.shadow_dir, env=env)
@@ -219,6 +226,9 @@ def full_build(
             exported = 0
             if fig_dir is not None:
                 exported = export_figures(out / f"{job}.pdf", pictures, fig_dir)
+                for p in pictures:
+                    if p.exported:
+                        store_references(fig_dir, p, {}, analysis.source_dir)
                 collect_garbage(fig_dir, {p.key for p in pictures})
             return PassResult(True, None, f"{exported} pictures exported" if exported else None)
         log = out / f"{job}.log"
