@@ -203,6 +203,9 @@
 % statement of its aux) and \chapmk@lmark{/<seg>} after each entry record, written while
 % the aux files are read at \end{document}; the driver splices list files by them
 \providecommand\chapmk@listexts{toc,lof,lot,loalg,lol,tdo}
+% "L <ext>": a list file read by \@starttoc (lists with other extensions: algorithm's .loa,
+% tocbasic's \DeclareNewTOC); the driver then copies, stores and splices them too
+\AddToHookWithArguments{cmd/@starttoc/before}{\immediate\write\chapmk@rec{L #1}}
 \def\chapmk@lmark#1{}
 \def\chapmk@listmarks#1{\@for\chapmk@ext:=\chapmk@listexts\do{%
   \@writefile{\chapmk@ext}{\chapmk@lmark{#1}}}}
