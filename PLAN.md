@@ -619,6 +619,7 @@ Full mode means plain sequential full runs to a fixpoint inside the build direct
 - unsupported packages (§1 non-goals): detected statically in the preamble, and at runtime from the `.fls` of the format build **and** the run. Packages dumped into the format are not in the run's `.fls`, and classes may load packages, e.g. `bookmark` only at `\begin{document}`.
   - `hyperref` loaded without `bookmark` also counts.
   - Runtime reasons are persistent: the next builds go straight to full mode until the main file changes (`canon/full-only.json`);
+- biblatex refsections (option `refsection=` other than `none`, `\begin{refsection}`, `\newrefsection` in the main file or a unit; C10): detected statically, so no build attempt is wasted; citations in a refsection other than 0 found at runtime also fall back;
 - `\documentclass` not before the split line (e.g. on the `\begin{document}` line);
 - format build failure;
 - a merge error (missing destinations, inconsistent SyncTeX header);

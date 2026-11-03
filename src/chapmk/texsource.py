@@ -46,6 +46,17 @@ def split_lines(text: str) -> list[str]:
     return lines
 
 
+def text_lines(text: str) -> list[str]:
+    """Lines of a file TeX or a tool wrote (aux, log, ``.fls``, ``.bcf`` ...), without line
+    endings: split at ``\n`` only, a trailing ``\r`` removed (C12). Unlike
+    :meth:`str.splitlines`, form feeds and Unicode line separators (U+2028, common in
+    copy-pasted titles) stay inside their line."""
+    lines = text.split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    return [line[:-1] if line.endswith("\r") else line for line in lines]
+
+
 def strip_comments(text: str) -> str:
     """Strip comments from every line of ``text``; the line structure stays."""
     return "".join(strip_comment(line) for line in split_lines(text))

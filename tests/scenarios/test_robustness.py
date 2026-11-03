@@ -125,3 +125,19 @@ def test_signal_kills_children(tmp_path: Path, sig: str) -> None:
     p.send_signal(getattr(signal, sig))
     assert p.wait(30) == (143 if sig == "SIGTERM" else 130)
     assert _processes_mentioning(str(runs)) == []
+
+
+def test_fallback_uses_the_state_epoch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """C11: a fallback full build days after the cold build uses the dates of the canonical
+    state, like --full and the check reference (no spurious \\today difference)."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    _document(src)
+    edit(src / "a.tex", "Alpha,", "Alpha (\\today),")
+    assert checked(src, capsys)["mode"] == "cold"
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", str(int(EPOCH) + 5 * 86400))
+    edit(src / "main.tex", "\\begin{document}", "\\usepackage{cleveref}\n\\begin{document}")
+    rep = checked(src, capsys)
+    assert rep["mode"] == "full" and "cleveref" in rep["reason"], rep

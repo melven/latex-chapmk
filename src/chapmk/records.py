@@ -9,6 +9,7 @@ from pathlib import Path
 
 from chapmk.analysis import Analysis
 from chapmk.errors import FallbackError
+from chapmk.texsource import text_lines
 
 Vector = dict[int, int]
 
@@ -48,7 +49,7 @@ def register_names(logs: list[Path]) -> dict[int, str]:
         if not log.is_file():
             continue
         stack: list[str | None] = []  # open files (None: other parentheses)
-        for line in log.read_text(errors="replace").splitlines():
+        for line in text_lines(log.read_text(errors="replace")):
             m = _ALLOC.match(line)
             if m:
                 package = next((f for f in reversed(stack) if f), None)
@@ -218,7 +219,7 @@ class RunRecords:
 
 
 def _read_aux_records(path: Path, recs: RunRecords) -> None:
-    for line in path.read_text(errors="replace").splitlines():
+    for line in text_lines(path.read_text(errors="replace")):
         m = _REC.match(line)
         if not m:
             continue
@@ -246,7 +247,7 @@ def _read_aux_records(path: Path, recs: RunRecords) -> None:
 
 
 def _read_frec(path: Path, recs: RunRecords) -> None:
-    for line in path.read_text(errors="replace").splitlines():
+    for line in text_lines(path.read_text(errors="replace")):
         if line.startswith("P "):
             index, seg, value, label = [*line[2:].split(" ", 3), ""][:4]
             recs.pages.append(PageRecord(int(index), seg, int(value), label))
@@ -275,7 +276,7 @@ def read_nomenclature(path: Path) -> dict[str, list[str]]:
     """``.nlo`` entries per segment, split at the ``%chapmk-seg`` markers (§6.4.2 item 5)."""
     entries: dict[str, list[str]] = {}
     seg: str | None = None
-    for line in path.read_text(errors="replace").splitlines():
+    for line in text_lines(path.read_text(errors="replace")):
         if line.startswith(NLO_MARKER):
             seg = line[len(NLO_MARKER) :].strip()
             entries.setdefault(seg, [])

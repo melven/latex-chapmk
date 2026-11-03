@@ -16,6 +16,7 @@ from typing import Protocol
 
 from chapmk.errors import ToolError
 from chapmk.proc import run
+from chapmk.texsource import text_lines
 
 #: Directory with chapmk-ini.sty and chapmk.sty; prepended to TEXINPUTS.
 TEX_DIR = Path(__file__).resolve().parent / "tex"
@@ -76,7 +77,7 @@ class TeXLive:
     def version(self) -> str:
         """First line of ``pdflatex --version``; part of the format fingerprint."""
         result = run(["pdflatex", "--version"], cwd=Path.cwd(), env=dict(os.environ))
-        return result.output.splitlines()[0].strip() if result.output else "unknown"
+        return text_lines(result.output)[0].strip() if result.output else "unknown"
 
     def environment(
         self, epoch: int, base: Mapping[str, str], formats_dir: Path | None = None
