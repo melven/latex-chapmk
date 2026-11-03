@@ -669,7 +669,7 @@ class Fixpoint:
             state,
             specs[-1].name,
             [s.name for s in specs],
-            complete=any(g is None for g in groups),
+            full_run=next((s.name for s in specs if s.selection is None), None),
         )
         t.lap("tools")
         post = self._view = read_canon(a, canon, state.list_suffixes)

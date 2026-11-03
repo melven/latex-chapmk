@@ -27,7 +27,7 @@ from chapmk.aux import (
     statements,
 )
 from chapmk.deps import cite_values, label_values, short_hash
-from chapmk.errors import ToolError
+from chapmk.errors import SelfCheckError, ToolError
 from chapmk.facts import DEFAULT_LIST_SUFFIXES, derived_suffixes
 from chapmk.files import copy_atomic, digest, write_if_changed
 from chapmk.fullbuild import NOMENCL_STYLE
@@ -39,6 +39,7 @@ from chapmk.state import SegmentArtifact, State
 from chapmk.texdist import TexDistribution
 from chapmk.tools import (
     citations_by_segment,
+    citekey_lines,
     datalists,
     nomenclature_file,
     patch_bcf,
@@ -259,6 +260,13 @@ def splice_list(base: str, sections: Mapping[str, list[str]]) -> str | None:
     return "".join(out)
 
 
+def _check_kept_sections(new: str, old: str, kept: set[str], name: str) -> None:
+    new_sections, old_sections = unit_sections(new), unit_sections(old)
+    for seg in sorted(kept, key=lambda s: int(s[1:])):
+        if seg in new_sections and seg in old_sections and new_sections[seg] != old_sections[seg]:
+            raise SelfCheckError(f"{name}: the entries of {seg} changed without a run of it")
+
+
 def commit_lists(
     analysis: Analysis,
     layout: Layout,
@@ -270,7 +278,11 @@ def commit_lists(
     another run of the batch (``batch_runs``) from that run (a parallel batch: no run read
     all new contributions). The sections of the other units are right in the last run: it
     wrote them from their canonical aux. Returns False if markers are missing (the list
-    files then come from the last run unchanged)."""
+    files then come from the last run unchanged).
+
+    Self-check (C14): the section of a unit that no run of the batch compiled, as the last
+    run wrote it from the unit's canonical aux, must equal its section in the previous
+    canonical list file."""
     canon, job = layout.canon_dir, analysis.jobname
     complete = True
     for suffix in state.list_suffixes:
@@ -279,6 +291,16 @@ def commit_lists(
             dst.unlink(missing_ok=True)
             continue
         base = src.read_text(encoding="utf-8", errors="surrogateescape")
+        if dst.is_file():
+            _check_kept_sections(
+                base,
+                dst.read_text(encoding="utf-8", errors="surrogateescape"),
+                {f"U{k}" for k in range(1, len(analysis.includes) + 1)}
+                - {
+                    seg for seg, art in state.segments.items() if art.run in (*batch_runs, last_run)
+                },
+                dst.name,
+            )
         sections: dict[str, list[str]] = {}
         for k in range(1, len(analysis.includes) + 1):
             run = state.segments[f"U{k}"].run
@@ -311,6 +333,16 @@ def list_files(
     }
 
 
+def _check_bcf(patched: str, written: Path) -> None:
+    if not written.is_file():
+        return
+    tex = written.read_text(encoding="utf-8", errors="surrogateescape")
+    if citekey_lines(patched) != citekey_lines(tex):
+        raise SelfCheckError(f"the patched .bcf citations differ from {written}")
+    if datalists(patched) != datalists(tex):
+        raise SelfCheckError(f"the patched .bcf datalists differ from {written}")
+
+
 def run_tools(
     analysis: Analysis,
     layout: Layout,
@@ -319,7 +351,7 @@ def run_tools(
     state: State,
     template_run: str,
     batch_runs: Sequence[str] = (),
-    complete: bool = False,
+    full_run: str | None = None,
 ) -> list[str]:
     """biber on the patched ``.bcf`` (S5: the template run's ``.bcf`` with the canonical
     citations of all segments) if it changed or there is no ``.bbl``; makeindex if the
@@ -327,7 +359,10 @@ def run_tools(
 
     Datalists are declared where ``\\printbibliography`` runs: the ``.bcf`` gets those of
     all ``batch_runs`` and, unless a run of the batch compiled all units (``complete``), those
-    of the previous canonical ``.bcf`` (a unit with the bibliography may be excluded)."""
+    of the previous canonical ``.bcf`` (a unit with the bibliography may be excluded).
+
+    Self-check (C14): if a run of the batch compiled all units (``full_run``), the patched
+    citations and datalists must equal those TeX wrote into that run's ``.bcf``."""
     job, canon = analysis.jobname, layout.canon_dir
     tools: list[str] = []
     bcf = layout.runs_dir / template_run / f"{job}.bcf"
@@ -336,7 +371,7 @@ def run_tools(
         patched = patch_bcf(bcf.read_text(encoding="utf-8", errors="surrogateescape"), elements)
         target = canon / f"{job}.bcf"
         blocks: dict[str, str] = {}
-        if not complete and target.is_file():
+        if full_run is None and target.is_file():
             blocks.update(datalists(target.read_text(encoding="utf-8", errors="surrogateescape")))
         for run_name in [*batch_runs, template_run]:
             run_bcf = layout.runs_dir / run_name / f"{job}.bcf"
@@ -344,6 +379,8 @@ def run_tools(
                 text = run_bcf.read_text(encoding="utf-8", errors="surrogateescape")
                 blocks.update(datalists(text))
         patched = with_datalists(patched, blocks)
+        if full_run is not None:
+            _check_bcf(patched, layout.runs_dir / full_run / f"{job}.bcf")
         if write_if_changed(target, patched) or not (canon / f"{job}.bbl").is_file():
             r = run(
                 dist.biber(job, canon), cwd=layout.shadow_dir, env=env, log_path=canon / "biber.out"
