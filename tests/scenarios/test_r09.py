@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from _helpers import EPOCH, build
+from _helpers import EPOCH, build, selections
 
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
 
@@ -56,8 +56,7 @@ def test_list_file_with_another_extension(
     src = tmp_path / "src"
     src.mkdir()
     (src / "main.tex").write_text(
-        # openany: no blank pages with running heads (a separate issue, not about lists)
-        "\\documentclass[openany]{book}\n\\usepackage{algorithm}\n\\begin{document}\n"
+        "\\documentclass{book}\n\\usepackage{algorithm}\n\\begin{document}\n"
         "\\listofalgorithms\n\\include{a}\n\\include{b}\n\\end{document}\n"
     )
     for name, title in (("a", "Alpha"), ("b", "Beta")):
@@ -110,3 +109,51 @@ def test_distribution_update_and_upgrade(
     monkeypatch.setattr(chapmk, "__version__", "99.0.0")
     rep = checked(src, capsys)
     assert rep["mode"] == "cold" and "chapmk version" in rep["reason"], rep
+
+
+def _heads_document(src: Path, extra: str = "") -> None:
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage{lipsum}\n\\begin{document}\n\\tableofcontents\n"
+        "\\include{a}\n\\include{b}\n\\include{c}\n\\end{document}\n"
+    )
+    for x in "abc":  # a ends on page 5: blank page 6 before b (head of a's last section)
+        n = 9 if x == "a" else 3
+        (src / f"{x}.tex").write_text(
+            f"\\chapter{{Chap {x}}}\n\\section{{Sec {x} one}}\n\\lipsum*[1-4]\n"
+            f"\\section{{Sec {x} two}}\nText {x}.{extra if x == 'a' else ''}\n\\lipsum*[1-{n}]\n"
+        )
+
+
+def test_running_heads_of_excluded_units(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """book, openright: the blank page before a chapter shows the running head of the last
+    section of the previous chapter. An excluded unit restores the marks its committing run
+    recorded at its end; the marks are part of the state vector, so a changed last heading
+    recompiles the following unit (entry state changed)."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    _heads_document(src)
+    assert checked(src, capsys)["mode"] == "cold"
+    path = src / "b.tex"
+    path.write_text(path.read_text().replace("Text b.", "Txet b."))
+    rep = checked(src, capsys)
+    assert selections(rep) == [["b"]], rep["runs"]
+    path = src / "a.tex"
+    path.write_text(path.read_text().replace("Sec a two", "Sec a TWO"))
+    rep = checked(src, capsys)
+    b = [x for r in rep["runs"] for x in r["reasons"].get("b", [])]
+    assert any(x.startswith("entry state changed (marks 2e-right") for x in b), rep["runs"]
+
+
+def test_primitive_marks_fall_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A primitive \\mark cannot be restored for excluded units: full mode with a warning."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    _heads_document(src, "\\mark{raw}")
+    rep = checked(src, capsys)
+    assert rep["mode"] == "full" and "primitive marks" in rep["reason"], rep
+    assert any("primitive marks" in w for w in rep["warnings"]), rep
