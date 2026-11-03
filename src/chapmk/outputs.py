@@ -79,11 +79,19 @@ def publish_state(
         recs = records(art.run)
         run_dir = layout.runs_dir / art.run
         by_index = {p.index: p for p in recs.pages}
+        # pages after an extra picture page (§6.17) are not indexed by the run's own labels
+        first_gap = next((n for n, p in enumerate(recs.pages) if p.index != n), len(recs.pages))
         for i in art.pages:
             if i not in by_index:
                 raise MergeFailedError(f"page {i} of run {art.run} has no page record")
             pages.append(
-                PageSource(run_dir / f"{job}.pdf", i, by_index[i].value, by_index[i].label)
+                PageSource(
+                    run_dir / f"{job}.pdf",
+                    i,
+                    by_index[i].value,
+                    by_index[i].label,
+                    check_label=i < first_gap,
+                )
             )
             syn.append((run_dir / f"{job}.synctex.gz", i))
         for line in slices[art.run].get(seg, []):
