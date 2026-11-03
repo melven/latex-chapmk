@@ -101,3 +101,12 @@ def test_page_shift_keeps_pictures(pictures: Path, capsys: pytest.CaptureFixture
     assert [x for x in diagrams if x.startswith("pictures exported")] == [
         "pictures exported (1)"
     ], diagrams
+
+
+def test_table_read_by_a_picture(pictures: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """C3: a pgfplots table read by a picture changes; the picture key (its code) stays, but
+    the figure is stale and exported again (also in the --full reference of check)."""
+    table = pictures / "data" / "points.dat"
+    table.write_text(table.read_text().replace("3 4", "3 1"))
+    rep = checked(pictures, capsys)
+    assert any(r.startswith("pictures exported") for r in reasons(rep)), rep["runs"]

@@ -66,7 +66,7 @@ def test_stale_figures(tmp_path: Path) -> None:
     becomes undefined; other keys do not matter."""
     rec = PictureRecord(KEY_A, "U1", True, 0, "0pt", "\\node {see \\ref{fig:a} and \\cite{k}};")
     values = {"L:fig:a": "1", "L:other": "2"}
-    store_references(tmp_path, rec, values)
+    store_references(tmp_path, rec, values, tmp_path)
     assert stale_figures(tmp_path, values) == []
     assert stale_figures(tmp_path, {**values, "L:other": "3"}) == []
     assert stale_figures(tmp_path, {**values, "L:fig:a": "9"}) == [KEY_A]
@@ -84,3 +84,21 @@ def test_config_picture_cache(tmp_path: Path) -> None:
     cfg.write_text("[pictures]\ncache = 1\n")
     with pytest.raises(ConfigError, match="true or false"):
         parse_config_file(cfg)
+
+
+def test_stale_figures_files(tmp_path: Path) -> None:
+    """A figure is stale when a file it read (recorded) or names in its code (a table) changes
+    or disappears."""
+    src, fig = tmp_path / "src", tmp_path / "fig"
+    (src / "data").mkdir(parents=True)
+    fig.mkdir()
+    (src / "data" / "t.dat").write_text("1 2\n")
+    (src / "inc.tex").write_text("x")
+    code = "\\begin{axis}\\addplot table {data/t.dat};\\end{axis}"
+    store_references(fig, PictureRecord(KEY_A, "U1", True, 0, "0pt", code, ("./inc.tex",)), {}, src)
+    assert stale_figures(fig, None, src) == []
+    (src / "data" / "t.dat").write_text("1 3\n")
+    assert stale_figures(fig, None, src) == [KEY_A]
+    store_references(fig, PictureRecord(KEY_A, "U1", True, 0, "0pt", code, ("./inc.tex",)), {}, src)
+    (src / "inc.tex").unlink()
+    assert stale_figures(fig, None, src) == [KEY_A]
