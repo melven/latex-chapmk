@@ -79,14 +79,15 @@ def test_interrupted_full_build(
 
 
 def _processes_mentioning(text: str) -> list[str]:
+    """Command lines of running TeX processes that mention ``text``."""
     out = []
     for cmd in Path("/proc").glob("[0-9]*/cmdline"):
         try:
-            argv = cmd.read_bytes().replace(b"\0", b" ").decode(errors="replace")
+            argv = cmd.read_bytes().decode(errors="replace").split("\0")
         except OSError:
             continue
-        if text in argv and "pytest" not in argv:
-            out.append(argv)
+        if argv and "tex" in Path(argv[0]).name and text in " ".join(argv):
+            out.append(" ".join(argv))
     return out
 
 
