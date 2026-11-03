@@ -12,7 +12,10 @@
 \providecommand\chapmk@denynames{}
 
 %% ---------------------------------------------------------------- helpers
-\def\chapmk@seg{G0}%  current segment id
+% current segment id: P (preamble after the split point: its files are global inputs of the
+% build, a change is a cold build), G0 from \begin{document} on, then U<k>/G<k>
+\def\chapmk@seg{P}%
+\AddToHook{begindocument/before}{\gdef\chapmk@seg{G0}}
 \def\chapmk@k{0}%     number of \include commands seen so far
 \def\chapmk@wrapped{-1}% \include index whose checkpoint wrapper ran (excluded units)
 \def\chapmk@inc#1{\xdef#1{\the\numexpr#1+1\relax}}
