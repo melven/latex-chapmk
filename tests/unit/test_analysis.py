@@ -124,11 +124,27 @@ def test_crlf_lines_are_kept(tmp_path: Path) -> None:
         ("\\usepackage[backend=bibtex]{biblatex}\n", "only biber"),
         ("\\ExecuteBibliographyOptions{backend = bibtex8}\n", "only biber"),
         ("\\makeglossaries\n", "makeglossaries"),
+        ("\\usepackage[backend=biber,refsection=chapter]{biblatex}\n", "refsections"),  # C10
+        ("\\ExecuteBibliographyOptions{refsection=part}\n", "refsections"),
     ],
 )
 def test_fallback_reasons(tmp_path: Path, preamble: str, reason: str) -> None:
     a = analyse(make(tmp_path, preamble="\\documentclass{book}\n" + preamble))
     assert any(reason in r for r in a.fallback_reasons), a.fallback_reasons
+
+
+def test_refsection_in_a_unit_is_a_fallback_reason(tmp_path: Path) -> None:
+    """C10: found in the unit files too; refsection=none and refsegments are fine."""
+    cfg = make(
+        tmp_path, preamble="\\documentclass{book}\n\\usepackage[refsection=none]{biblatex}\n"
+    )
+    a = analyse(cfg)
+    assert not any("refsection" in r for r in a.fallback_reasons), a.fallback_reasons
+    unit = a.includes[0].path
+    unit.write_text(unit.read_text() + "\\begin{refsection}\\cite{k}\\end{refsection}\n")
+    assert any("refsections" in r for r in analyse(cfg).fallback_reasons)
+    unit.write_text(unit.read_text().replace("refsection}", "refsegment}"))
+    assert not any("refsection" in r for r in analyse(cfg).fallback_reasons)
 
 
 def test_bibtex_in_body_is_a_fallback_reason(tmp_path: Path) -> None:
