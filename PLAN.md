@@ -30,7 +30,7 @@ One command (`chapmk build main.tex`) replaces `latexmk -pdf -synctex=1`. It pro
 - Units other than `\include` (no automatic splitting at `\chapter`).
 - The user's TikZ externalize settings (prefix, shell escape, system calls). chapmk keeps the user's `\tikzexternalize` but redirects it to its own picture cache (§6.4.3, §6.17).
 - Byte-identical PDFs.
-- `glossaries`, `imakeidx`/`makeidx`, `minted`, `cleveref`. Detect these and fall back to full builds with a warning (§6.14).
+- `glossaries`, `imakeidx`/`makeidx`, `minted`, `cleveref`. Detect these and fall back to full builds with a warning (§6.14). One table (`facts.UNSUPPORTED_PACKAGES`) serves the preamble scan and the runtime `.fls` check.
 - biblatex with `backend=bibtex` (or classic BibTeX). Only biber is supported; others fall back to full builds.
 - PDF outline via hyperref's `.out` file, i.e. hyperref without the `bookmark` package. v1 supports the outline only through `bookmark`, which KOMA classes load automatically (S1). Without `bookmark`: fall back to full builds; the `.out` route is phase 2.
 
@@ -627,7 +627,7 @@ Full mode means plain sequential full runs to a fixpoint inside the build direct
 - primitive marks (§6.4.2, persistent, with a warning);
 - `--full`.
 
-All of these are one exception class, `errors.FallbackError` (records, tool inputs, merges derive from it; D3), handled only by the builder. Persistent reasons are also reported as warnings. Any other exception is a bug: exit code 3 with a one-line `internal error: ...` message, the traceback only with `-v` (C9).
+Each fallback is reported as one warning (`full build: <reason>`). All of these are one exception class, `errors.FallbackError` (records, tool inputs, merges derive from it; D3), handled only by the builder. Persistent reasons are also reported as warnings. Any other exception is a bug: exit code 3 with a one-line `internal error: ...` message, the traceback only with `-v` (C9).
 
 Each trigger prints a one-line reason.
 
