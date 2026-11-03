@@ -13,6 +13,8 @@
 # Behind a proxy: --build-arg HTTPS_PROXY=... (--network host for a local proxy); if it
 # intercepts TLS: --secret id=ca,src=<CA bundle incl. public CAs> (used during the build only).
 FROM ubuntu:24.04
+LABEL org.opencontainers.image.source="https://github.com/melven/latex-chapmk" \
+      org.opencontainers.image.description="chapmk MiKTeX dev and CI image: complete MiKTeX on Ubuntu, Python tooling"
 
 ARG MIKTEX_MIRROR=https://ftp.fau.de/ctan/systems/win32/miktex
 ARG USERNAME=dev
