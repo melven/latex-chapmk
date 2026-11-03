@@ -440,35 +440,40 @@ def test_list_reads() -> None:
 
 
 def test_glue_hints() -> None:
-    """Slow glue blocks: movable ones get advice (with a units.heading entry for list
-    commands), others the reason; fast ones nothing."""
+    """Slow glue blocks: the part from the first chapter-level heading or list command can be
+    \\include'd (state commands before it stay; list commands need a units.heading entry);
+    otherwise the reason; fast blocks: nothing."""
     from fastinc.lint import glue_hints
 
     lines = [
         "\\documentclass{book}\n",  # 1
         "\\begin{document}\n",  # 2
-        "\\tableofcontents\n",  # 3   G0
+        "\\tableofcontents\n",  # 3   G0 (fast)
         "\\include{a}\n",  # 4
-        "\\appendix\n",  # 5          G1: state change
+        "\\appendix\n",  # 5          G1: \appendix stays, \chapter movable
         "\\chapter{Extra}\n",  # 6
         "\\include{b}\n",  # 7
-        "% comment\n\\printbibliography\n",  # 8-9 G2
+        "\\backmatter\n",  # 8        G2: as in the reference document
+        "\n",  # 9
+        "% comment\n",  # 10
+        "\\printbibliography\n",  # 11
+        "\\include{c}\n",  # 12
+        "Some text\\par\n",  # 13      G3: no heading
         "\\end{document}\n",
     ]
-    lines = [x for line in lines for x in line.splitlines(keepends=True)]
-    hints = glue_hints("main.tex", lines, 2, [4, 7], {"G0": 0.1, "G1": 0.7, "G2": 1.8}, ["chapter"])
-    assert len(hints) == 2
-    assert (
-        hints[0].startswith("main.tex:5-6: glue (\\appendix) takes 0.7 s")
-        and "stays glue" in hints[0]
+    hints = glue_hints(
+        "main.tex", lines, 2, [4, 7, 12], {"G0": 0.1, "G1": 0.7, "G2": 1.8, "G3": 0.9}, ["chapter"]
     )
-    assert hints[1].startswith("main.tex:8-9: glue (\\printbibliography) takes 1.8 s")
-    assert '[units] heading = ["printbibliography"]' in hints[1]
-    grouped = [
-        "\\begin{document}\n",
-        "\\chapter{X}\\begingroup\n",
-        "\\include{a}\n",
-        "\\endgroup\n",
-    ]
+    assert len(hints) == 3
+    assert hints[0].startswith("main.tex:5-6: glue (\\appendix) takes 0.7 s")
+    assert "lines 6-6 (from \\chapter) moved" in hints[0] and "(lines 5-5 stay)" in hints[0]
+    assert hints[1].startswith("main.tex:8-11: glue (\\backmatter) takes 1.8 s")
+    assert "lines 11-11 (from \\printbibliography) moved" in hints[1]
+    assert '[units] heading = ["printbibliography"] (lines 8-10 stay)' in hints[1]
+    assert "no chapter-level heading" in hints[2]
+    grouped = ["\\begin{document}\n", "\\chapter{X}\\begingroup\n", "\\include{a}\n"]
     [hint] = glue_hints("m.tex", grouped, 1, [3], {"G0": 1.0}, ["chapter"])
     assert "group or environment is open" in hint
+    stateful = ["\\begin{document}\n", "\\chapter{X}\\pagestyle{empty}\n", "\\include{a}\n"]
+    [hint] = glue_hints("m.tex", stateful, 1, [3], {"G0": 1.0}, ["chapter"])
+    assert "contains \\pagestyle" in hint

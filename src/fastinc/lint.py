@@ -260,6 +260,16 @@ _PAGE_STARTERS = frozenset(
     }
 )
 _FIRST_CS = re.compile(r"\s*\\([A-Za-z@]+\*?)")
+_CONTROL_WORD = re.compile(r"\\([A-Za-z@]+\*?)")
+
+
+def _balanced(text: str) -> bool:
+    """No group (``\\begingroup``/``\\bgroup``) or environment open at the end of ``text``."""
+    groups = len(re.findall(r"\\(begingroup|bgroup)(?![A-Za-z@])", text)) - len(
+        re.findall(r"\\(endgroup|egroup)(?![A-Za-z@])", text)
+    )
+    envs = len(re.findall(r"\\begin\s*\{", text)) - len(re.findall(r"\\end\s*\{", text))
+    return groups == 0 and envs == 0
 
 
 def glue_hints(
@@ -299,22 +309,37 @@ def glue_hints(
         m = _FIRST_CS.match(text)
         first = m.group(1) if m else None
         where = f"{main_name}:{start}-{end}: glue" + (f" (\\{first})" if first else "")
-        hits = lint_text(text, main_name)
-        opened = len(re.findall(r"\\(begingroup|bgroup)(?![A-Za-z@])", text)) - len(
-            re.findall(r"\\(endgroup|egroup)(?![A-Za-z@])", text)
+        # the movable part starts at the first chapter-level heading or list command; what
+        # precedes it (e.g. \backmatter) stays in the main file
+        split = next(
+            (
+                c
+                for c in _CONTROL_WORD.finditer(text)
+                if c.group(1) in headings or c.group(1) in _PAGE_STARTERS
+            ),
+            None,
         )
-        envs = len(re.findall(r"\\begin\s*\{", text)) - len(re.findall(r"\\end\s*\{", text))
-        if first is None or (first not in headings and first not in _PAGE_STARTERS):
-            reason = "it does not start with a chapter-level heading"
-        elif hits:
-            reason = f"it contains {hits[0].command}"
-        elif opened or envs:
+        if split is None:
+            hints.append(
+                f"{where} takes {seconds:.1f} s in every run; it has no chapter-level heading, "
+                "so it stays glue"
+            )
+            continue
+        name = split.group(1)
+        moved, before = text[split.start() :], text[: split.start()]
+        first_line = start + text.count("\n", 0, split.start())
+        hits = lint_text(moved, main_name)
+        if hits:
+            reason = f"the part from line {first_line} contains {hits[0].command}"
+        elif not (_balanced(moved) and _balanced(before)):
             reason = "a group or environment is open across its ends"
         else:
-            config = "" if first in headings else f' and fastinc.toml [units] heading = ["{first}"]'
+            keep = f" (lines {start}-{first_line - 1} stay)" if before.strip() else ""
+            config = "" if name in headings else f' and fastinc.toml [units] heading = ["{name}"]'
             hints.append(
-                f"{where} takes {seconds:.1f} s in every run; moved into an \\include'd file"
-                f"{config}, it is compiled only when needed (output unchanged)"
+                f"{where} takes {seconds:.1f} s in every run; lines {first_line}-{end} "
+                f"(from \\{name}) moved into an \\include'd file{config}{keep} are compiled "
+                "only when needed (output unchanged)"
             )
             continue
         hints.append(f"{where} takes {seconds:.1f} s in every run; {reason}, so it stays glue")
