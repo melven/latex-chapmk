@@ -12,7 +12,8 @@ from pathlib import Path
 import chapmk
 from chapmk.analysis import Analysis
 from chapmk.errors import TexError
-from chapmk.gensrc import format_source, write_if_changed
+from chapmk.files import digest, write_atomic, write_if_changed
+from chapmk.gensrc import format_source
 from chapmk.layout import Layout
 from chapmk.logs import first_error, map_paths
 from chapmk.proc import run
@@ -50,10 +51,6 @@ def format_stamp(analysis: Analysis, dist_version: str) -> str:
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
 
-def _sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def _read_stamp(stamp_file: Path) -> tuple[str, dict[str, str], dict[str, str]]:
     """(stamp, source inputs, distribution inputs) of a format; empty if missing or
     unreadable."""
@@ -88,7 +85,9 @@ def internal_dirs(layout: Layout) -> tuple[Path, ...]:
 
 
 def _current(source_dir: Path, inputs: Mapping[str, str]) -> bool:
-    return all((source_dir / n).is_file() and _sha(source_dir / n) == d for n, d in inputs.items())
+    return all(
+        (source_dir / n).is_file() and digest(source_dir / n) == d for n, d in inputs.items()
+    )
 
 
 def ensure_format(
@@ -146,9 +145,10 @@ def ensure_format(
     for path in read_inputs(fls, layout.shadow_dir, layout.shadow_dir):
         name = path.relative_to(shadow).as_posix()
         if (layout.source_dir / name).is_file():
-            inputs[name] = _sha(layout.source_dir / name)
+            inputs[name] = digest(layout.source_dir / name)
     dist_inputs = stat_signatures(external_inputs(fls, layout.shadow_dir, internal_dirs(layout)))
-    stamp_file.write_text(
-        json.dumps({"stamp": stamp, "inputs": inputs, "dist": dist_inputs}, sort_keys=True)
+    write_atomic(
+        stamp_file,
+        json.dumps({"stamp": stamp, "inputs": inputs, "dist": dist_inputs}, sort_keys=True),
     )
     return FormatInfo(fmt_dir, FORMAT_NAME, rebuilt=True)

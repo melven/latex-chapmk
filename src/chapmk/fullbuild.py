@@ -9,7 +9,6 @@ write into ``<build>/full``; only the final PDF, SyncTeX file and log are publis
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
@@ -19,6 +18,7 @@ from chapmk.analysis import Analysis
 from chapmk.aux import read_lines
 from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import TexError, ToolError
+from chapmk.files import digest
 from chapmk.fmt import format_stamp, internal_dirs
 from chapmk.gensrc import full_mode_input
 from chapmk.layout import Layout
@@ -65,14 +65,10 @@ def _names(names: list[str], limit: int = 5) -> str:
     return shown if len(names) <= limit else f"{shown}, ... (+{len(names) - limit} more)"
 
 
-def _digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def _snapshot(outdir: Path) -> dict[Path, str]:
     """Content hashes of the files in ``outdir`` that a pass may read."""
     return {
-        Path(p).absolute(): _digest(p)
+        Path(p).absolute(): digest(p)
         for p in outdir.rglob("*")
         if p.is_file() and not p.name.endswith(_NOT_INPUTS)
     }
@@ -99,22 +95,22 @@ def run_tools(
     """Run biber, makeindex for nomencl (``.nlo``) and makeindex for a generic index
     (``.idx``, default style, like latexmk) in ``outdir`` when their inputs changed."""
     bcf = outdir / f"{job}.bcf"
-    if bcf.is_file() and _digest(bcf) != state.bcf:
+    if bcf.is_file() and digest(bcf) != state.bcf:
         r = run(dist.biber(job, outdir), cwd=cwd, env=env, log_path=outdir / "biber.out")
         if not r.ok:
             raise ToolError(f"biber failed, see {outdir / f'{job}.blg'}")
-        state.bcf = _digest(bcf)
+        state.bcf = digest(bcf)
         state.runs.append("biber")
     nlo = outdir / f"{job}.nlo"
-    if nlo.is_file() and _digest(nlo) != state.nlo:
+    if nlo.is_file() and digest(nlo) != state.nlo:
         argv = dist.makeindex(nlo.name, f"{job}.nls", NOMENCL_STYLE)
         r = run(argv, cwd=outdir, env=env, log_path=outdir / "makeindex.out")
         if not r.ok:
             raise ToolError(f"makeindex failed: {r.output.strip()[-500:]}")
-        state.nlo = _digest(nlo)
+        state.nlo = digest(nlo)
         state.runs.append("makeindex")
     idx = outdir / f"{job}.idx"
-    if idx.is_file() and _digest(idx) != state.idx:
+    if idx.is_file() and digest(idx) != state.idx:
         r = run(
             dist.makeindex(idx.name, f"{job}.ind", None),
             cwd=outdir,
@@ -123,7 +119,7 @@ def run_tools(
         )
         if not r.ok:
             raise ToolError(f"makeindex failed: {r.output.strip()[-500:]}")
-        state.idx = _digest(idx)
+        state.idx = digest(idx)
         state.runs.append("makeindex (index)")
 
 
@@ -163,7 +159,7 @@ def converge(
         changed = sorted(
             p.name
             for p in read_inputs(outdir / f"{job}.fls", cwd, outdir)
-            if not p.name.endswith(_NOT_INPUTS) and before.get(p) != _digest(p)
+            if not p.name.endswith(_NOT_INPUTS) and before.get(p) != digest(p)
         )
         why = [f"changed {_names(changed)}"] if changed else []
         if result.rerun is not None:

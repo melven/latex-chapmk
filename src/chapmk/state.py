@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from chapmk.errors import ChapmkError
+from chapmk.files import write_atomic
 from chapmk.predict import SegmentVectors
 from chapmk.runner import DEFAULT_LIST_SUFFIXES
 
@@ -107,9 +108,7 @@ def save_state(state: State, canon_dir: Path) -> None:
         }
         for seg, v in state.vectors.items()
     }
-    tmp = canon_dir / f".{STATE_FILE}.tmp"
-    tmp.write_text(json.dumps(data, indent=1, sort_keys=True), encoding="utf-8")
-    tmp.replace(canon_dir / STATE_FILE)
+    write_atomic(canon_dir / STATE_FILE, json.dumps(data, indent=1, sort_keys=True))
 
 
 def load_state(canon_dir: Path) -> State | None:

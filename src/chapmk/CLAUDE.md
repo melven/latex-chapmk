@@ -22,7 +22,7 @@ shadow, layout, gensrc    shadow tree, directory layout, generated TeX sources
 analysis                  static analysis of the sources
 texdist, proc             TeX distribution adapter, subprocess helper
 aux, synctex, publish, logs  file formats and output handling
-texsource, config, errors, timing, lock  basics
+texsource, config, errors, timing, lock, files  basics
 ```
 
 ## Modules
@@ -31,11 +31,12 @@ texsource, config, errors, timing, lock  basics
 |---|---|---|
 | `timing.py` | M6 wall-time breakdown per build phase (`--report`: `timings`) | `Timings` (`lap(phase)`, `restart()`, `as_dict()`) |
 | `errors.py` | Exceptions; `str(err)` is the user message; `exit_code` 2 (1 for `TexError`) | `ChapmkError`, `ConfigError`, `AnalysisError`, `ToolError`, `TexError(msg, log, first_error)` |
+| `files.py` | D1: digests and atomic writes (temp file + `os.replace`); every file kept between builds is written with them (C7) | `digest(path)` (sha256 hex), `write_atomic(path, bytes\|str)` (str: UTF-8 with surrogateescape; parents created), `write_if_changed(path, data) -> bool`, `copy_atomic(src, dst)` |
 | `lock.py` | C6: exclusive OS file lock of a build directory (`<build>/lock`, holder PID inside) | `build_lock(build_dir, wait=, say=)` (context manager; waits with one message or raises), `LockedError`, `LOCK_FILE` |
 | `config.py` | `chapmk.toml` plus CLI overrides (§6.15) | `Config` (frozen; `effective_jobs`, `picture_cache` = `pictures.cache`), `load_config(main, cwd, **overrides)`, `parse_config_file(path)`, `find_config_file(dir)`, `CONFIG_NAME` |
 | `texsource.py` | Scanning TeX source without TeX: comments, braces, control words, arguments | `split_lines` (at `\n` only; never use `str.splitlines`), `strip_comment(s)`, `control_sequences`, `find_macros(text, names) -> [Macro]`, `read_group`, `read_optional`, `skip_space`, `LineIndex`, `depth_at_line_starts`, `open_conditional_at_line_starts` (primitive and `\newif` conditionals), `PRIMITIVE_CONDITIONALS`, `split_list` |
 | `analysis.py` | §6.1: `\begin{document}`, inlined preamble inputs, format split point, includes, compilation units (A5), fingerprints, fallback reasons | `analyse(config) -> Analysis`; `Analysis` (`lines`, `begin_line`, `split_line`, `split_reason`, `includes`, `units`, `fingerprints`, `fallback_reasons`, `warnings`, `jobname`, `newline`), `Include` (`heading`, `resets`), `CompilationUnit`, `Fingerprints`, `read_source`/`encode_source` (exact byte round trip), `DENY_SPLIT` (incl. PDF xobject/image creators), `UNIT_HEADINGS`, `UNSUPPORTED_PACKAGES` |
-| `gensrc.py` | §6.2: generated sources that keep line numbers | `format_source(a)`, `run_main(a, selection, deny_names, list_suffixes)` (`None` = all units, `[]` = glue only; `deny_names` = extra run-local registers for chapmk.sty; `list_suffixes`: list files that get unit markers), `full_mode_input(a)`, `write_if_changed(path, text)`, `INI_PACKAGE`, `RUNTIME_PACKAGE` |
+| `gensrc.py` | §6.2: generated sources that keep line numbers | `format_source(a)`, `run_main(a, selection, deny_names, list_suffixes)` (`None` = all units, `[]` = glue only; `deny_names` = extra run-local registers for chapmk.sty; `list_suffixes`: list files that get unit markers), `full_mode_input(a)`, `INI_PACKAGE`, `RUNTIME_PACKAGE` |
 | `proc.py` | Run programs: argv only, stdin closed, combined output | `run(argv, cwd=, env=, timeout=, log_path=) -> ProcResult` (`ok`, `output`, `seconds`) |
 | `texdist.py` | §6.16 distribution adapter. **Only place with engine flags.** | `detect() -> TexDistribution`, `TeXLive` (`pdflatex`, `format_build`, `biber`, `makeindex` (style None: default), `environment`, `version`, `check_tools`), `deterministic_env(epoch)` (N4), `tex_path`, `TEX_DIR` |
 | `layout.py` | Build directory parts and published outputs | `Layout` (`shadow_dir`, `fmt_dir`, `full_dir`, `runs_dir`, `canon_dir`, `fig_dir`, `full_fig_dir`, `output(suffix)`, `path_map()`), `make_layout(config, analysis)` (default build directory `<source>/.chapmk/<jobname>`, `DEFAULT_BUILD_DIR` root skipped by the shadow tree) |

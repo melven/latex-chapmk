@@ -3,7 +3,6 @@ file, concatenated log, and the log of a failed run."""
 
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -12,6 +11,7 @@ from chapmk.analysis import Analysis
 from chapmk.aux import parse_bookmark, read_lines, segment_slices
 from chapmk.canon import segments
 from chapmk.errors import ChapmkError, TexError
+from chapmk.files import digest, write_atomic
 from chapmk.layout import Layout
 from chapmk.logs import map_paths
 from chapmk.publish import publish, text_writer
@@ -135,8 +135,7 @@ def _published_stamp(layout: Layout) -> dict[str, object]:
         path = layout.output(suffix)
         st = path.stat() if path.is_file() else None
         outputs[str(path)] = [st.st_size, st.st_mtime_ns] if st else None
-    digest = hashlib.sha256(canon_state.read_bytes()).hexdigest() if canon_state.is_file() else ""
-    return {"state": digest, "outputs": outputs}
+    return {"state": digest(canon_state) if canon_state.is_file() else "", "outputs": outputs}
 
 
 def is_published(layout: Layout) -> bool:
@@ -151,4 +150,4 @@ def is_published(layout: Layout) -> bool:
 
 
 def mark_published(layout: Layout) -> None:
-    (layout.canon_dir / PUBLISHED_FILE).write_text(json.dumps(_published_stamp(layout)))
+    write_atomic(layout.canon_dir / PUBLISHED_FILE, json.dumps(_published_stamp(layout)))

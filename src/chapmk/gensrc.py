@@ -1,14 +1,14 @@
 """Generated TeX sources that keep the user's line numbers (PLAN §6.2).
 
-All functions return text; writing files is the caller's job (:func:`write_if_changed`).
+All functions return text; writing files is the caller's job
+(:func:`chapmk.files.write_if_changed`).
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 
-from chapmk.analysis import Analysis, encode_source
+from chapmk.analysis import Analysis
 
 INI_PACKAGE = "chapmk-ini"
 RUNTIME_PACKAGE = "chapmk"
@@ -76,14 +76,3 @@ def full_mode_input(analysis: Analysis) -> str:
     """TeX command-line input for full-mode and reference runs: the unmodified main file with
     ``chapmk-ini`` loaded before ``\\documentclass`` (externalize neutralisation, §6.4.1)."""
     return f"\\RequirePackage{{{INI_PACKAGE}}}\\input{{{analysis.main.name}}}"
-
-
-def write_if_changed(path: Path, text: str) -> bool:
-    """Write ``text`` (exact bytes, see :func:`chapmk.analysis.encode_source`) unless the file
-    already has this content. Returns whether the file was written."""
-    data = encode_source(text)
-    if path.is_file() and path.read_bytes() == data:
-        return False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
-    return True

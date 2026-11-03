@@ -21,7 +21,6 @@ exported into the cache; a change (package update) empties the cache (:func:`che
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import re
@@ -30,6 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from chapmk.deps import TokenScan, changed_imports, imports
+from chapmk.files import digest, write_atomic
 from chapmk.shadow import changed_signatures
 from chapmk.texdist import tex_path
 
@@ -112,9 +112,9 @@ def export_figures(pdf: Path, records: Iterable[PictureRecord], fig_dir: Path) -
         for r in exported:
             out = pikepdf.new()
             out.pages.append(src.pages[r.page])
-            tmp = fig_dir / f"{r.key}.tmp.pdf"
+            tmp = fig_dir / f"{r.key}.{os.getpid()}.tmp.pdf"
             out.save(tmp, deterministic_id=True)
-            (fig_dir / f"{r.key}.dpth").write_text(f"{r.depth}\n", encoding="ascii")
+            write_atomic(fig_dir / f"{r.key}.dpth", f"{r.depth}\n")
             tmp.replace(fig_dir / f"{r.key}.pdf")
     return len(exported)
 
@@ -129,8 +129,8 @@ def driver_file(fig_dir: Path | None, cwd: Path, stamp: str, refs: Mapping[str, 
 
     picdir = "" if fig_dir is None else tex_path(Path(os.path.relpath(fig_dir, cwd))) + "/"
     text = define("chapmk@picdir", picdir) + define("chapmk@picstamp", stamp)
-    for seg, digest in sorted(refs.items()):
-        text += define(f"chapmk@picrefs@{seg}", digest)
+    for seg, value in sorted(refs.items()):
+        text += define(f"chapmk@picrefs@{seg}", value)
     return text
 
 
@@ -141,27 +141,23 @@ def _source_name(recorded: str, source_dir: Path) -> str | None:
     return name if name and (source_dir / name).is_file() else None
 
 
-def _sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def store_references(
     fig_dir: Path, rec: PictureRecord, values: Mapping[str, str], source_dir: Path
 ) -> None:
     """Store an exported picture's code, the values of the keys it references and the
     digests of the source files it read or names (tables, inputs, images)."""
-    (fig_dir / f"{rec.key}.src").write_text(rec.source, encoding="utf-8", errors="surrogateescape")
+    write_atomic(fig_dir / f"{rec.key}.src", rec.source)
     scan = TokenScan([rec.source])
     names = {_source_name(f, source_dir) for f in rec.files}
     names |= {_source_name(t, source_dir) for t in scan.tokens if "." in t or "/" in t}
-    files = {n: _sha(source_dir / n) for n in sorted(n for n in names if n)}
+    files = {n: digest(source_dir / n) for n in sorted(n for n in names if n)}
     data = {
         "deps": imports(scan, values),
         "tokens": sorted(scan.tokens),
         "text": scan.texts[0],
         "files": files,
     }
-    (fig_dir / f"{rec.key}.deps").write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
+    write_atomic(fig_dir / f"{rec.key}.deps", json.dumps(data, sort_keys=True))
 
 
 def stale_figures(
@@ -191,7 +187,7 @@ def stale_figures(
         if (values is not None and changed_imports(stored, scan, values)) or (
             source_dir is not None
             and any(
-                not (source_dir / n).is_file() or _sha(source_dir / n) != d
+                not (source_dir / n).is_file() or digest(source_dir / n) != d
                 for n, d in files.items()
             )
         ):
@@ -209,7 +205,7 @@ def record_inputs(fig_dir: Path, signatures: Mapping[str, str]) -> None:
     data = {**(old if isinstance(old, dict) else {}), **signatures}
     if data != old:
         fig_dir.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(data, sort_keys=True), encoding="utf-8")
+        write_atomic(path, json.dumps(data, sort_keys=True))
 
 
 def check_inputs(fig_dir: Path) -> bool:

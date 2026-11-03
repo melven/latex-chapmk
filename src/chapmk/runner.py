@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from chapmk.analysis import Analysis
-from chapmk.gensrc import run_main, write_if_changed
+from chapmk.files import write_if_changed
+from chapmk.gensrc import run_main
 from chapmk.layout import Layout
 from chapmk.logs import first_error, map_paths
 from chapmk.proc import run

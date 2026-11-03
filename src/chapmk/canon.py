@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-import shutil
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,6 +28,7 @@ from chapmk.aux import (
 )
 from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import ToolError
+from chapmk.files import copy_atomic, digest, write_if_changed
 from chapmk.fullbuild import NOMENCL_STYLE
 from chapmk.layout import Layout
 from chapmk.predict import SegmentVectors, normalized
@@ -55,7 +55,7 @@ def segments(analysis: Analysis) -> list[str]:
 
 
 def _digest(path: Path) -> str | None:
-    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+    return digest(path) if path.is_file() else None
 
 
 @dataclass
@@ -164,7 +164,7 @@ def commit_run(
     for k, inc in enumerate(analysis.includes, start=1):
         if f"U{k}" in compiled:
             (canon / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(run_dir / inc.aux_name, canon / inc.aux_name)
+            copy_atomic(run_dir / inc.aux_name, canon / inc.aux_name)
     for seg in taken:
         state.segments[seg] = SegmentArtifact(
             run_name, tuple(p.index for p in recs.pages if p.segment == seg)
@@ -197,7 +197,7 @@ def commit_run(
         [a for s in order for a in state.aggregates.get(s, [])],
         pages,
     )
-    _write_if_changed(old_path, "\n".join(canonical) + "\n")
+    write_if_changed(old_path, "\n".join(canonical) + "\n")
     bcf = run_dir / f"{job}.bcf"
     if bcf.is_file():
         by_seg = citations_by_segment(
@@ -210,7 +210,7 @@ def commit_run(
         entries = read_nomenclature(nlo) if nlo.is_file() else {}
         for seg in taken:
             entries[seg] = recs.nomenclature.get(seg, [])
-        if _write_if_changed(nlo, nomenclature_file(order, entries)):
+        if write_if_changed(nlo, nomenclature_file(order, entries)):
             (canon / _NLO_CHANGED).touch()
 
 
@@ -298,7 +298,7 @@ def commit_lists(
         spliced = splice_list(base, sections)
         if spliced is None:
             complete, spliced = False, base
-        _write_if_changed(dst, spliced)
+        write_if_changed(dst, spliced)
     return complete
 
 
@@ -310,14 +310,6 @@ def list_files(
         s: (directory / f"{job}{s}").read_bytes() if (directory / f"{job}{s}").is_file() else None
         for s in suffixes
     }
-
-
-def _write_if_changed(path: Path, text: str) -> bool:
-    data = text.encode("utf-8", "surrogateescape")
-    if path.is_file() and path.read_bytes() == data:
-        return False
-    path.write_bytes(data)
-    return True
 
 
 def run_tools(
@@ -353,7 +345,7 @@ def run_tools(
                 text = run_bcf.read_text(encoding="utf-8", errors="surrogateescape")
                 blocks.update(datalists(text))
         patched = with_datalists(patched, blocks)
-        if _write_if_changed(target, patched) or not (canon / f"{job}.bbl").is_file():
+        if write_if_changed(target, patched) or not (canon / f"{job}.bbl").is_file():
             r = run(
                 dist.biber(job, canon), cwd=layout.shadow_dir, env=env, log_path=canon / "biber.out"
             )

@@ -21,7 +21,6 @@ and an empty canonical state (§6.9.4).
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import shutil
@@ -38,6 +37,7 @@ from chapmk.canon import CanonView, commit_lists, commit_run, read_canon, run_to
 from chapmk.config import Config
 from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
 from chapmk.errors import ChapmkError, TexError
+from chapmk.files import digest, write_atomic
 from chapmk.fmt import (
     FormatInfo,
     ensure_format,
@@ -157,10 +157,6 @@ class Context:
 # --- file attribution ------------------------------------------------------------------------
 
 
-def _sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def _source_file(ctx: Context, recorded: str) -> str | None:
     """Source-tree path (relative, posix) of a file name recorded by a run, if it is one."""
     name = recorded.lstrip("/")
@@ -174,7 +170,7 @@ def _source_file(ctx: Context, recorded: str) -> str | None:
 
 
 def _hashes(ctx: Context, names: set[str]) -> dict[str, str]:
-    return {n: _sha(ctx.analysis.source_dir / n) for n in sorted(names)}
+    return {n: digest(ctx.analysis.source_dir / n) for n in sorted(names)}
 
 
 def _segment_files(ctx: Context, recs: RunRecords) -> dict[str, dict[str, str]]:
@@ -205,9 +201,9 @@ def _global_files(ctx: Context, run_dir: Path, attributed: set[str]) -> dict[str
 
 def _changed(ctx: Context, files: dict[str, str]) -> list[str]:
     out = []
-    for name, digest in files.items():
+    for name, stored in files.items():
         path = ctx.analysis.source_dir / name
-        if not path.is_file() or _sha(path) != digest:
+        if not path.is_file() or digest(path) != stored:
             out.append(name)
     return out
 
@@ -236,7 +232,7 @@ def _records(ctx: Context, run_dir: Path) -> RunRecords:
 
 
 def _write(path: Path, stmts: list[str]) -> None:
-    path.write_text("\n".join(stmts) + "\n", encoding="utf-8", errors="surrogateescape")
+    write_atomic(path, "\n".join(stmts) + "\n")
 
 
 def _eqp_tag(key: str) -> str:
@@ -1010,7 +1006,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         for hint in hints:
             ctx.say(f"hint: {hint}")
         if runs:  # a no-op build lints nothing
-            (canon / LINT_CACHE).write_text(json.dumps(dict(loop.lint_cache)))
+            write_atomic(canon / LINT_CACHE, json.dumps(dict(loop.lint_cache)))
         if runs or not is_published(ctx.layout):
             pdf = publish_state(ctx.analysis, ctx.layout, state, ctx.timings)
             mark_published(ctx.layout)
@@ -1044,7 +1040,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         persistent = isinstance(fb, FallbackError) and fb.persistent
         if persistent:
             canon.mkdir(parents=True, exist_ok=True)
-            marker.write_text(json.dumps({**stamp_data, "reason": str(fb)}))
+            write_atomic(marker, json.dumps({**stamp_data, "reason": str(fb)}))
         return _full(ctx, epoch, str(fb), start, warn=persistent)
 
 
