@@ -18,7 +18,7 @@ from pathlib import Path
 from chapmk.analysis import Analysis
 from chapmk.aux import read_lines
 from chapmk.deps import cite_values, label_values, short_hash
-from chapmk.errors import TexError, ToolError
+from chapmk.errors import TexError
 from chapmk.files import digest, write_atomic
 from chapmk.fmt import format_stamp, internal_dirs
 from chapmk.gensrc import full_mode_input
@@ -41,12 +41,12 @@ from chapmk.publish import copy_bytes, publish
 from chapmk.shadow import external_inputs, read_inputs, stat_signatures
 from chapmk.synctex import rewrite_paths
 from chapmk.texdist import TexDistribution
+from chapmk.tools import NOMENCL_STYLE, run_biber, run_makeindex
 
 MAX_PASSES = 8
 #: present in the full-mode directory while passes run (C7): a kill leaves it, and the next
 #: full build starts from an empty directory
 JOURNAL_FILE = ".in-progress"
-NOMENCL_STYLE = "nomencl.ist"
 
 # files that are outputs of a pass, never inputs of the next one
 _NOT_INPUTS = (
@@ -103,29 +103,17 @@ def run_tools(
     (``.idx``, default style, like latexmk) in ``outdir`` when their inputs changed."""
     bcf = outdir / f"{job}.bcf"
     if bcf.is_file() and digest(bcf) != state.bcf:
-        r = run(dist.biber(job, outdir), cwd=cwd, env=env, log_path=outdir / "biber.out")
-        if not r.ok:
-            raise ToolError(f"biber failed, see {outdir / f'{job}.blg'}")
+        run_biber(dist, job, outdir, cwd, env)
         state.bcf = digest(bcf)
         state.runs.append("biber")
     nlo = outdir / f"{job}.nlo"
     if nlo.is_file() and digest(nlo) != state.nlo:
-        argv = dist.makeindex(nlo.name, f"{job}.nls", NOMENCL_STYLE)
-        r = run(argv, cwd=outdir, env=env, log_path=outdir / "makeindex.out")
-        if not r.ok:
-            raise ToolError(f"makeindex failed: {r.output.strip()[-500:]}")
+        run_makeindex(dist, nlo.name, f"{job}.nls", NOMENCL_STYLE, outdir, env)
         state.nlo = digest(nlo)
         state.runs.append("makeindex")
     idx = outdir / f"{job}.idx"
     if idx.is_file() and digest(idx) != state.idx:
-        r = run(
-            dist.makeindex(idx.name, f"{job}.ind", None),
-            cwd=outdir,
-            env=env,
-            log_path=outdir / "makeindex-idx.out",
-        )
-        if not r.ok:
-            raise ToolError(f"makeindex failed: {r.output.strip()[-500:]}")
+        run_makeindex(dist, idx.name, f"{job}.ind", None, outdir, env, "makeindex-idx.out")
         state.idx = digest(idx)
         state.runs.append("makeindex (index)")
 

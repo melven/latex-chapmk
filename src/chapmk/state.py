@@ -111,8 +111,13 @@ def save_state(state: State, canon_dir: Path) -> None:
     write_atomic(canon_dir / STATE_FILE, json.dumps(data, indent=1, sort_keys=True))
 
 
+class CorruptStateError(ChapmkError):
+    """``state.json`` cannot be read (truncated, edited, ...): the builder starts cold (E7)."""
+
+
 def load_state(canon_dir: Path) -> State | None:
-    """The persisted state, or ``None`` if there is none or it is unusable (cold build)."""
+    """The persisted state, or ``None`` if there is none or it has an older version (cold
+    build). An unreadable state raises :class:`CorruptStateError`."""
     path = canon_dir / STATE_FILE
     if not path.is_file():
         return None
@@ -160,5 +165,5 @@ def load_state(canon_dir: Path) -> State | None:
             list_suffixes=list(data["list_suffixes"]),
             dist_files={str(k): str(v) for k, v in data["dist_files"].items()},
         )
-    except (ValueError, KeyError, TypeError) as err:
-        raise ChapmkError(f"{path}: corrupt state ({err}); run 'chapmk clean'") from err
+    except (ValueError, KeyError, TypeError, AttributeError) as err:
+        raise CorruptStateError(f"{path} is unreadable ({type(err).__name__}: {err})") from err

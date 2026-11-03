@@ -88,7 +88,7 @@ from chapmk.records import (
 )
 from chapmk.runner import RunSpec, prepare_run_dir, run_batch
 from chapmk.shadow import changed_signatures, external_inputs, read_inputs, stat_signatures
-from chapmk.state import State, UnitInputs, load_state, save_state
+from chapmk.state import CorruptStateError, State, UnitInputs, load_state, save_state
 from chapmk.texdist import TexDistribution
 from chapmk.texsource import text_lines
 from chapmk.timing import Timings
@@ -960,9 +960,13 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
     ):
         return _full(ctx, epoch, data["reason"], start)
     try:
-        state = load_state(canon)
+        try:
+            state = load_state(canon)
+            unreadable = None
+        except CorruptStateError as err:  # E7: a cold build instead of an error
+            state, unreadable = None, str(err)
         stamp = format_stamp(ctx.analysis, ctx.dist.version)
-        reason = _cold_reason(ctx, state, stamp)
+        reason = _cold_reason(ctx, state, stamp) if unreadable is None else unreadable
         if state is None or reason is not None:
             ctx.say(f"cold build: {reason}")
             next_run = state.next_run if state is not None else 1
@@ -1043,5 +1047,8 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
 
 def load_epoch(canon_dir: Path, default: int) -> int:
     """SOURCE_DATE_EPOCH of the canonical state (N4), else ``default``."""
-    state = load_state(canon_dir)
+    try:
+        state = load_state(canon_dir)
+    except CorruptStateError:
+        return default
     return state.epoch if state is not None else default
