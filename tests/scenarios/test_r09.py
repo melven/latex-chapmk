@@ -44,3 +44,34 @@ def test_local_packages_before_and_after_the_split(
         path.write_text(path.read_text().replace(old, new))
         rep = checked(src, capsys)
         assert rep["mode"] == "cold" and name in rep["reason"], rep
+
+
+def test_list_file_with_another_extension(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """C2: \\listofalgorithms of algorithm.sty reads <job>.loa, an extension chapmk did not know.
+    It is recorded, stored, spliced and kept fresh; a stale main.loa of a manual build in
+    the source directory is not read."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        # openany: no blank pages with running heads (a separate issue, not about lists)
+        "\\documentclass[openany]{book}\n\\usepackage{algorithm}\n\\begin{document}\n"
+        "\\listofalgorithms\n\\include{a}\n\\include{b}\n\\end{document}\n"
+    )
+    for name, title in (("a", "Alpha"), ("b", "Beta")):
+        (src / f"{name}.tex").write_text(
+            f"\\chapter{{{name}}}\\begin{{algorithm}}x"
+            f"\\caption{{{title} method}}\\end{{algorithm}}\n"
+        )
+    (src / "main.loa").write_text("\\contentsline {algorithm}{STALE ENTRY}{1}\n")
+    assert checked(src, capsys)["mode"] == "cold"
+    state = (src / ".chapmk" / "main" / "canon" / "state.json").read_text()
+    assert '".loa"' in state
+    path = src / "b.tex"
+    path.write_text(path.read_text().replace("Beta method", "Gamma method"))
+    rep = checked(src, capsys)
+    assert rep["mode"] == "incremental", rep
+    loa = (src / ".chapmk" / "main" / "canon" / "main.loa").read_text()
+    assert "Gamma method" in loa and "Beta" not in loa and "STALE" not in loa
