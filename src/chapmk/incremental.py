@@ -103,6 +103,8 @@ RUNTIME_UNSUPPORTED = (
     "minted.sty",
 )
 FULL_ONLY_FILE = "full-only.json"
+#: present in ``canon/`` while a batch commits (C7)
+JOURNAL_FILE = ".in-progress"
 
 
 class FallbackError(ChapmkError):
@@ -672,6 +674,9 @@ class Fixpoint:
             for reg, name in all_recs[0].mark_classes.items():
                 self.register_names[reg] = f"marks {name}"
         t.lap("records")
+        # journal (C7): canon files and state change from here until save_state; an
+        # interrupted commit leaves the marker, and the next build is cold
+        write_atomic(canon / JOURNAL_FILE, " ".join(s.name for s in specs))
         for spec, recs, compiled in zip(specs, all_recs, compiled_by_run, strict=True):
             try:
                 commit_run(a, ctx.layout, state, spec.name, recs, compiled)
@@ -736,6 +741,7 @@ class Fixpoint:
                 glue_after = glue_after or f"pictures exported ({n} in the glue)"
         state.pending, state.glue_pending = dirty_after, glue_after
         save_state(state, canon)
+        (canon / JOURNAL_FILE).unlink()
         t.lap("dirty")
         reports = []
         for j, (spec, result) in enumerate(zip(specs, results, strict=True)):
@@ -928,6 +934,8 @@ def _full(
 
 
 def _cold_reason(ctx: Context, state: State | None, stamp: str) -> str | None:
+    if (ctx.layout.canon_dir / JOURNAL_FILE).exists():
+        return "the previous build was interrupted while committing"
     if state is None:
         return "no previous state"
     if state.format_stamp != stamp:

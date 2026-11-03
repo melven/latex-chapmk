@@ -10,6 +10,7 @@ write into ``<build>/full``; only the final PDF, SyncTeX file and log are publis
 from __future__ import annotations
 
 import json
+import shutil
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -18,7 +19,7 @@ from chapmk.analysis import Analysis
 from chapmk.aux import read_lines
 from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import TexError, ToolError
-from chapmk.files import digest
+from chapmk.files import digest, write_atomic
 from chapmk.fmt import format_stamp, internal_dirs
 from chapmk.gensrc import full_mode_input
 from chapmk.layout import Layout
@@ -42,10 +43,22 @@ from chapmk.synctex import rewrite_paths
 from chapmk.texdist import TexDistribution
 
 MAX_PASSES = 8
+#: present in the full-mode directory while passes run (C7): a kill leaves it, and the next
+#: full build starts from an empty directory
+JOURNAL_FILE = ".in-progress"
 NOMENCL_STYLE = "nomencl.ist"
 
 # files that are outputs of a pass, never inputs of the next one
-_NOT_INPUTS = (".pdf", ".log", ".fls", ".synctex.gz", ".synctex(busy)", ".blg", PICS_FILE)
+_NOT_INPUTS = (
+    ".pdf",
+    ".log",
+    ".fls",
+    ".synctex.gz",
+    ".synctex(busy)",
+    ".blg",
+    PICS_FILE,
+    JOURNAL_FILE,
+)
 
 
 @dataclass(frozen=True)
@@ -202,7 +215,11 @@ def full_build(
     :class:`TexError` is raised. The shadow tree must be up to date.
     """
     out, job = layout.full_dir, analysis.jobname
+    journal = out / JOURNAL_FILE
+    if journal.exists():  # a pass was killed: its aux files may be truncated (C7)
+        shutil.rmtree(out)
     out.mkdir(parents=True, exist_ok=True)
+    write_atomic(journal, "")
     for inc in analysis.includes:  # \include writes <arg>.aux into the output directory (S2)
         (out / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
     argv = dist.pdflatex(full_mode_input(analysis), job, out)
@@ -247,9 +264,11 @@ def full_build(
         passes, tools = converge(
             job, out, layout.shadow_dir, dist, env, run_pass, report=report, max_passes=max_passes
         )
-    except TexError as err:
+    except TexError as err:  # TeX ended normally: its files are complete
+        journal.unlink()
         err.log = _publish_log(analysis, layout)
         raise
+    journal.unlink()
 
     pdf = publish(copy_bytes(out / f"{job}.pdf"), layout.output(".pdf"))
     syn_src = out / f"{job}.synctex.gz"
