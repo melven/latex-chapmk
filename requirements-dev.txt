@@ -1,11 +1,9 @@
 # Runtime
-pikepdf>=9
-watchdog>=4
+pikepdf>=10
 
-# Development / tests
+# Development / tests (same as the "dev" extra in pyproject.toml)
 pytest>=8
 pytest-xdist>=3
-numpy>=1.26
-pillow>=10
+pytest-cov>=5
 ruff>=0.6
 mypy>=1.11

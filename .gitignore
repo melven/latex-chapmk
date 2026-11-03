@@ -11,3 +11,6 @@ __pycache__/
 !tests/corpus/**/fig/*.pdf
 !tests/corpus/pgfmanual/upstream/**/*.pdf
 .test-cache/
+.coverage
+.coverage.*
+coverage.xml

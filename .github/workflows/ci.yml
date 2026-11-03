@@ -1,16 +1,77 @@
 name: ci
 
+# PRs run on pull_request only (a push to a PR branch would otherwise run everything twice);
+# main runs after each merge; any branch can be run by hand
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+# a newer push to the same PR or branch cancels the older run
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  linux-texlive:
+  # unit tests (no TeX) on every supported Python (R1); the slow suite runs in the image
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      - run: pytest -n auto tests/unit
+
+  # licence and copyright information of every file (R9)
+  reuse:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build dev image
-        run: docker build -t chapmk-dev .
+      - uses: fsfe/reuse-action@v5
+
+  linux-texlive:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write  # the dev image in GHCR
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dev image (from GHCR, else build and publish)
+        # tagged by the hash of its inputs: a changed Dockerfile or requirements file gives a
+        # new tag, built once and pushed; later runs pull it (no Docker Hub, same image)
+        env:
+          TAG: ${{ hashFiles('Dockerfile', 'requirements-dev.txt') }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/latex-chapmk-dev:$TAG"
+          echo "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          if docker pull -q "$image"; then
+            docker tag "$image" chapmk-dev
+          else
+            docker build -t chapmk-dev .
+            docker tag chapmk-dev "$image"
+            docker push -q "$image" || echo "::warning::could not publish $image (no package permission)"
+          fi
+      - name: Reference cache key
+        # what the references depend on besides the sources (each entry is keyed by a hash of
+        # its sources, tests/conftest.py): the TeX image and the full-mode code
+        id: refs
+        run: echo "deps=${{ hashFiles('Dockerfile', 'requirements-dev.txt', 'tests/conftest.py', 'src/chapmk/fullbuild.py', 'src/chapmk/gensrc.py', 'src/chapmk/texdist.py', 'src/chapmk/pictures.py', 'src/chapmk/synctex.py', 'src/chapmk/publish.py', 'src/chapmk/tex/chapmk-ini.sty') }}" >> "$GITHUB_OUTPUT"
+      - name: Reference cache
+        # .test-cache: --full and latexmk references. Restored from the latest run with the
+        # same dependencies and saved again under a new key, so references of changed corpus
+        # files accumulate; a changed image or full-mode code starts empty.
+        uses: actions/cache@v4
+        with:
+          path: .test-cache
+          key: test-cache-${{ steps.refs.outputs.deps }}-${{ github.run_id }}
+          restore-keys: test-cache-${{ steps.refs.outputs.deps }}-
       - name: Lint, type-check, tests
         run: |
           docker run --rm -v "$PWD":/work -w /work --user root chapmk-dev bash -c '
@@ -19,7 +80,19 @@ jobs:
             pip install -e .
             ruff check . && ruff format --check .
             mypy --strict src
-            pytest -n auto
+            pytest -n auto --cov --cov-report=term
+          '
+      - name: Wheel smoke test
+        # the built wheel installs into a clean venv, runs and ships the LaTeX packages (R3)
+        run: |
+          docker run --rm -v "$PWD":/work:ro -w /tmp --user root chapmk-dev bash -c '
+            set -e
+            cp -r /work /tmp/src && cd /tmp/src && rm -rf build dist *.egg-info
+            pip wheel --no-deps -q -w /tmp/dist .
+            python -m venv /tmp/v && /tmp/v/bin/pip install -q /tmp/dist/*.whl
+            /tmp/v/bin/chapmk --version
+            test -f /tmp/v/lib/python3*/site-packages/chapmk/tex/chapmk.sty
+            test -f /tmp/v/lib/python3*/site-packages/chapmk/tex/chapmk-ini.sty
           '
 
   # M7: add macos-texlive, windows-texlive and windows-miktex (PLAN.md §6.16).

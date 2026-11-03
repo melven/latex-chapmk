@@ -106,7 +106,7 @@ def test_list_extensions_match_the_driver() -> None:
     import re
     from pathlib import Path
 
-    from chapmk.canon import LIST_SUFFIXES
+    from chapmk.facts import DEFAULT_LIST_SUFFIXES as LIST_SUFFIXES
 
     sty = (Path(__file__).parents[2] / "src/chapmk/tex/chapmk.sty").read_text()
     m = re.search(r"\\providecommand\\chapmk@listexts\{([^}]*)\}", sty)

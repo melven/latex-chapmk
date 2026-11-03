@@ -2,7 +2,7 @@
 %% reference builds (PLAN §6.4.1). Records and hooks only, no logic.
 %% The version must equal the driver version (chapmk.__version__).
 \NeedsTeXFormat{LaTeX2e}[2023/06/01]
-\ProvidesPackage{chapmk-ini}[2026/10/31 v0.1.0 chapmk: format and reference-build hooks]
+\ProvidesPackage{chapmk-ini}[2026/11/03 v0.9.0 chapmk: format and reference-build hooks]
 
 % Kernel register boundary (S4): \count registers with a higher index are allocated by the
 % class, packages or the document; only those belong to the state vector.
@@ -18,6 +18,7 @@
 %   chapmk-picture: x <key> <0-based PDF page> <depth> <segment>   exported
 %   chapmk-picture: u <key> <segment>                              figure used
 %   chapmk-picture: s <key> <picture code>                         code of an exported one
+%   chapmk-picture: f <key> <file>                                 file read while exporting
 % Driver parameters (chapmk-pics.tex, read at \begin{document}): \chapmk@picdir (relative
 % to the working directory, with a trailing slash; empty: no cache, pictures inline),
 % \chapmk@picstamp, \chapmk@picrefs@<segment>.
@@ -107,6 +108,14 @@
   {\chapmk@externalize@{#1}\@gobble}{\chapmk@externalize@{#1}}}
 \def\chapmk@externalize@#1{\chapmk@orig@externalize[#1,mode=convert with system call]}
 \AddToHook{file/tikzlibraryexternal.code.tex/after}{\chapmk@redirect@externalize}
+% files read inside a picture being exported (\input, graphics): their changes make the
+% figure stale (the driver also checks the files named in the picture code, e.g. tables)
+\def\chapmk@picfile#1{\ifx\chapmk@picexport\@empty\else
+  \chapmk@picrec{f \chapmk@picexport\space#1}\fi}
+\AddToHook{file/before}{\chapmk@picfile{\CurrentFilePathUsed/\CurrentFileUsed}}
+\AtBeginDocument{\ifdefined\Gin@setfile
+  \let\chapmk@ini@Gin@setfile\Gin@setfile
+  \def\Gin@setfile#1#2#3{\chapmk@picfile{#3}\chapmk@ini@Gin@setfile{#1}{#2}{#3}}\fi}
 \AddToHook{begindocument/before}{\InputIfFileExists{chapmk-pics.tex}{}{}}
 
 % Deferral table (§6.3.3): empty in v1, because mylatexformat replays \openout calls (S1).

@@ -18,7 +18,8 @@ CORPUS = REPO / "tests" / "corpus"
 # References (the --full build of `--check`, latexmk in the acceptance tests) depend only on the
 # sources, so they are kept in REFERENCE_CACHE by a hash of the source files and reused in later
 # test runs on this machine. Not keyed: the TeX installation and the full-mode code. After a TeX
-# update or an intended change of the --full output: rm -rf .test-cache (CI starts without it).
+# update or an intended change of the --full output: rm -rf .test-cache. CI restores the cache of
+# an earlier run only if the image and the full-mode code are unchanged (.github/workflows/ci.yml).
 REFERENCE_CACHE = REPO / ".test-cache"
 _SRC_PLACEHOLDER = "/@chapmk-test-source@"
 # files with a sibling .tex of the same stem are build outputs (fig/*.pdf, main.pdf, ...)
@@ -81,6 +82,19 @@ def reuse_reference(
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _texinputs_hashes(env: Any) -> list[str]:
+    """Hashes of the test's own TEXINPUTS directories (packages outside the source directory,
+    standing in for distribution files): a reference depends on them too."""
+    from chapmk.texdist import TEX_DIR
+
+    out = []
+    for entry in str(env.get("TEXINPUTS", "")).split(os.pathsep):
+        d = Path(entry.rstrip("/"))
+        if entry and d.is_dir() and d.resolve() != TEX_DIR:
+            out.append(source_hash(d))
+    return out
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _cached_check_reference() -> Iterator[None]:
     """`--check` builds its --full reference through ``chapmk.cli.full_build``; reuse cached
@@ -98,6 +112,7 @@ def _cached_check_reference() -> Iterator[None]:
             analysis.main.name,
             str(env.get("SOURCE_DATE_EPOCH")),
             str(kwargs.get("picture_cache")),
+            *_texinputs_hashes(env),
         )
         outputs = {f"ref{s}": layout.output(s) for s in (".pdf", ".synctex.gz", ".log")}
         reuse_reference(key, src, outputs, lambda: real(analysis, layout, dist, env, **kwargs))

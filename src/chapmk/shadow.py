@@ -8,12 +8,14 @@ files) are left out, so they can never be read by a run (F11).
 from __future__ import annotations
 
 import os
+import re
 import shutil
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from chapmk.analysis import Analysis
+from chapmk.facts import DEFAULT_LIST_SUFFIXES, TOOL_SUFFIXES
 from chapmk.layout import DEFAULT_BUILD_DIR
 
 ALWAYS_SKIPPED_DIRS = frozenset({".git", ".hg", ".svn"})
@@ -23,12 +25,8 @@ ALWAYS_SKIPPED_DIRS = frozenset({".git", ".hg", ".svn"})
 BUILD_OUTPUT_SUFFIXES = frozenset(
     {
         ".aux",
-        ".toc",
-        ".lof",
-        ".lot",
-        ".loalg",
-        ".lol",
-        ".tdo",
+        *DEFAULT_LIST_SUFFIXES,
+        *TOOL_SUFFIXES,
         ".out",
         ".log",
         ".fls",
@@ -71,14 +69,20 @@ class ShadowStats:
     total: int
 
 
-def build_output_filter(analysis: Analysis) -> Callable[[PurePosixPath], bool]:
+def build_output_filter(
+    analysis: Analysis, list_suffixes: Sequence[str] = ()
+) -> Callable[[PurePosixPath], bool]:
     """Predicate for files to leave out: build outputs ``<jobname><suffix>`` in the top
     directory (:data:`BUILD_OUTPUT_SUFFIXES`) and the aux files of all includes."""
-    outputs = {f"{analysis.jobname}{suffix}" for suffix in BUILD_OUTPUT_SUFFIXES}
+    outputs = {f"{analysis.jobname}{suffix}" for suffix in (*BUILD_OUTPUT_SUFFIXES, *list_suffixes)}
     unit_aux = {inc.aux_name for inc in analysis.includes}
 
+    # list files of any list (.loa, .loe, tocbasic's \DeclareNewTOC ...): the extension of a
+    # new kind is recorded only by the first run, which must not read a stale one already
+    lists = re.compile(re.escape(analysis.jobname) + r"\.lo[a-z0-9]*")
+
     def excluded(rel: PurePosixPath) -> bool:
-        if len(rel.parts) == 1 and rel.name in outputs:
+        if len(rel.parts) == 1 and (rel.name in outputs or lists.fullmatch(rel.name)):
             return True
         return rel.as_posix() in unit_aux
 
@@ -167,12 +171,77 @@ def sync_shadow(
     return ShadowStats(created, removed, len(wanted_files))
 
 
-def sync_project_shadow(analysis: Analysis, shadow_dir: Path, build_dir: Path) -> ShadowStats:
+def sync_project_shadow(
+    analysis: Analysis, shadow_dir: Path, build_dir: Path, list_suffixes: Sequence[str] = ()
+) -> ShadowStats:
     """:func:`sync_shadow` for an analysed project; the build directory and the default build
     root (the build directories of all jobs) are skipped."""
     return sync_shadow(
         analysis.source_dir,
         shadow_dir,
         skip_dirs=[build_dir, analysis.source_dir / DEFAULT_BUILD_DIR],
-        excluded=build_output_filter(analysis),
+        excluded=build_output_filter(analysis, list_suffixes),
     )
+
+
+def read_inputs(fls: Path, cwd: Path, within: Path) -> set[Path]:
+    """Files read by a run (``INPUT`` lines of the ``-recorder`` file) that lie in ``within``,
+    as paths below ``within``. The test is made on the normalised path before resolving
+    symlinks (files of the shadow tree are symlinks into the source directory), and on the
+    resolved path (a ``within`` given through a symlink)."""
+    if not fls.is_file():
+        return set()
+    root = Path(within).absolute()
+    resolved_root = root.resolve()
+    found: set[Path] = set()
+    for line in fls.read_text(errors="surrogateescape").split("\n"):
+        if line.startswith("INPUT "):
+            p = Path(line[6:].rstrip("\r"))
+            p = Path(os.path.normpath(p if p.is_absolute() else Path(cwd).absolute() / p))
+            if p.is_relative_to(root):
+                rel = p.relative_to(root)
+            elif p.resolve().is_relative_to(resolved_root):
+                rel = p.resolve().relative_to(resolved_root)
+            else:
+                continue
+            if (root / rel).is_file():
+                found.add(root / rel)
+    return found
+
+
+def external_inputs(fls: Path, cwd: Path, internal: Iterable[Path]) -> set[Path]:
+    """Files read by a run (``INPUT`` lines) outside the ``internal`` directories (shadow
+    tree, build and source directory): the TeX distribution, ``TEXMFHOME``, ``TEXINPUTS``.
+    Absolute, normalised paths of existing files."""
+    if not fls.is_file():
+        return set()
+    roots = [Path(d).absolute() for d in internal]
+    roots += [r.resolve() for r in roots]
+    found: set[Path] = set()
+    for line in fls.read_text(errors="surrogateescape").split("\n"):
+        if line.startswith("INPUT "):
+            p = Path(line[6:].rstrip("\r"))
+            p = Path(os.path.normpath(p if p.is_absolute() else Path(cwd).absolute() / p))
+            if any(p.is_relative_to(r) for r in roots) or not p.is_file():
+                continue
+            if not any(p.resolve().is_relative_to(r) for r in roots):
+                found.add(p)
+    return found
+
+
+def _stat(path: Path) -> str:
+    try:
+        st = path.stat()
+    except OSError:
+        return ""
+    return f"{st.st_size}:{st.st_mtime_ns}"
+
+
+def stat_signatures(paths: Iterable[Path]) -> dict[str, str]:
+    """``{path: "size:mtime_ns"}``: cheap change detection for distribution files (C4)."""
+    return {p.as_posix(): _stat(p) for p in paths}
+
+
+def changed_signatures(signatures: Mapping[str, str]) -> list[str]:
+    """Paths whose size or mtime changed since :func:`stat_signatures` (or that vanished)."""
+    return [p for p, s in signatures.items() if _stat(Path(p)) != s]

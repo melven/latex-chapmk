@@ -14,6 +14,7 @@ from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from chapmk.aux import normalize_statement, statements
+from chapmk.facts import LIST_COMMANDS
 
 UNDEFINED = "-"
 _NEWLABEL = re.compile(r"^\\newlabel\{(.+?)\}\{(.*)\}\s*$", re.DOTALL)
@@ -36,18 +37,6 @@ _LIST_READERS = re.compile(
 )
 
 
-#: list commands with a known derived file (others: all list files)
-_LIST_FILES = {
-    "tableofcontents": ".toc",
-    "minitoc": ".toc",
-    "listoffigures": ".lof",
-    "listoftables": ".lot",
-    "listofalgorithms": ".loalg",
-    "listoftodos": ".tdo",
-    "printbibliography": ".bbl",
-    "bibliography": ".bbl",
-    "printnomenclature": ".nls",
-}
 _STARTTOC_ARG = re.compile(r"\s*\{([A-Za-z]+)\}")
 
 
@@ -167,8 +156,8 @@ class TokenScan:
                     if arg is None:
                         return None
                     out.add(f".{arg.group(1)}")
-                elif name in _LIST_FILES:
-                    out.add(_LIST_FILES[name])
+                elif name in LIST_COMMANDS:
+                    out.add(LIST_COMMANDS[name])
                 else:
                     return None
         return out

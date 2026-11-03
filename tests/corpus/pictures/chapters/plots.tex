@@ -23,4 +23,13 @@ An inline picture \tikz \draw (0,0) circle (1ex); in a sentence, and one on a ba
   \end{tikzpicture}
   \caption{An axis}\label{fig:axis}
 \end{figure}
+\begin{figure}[htbp]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[width=6cm,height=4cm]
+      \addplot table {data/points.dat};
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Measured points}\label{fig:table}
+\end{figure}
 See Figure~\ref{fig:axis} and Section~\ref{sec:diagrams}.

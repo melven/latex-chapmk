@@ -30,7 +30,7 @@ One command (`chapmk build main.tex`) replaces `latexmk -pdf -synctex=1`. It pro
 - Units other than `\include` (no automatic splitting at `\chapter`).
 - The user's TikZ externalize settings (prefix, shell escape, system calls). chapmk keeps the user's `\tikzexternalize` but redirects it to its own picture cache (§6.4.3, §6.17).
 - Byte-identical PDFs.
-- `glossaries`, `imakeidx`/`makeidx`, `minted`, `cleveref`. Detect these and fall back to full builds with a warning (§6.14).
+- `glossaries`, `imakeidx`/`makeidx`, `minted`, `cleveref`. Detect these and fall back to full builds with a warning (§6.14). One table (`facts.UNSUPPORTED_PACKAGES`) serves the preamble scan and the runtime `.fls` check.
 - biblatex with `backend=bibtex` (or classic BibTeX). Only biber is supported; others fall back to full builds.
 - PDF outline via hyperref's `.out` file, i.e. hyperref without the `bookmark` package. v1 supports the outline only through `bookmark`, which KOMA classes load automatically (S1). Without `bookmark`: fall back to full builds; the `.out` route is phase 2.
 
@@ -185,7 +185,7 @@ All generated files keep the user's line numbers, so errors and SyncTeX map back
 pdflatex -ini -jobname=pre -output-directory=.chapmk/fmt "&pdflatex" mylatexformat.ltx .chapmk/fmt/pre.tex
 ```
 
-- Rebuild when `pre`, the TeX Live version string, or the `chapmk-ini.sty` version changes.
+- Rebuild when `pre`, the TeX Live version string, `chapmk-ini.sty`, `chapmk.sty`, the chapmk version, a source file read by the build, or a distribution file read by the build changes (size and mtime from `fmt/pre.fls`: the version string changes only yearly, `tlmgr` updates do not change it).
 - The class options are part of `pre` (the `draft` option freezes `\ifdraft`).
 - Run usage: `TEXFORMATS=.chapmk/fmt:` and `-fmt=pre`. An absolute `-fmt=` path breaks `-recorder` (S1).
 
@@ -226,7 +226,8 @@ Requirements:
    - The *state vector* (S4) is:
      - the LaTeX counters in the kernel checkpoint list (`\cl@@ckpt`),
      - plus all `\count` registers allocated **after the kernel**, i.e. with an index above `\count10` at `\documentclass` (recorded by `chapmk-ini.sty`). Allocation is linear in `\count10`, with a jump to 266 when the classic range is exhausted.
-     - minus a deny list of **run-local** registers, which number objects created in the current run: `Hy@abspage`, `BKM@id`, plus config `[state] ignore`.
+     - minus a deny list of **run-local** registers, which number objects created in the current run: `Hy@abspage`, `BKM@id`, plus config `[state] ignore`;
+     - plus one pseudo register per mark class of the kernel (`\NewMarkClass`: `2e-left`, `2e-right`, `2e-right-nonempty`, and those of packages; R0.9): number `100000 + <\marks register of the class>`, value 0 for an empty last mark of the `page` region, else a 28-bit digest of its text as an aux file gives it back. Running heads of the first pages of a unit (e.g. the blank page before a chapter under `openright`) show the last marks of the preceding unit. A segment that sets a mark of a class has it in its absolute set (prediction). At its end, a unit writes the texts of its `page` and `column` regions (`top`, `first`, `last`) as `\chapmk@mk` records into its unit aux; an excluded unit restores those of the pseudo registers its checkpoint lists, after the counters. Primitive marks (`\mark`, `\marks` registers of no class) cannot be restored: their use (`K primitive <n>` in `.frec`) is a persistent full-mode fallback with a warning. Mark ids (`\IfMarksEqual`) are run-local and not restored.
      Kernel registers are scratch, absolute (shipout counters) or float-box insert counts; they are neither compared nor restored. Package scratch registers need no deny list: after the restore (3) they equal the full run (S4). The number↔name map comes from the allocation lines `\<name>=\count<n>` in the format and run logs. The deny list is re-evaluated against real documents (`chapmk check` on the benchmark document); a run-local register missing from it breaks the run (fallback) or shows up in acceptance tests.
    - At `\begin{document}` (end of the `AtBeginDocument` hooks), write a baseline `\chapmk@base{...}` to the main aux (`\immediate\write\@mainaux`), as a sparse vector `n=v,...`.
    - At each segment start, write `\chapmk@entry{<seg>}{<sparse vector vs base>}` to the main aux. This happens in every run, for selected and excluded units alike. For excluded units it is written **before** their checkpoints are restored. `include/excluded` runs after the kernel restore (S3), so the entry is recorded by wrapping `\@setckpt` (an aux handler): `\cp@<unit>` becomes `<record entry><original checkpoint>`. A unit without a checkpoint (never compiled) records no entry; it is dirty anyway (§6.9.1 f).
@@ -327,11 +328,12 @@ Per segment, `state.json` stores:
 - **Cold build:** one run with all units, format and chapmk.sty, to the fixpoint (`fullbuild.converge`). Its aux, derived and `.bcf`/`.nlo` files become `canon/`. `state.json` records:
   - per segment the run and page indices;
   - per segment the source files attributed by the `F` records, with sha256;
-  - global inputs: source files in the `.fls` attributed to no segment, plus the `.bcf` data sources.
+  - global inputs: source files in the `.fls` attributed to no segment (incl. those read by the preamble after the split point, segment `P`), source files read by the format build (`fmt/pre.fls`, also in the format stamp), plus the `.bcf` data sources;
+  - distribution files read by the format build and the runs (`.fls` lines outside the shadow tree, build and source directory) with size and mtime (cheap `stat`).
 - **Incremental step:** the dirty compilation units (attributed files changed) are compiled in one run from `canon/`. They are accepted only if the unit aux, the unit's main-aux slice and its nomenclature entries equal the canonical ones. The comparison ignores structural lines (`\relax`, `\providecommand`), which packages write once per run into whichever aux comes first, and replaces bookmark ids by levels (run-local, S6).
   - Then glue and all other units are still valid: only the unit's pages and files are committed.
   - Otherwise: cold build with the reason. M4 replaces this with the dependency model and the fixpoint.
-- **Cold-build triggers:** no state, format stamp, main-file fingerprints, include list, a glue segment's attributed files, or global inputs changed.
+- **Cold-build triggers:** no state, format stamp (incl. the chapmk version), main-file fingerprints, include list, a glue segment's attributed files, global inputs or distribution files changed. Any change of the `state.json` semantics bumps `STATE_VERSION`. **Interrupted builds (C7):** every file kept between builds is written atomically (temp file + rename); while a batch commits (canon files, tools, state), `canon/.in-progress` exists, and a build that finds it is cold (reason: interrupted). Full mode keeps `full/.in-progress` while passes run; a build that finds it starts from an empty `full/`. (A planned-commit object that applies all writes at once, D2 of the review, is deferred: the journal gives the same safety.) `full-only.json` (persistent full-mode fallback) is keyed by the main fingerprints and the chapmk version.
 
 ### 6.7 Aux linker and aux classification
 
@@ -340,7 +342,7 @@ Per segment, `state.json` stores:
 Derived list files (`.toc`, `.lof`, …) are **written by TeX**, not by a Python linker (M3).
 - A Python linker was tried and is not byte-identical: when writing, TeX expands content (`\protected@file@percent` → `%`), and aux macros such as `\babel@aux` add entries.
 - Every run reads all aux files at `\end{document}` (its new ones and the canonical ones of excluded units) and writes complete list files.
-- In M3 the list files stay canonical (verification). Since M4 every run's list files become canonical; the glue compiled in a later run reads them. Since M5 they are spliced per unit (§6.9.3, list-file markers).
+- In M3 the list files stay canonical (verification). Since M4 every run's list files become canonical; the glue compiled in a later run reads them. Since M5 they are spliced per unit (§6.9.3, list-file markers). The list files of a document are found at runtime: every `\@starttoc{<ext>}` writes an `L <ext>` record, so lists of other packages (`algorithm`'s `.loa`, tocbasic's `\DeclareNewTOC`) are copied, stored and spliced like `.toc`; `<job>.lo*` files of manual builds are kept out of the shadow tree.
 - **Deferred glue writes (M4 finding):** a non-immediate write of the glue (e.g. `\appendix` writes `\def\@chapapp{…}` to `.toc`/`.lof`/…) is flushed at the next shipout. In a full run that is the first page of the next unit, so the line follows that unit's entries; when that unit is excluded, it follows a later unit's entries. The list files then differ in the position of such lines. Consequence: right after a run that compiled such a unit, a run without it changes the list files and costs one glue-only run (T1 checks the steady state). Candidate fix (later): flush pending writes at an excluded `\include` with a dummy shipout that the merge drops.
 
 #### 6.7.2 Line classification
@@ -379,7 +381,7 @@ Aux files are parsed as brace-balanced statements, not lines: `\@setckpt` and `\
 
 1. **Format and preamble:** `pre`, `post`. A change dirties everything.
 2. **Main body:** `body`. A change dirties everything (A3).
-3. **Own sources:** files attributed to *u* via `.ffl`, plus graphics. Files from `.fls` under the source tree that are attributed to no segment are global inputs (a change dirties everything). Not tracked by hash: files in the TeX distribution (covered by the TeX Live version string and the format fingerprint, §6.3.1) and files generated in the build directory (aux, derived lists, `.bbl`, `.nls`; covered by the dependency model).
+3. **Own sources:** files attributed to *u* via `.ffl`, plus graphics. Files from `.fls` under the source tree that are attributed to no segment are global inputs (a change dirties everything). Not tracked by hash: files in the TeX distribution (tracked by size and mtime: a change gives a cold build, §6.6) and files generated in the build directory (aux, derived lists, `.bbl`, `.nls`; covered by the dependency model).
 4. **Entry state:** the observed entry vector (§6.9 defines validity).
 5. **Imports:** label keys and cite keys used by *u*. These are determined by a **text scan** of *u*'s attributed TeX files for every known key K: regex `(?<=[{,\[\s])K(?=[},\]\s])`. Comments count too, so this is a safe over-approximation. A label value changes when the whole `\newlabel` argument changes (number, page, title, anchor). A cite value is the key's `.bbl` entry block plus its position in the `.bbl`.
 6. **Self aux:** the class-*self* lines of *u*'s aux at compile start must equal those after compile (standard rerun rule).
@@ -621,20 +623,27 @@ Full mode means plain sequential full runs to a fixpoint inside the build direct
 - format build failure;
 - a merge error (missing destinations, inconsistent SyncTeX header);
 - the fixpoint not reached (§6.9.2);
-- missing records (e.g. a page without a page-map entry);
+- missing, truncated or inconsistent records (e.g. a page without a page-map entry or of an unknown segment);
+- primitive marks (§6.4.2, persistent, with a warning);
 - `--full`.
+
+Each fallback is reported as one warning (`full build: <reason>`). All of these are one exception class, `errors.FallbackError` (records, tool inputs, merges derive from it; D3), handled only by the builder. Persistent reasons are also reported as warnings. Any other exception is a bug: exit code 3 with a one-line `internal error: ...` message, the traceback only with `-v` (C9).
 
 Each trigger prints a one-line reason.
 
 ### 6.15 CLI and configuration
 
 ```
-chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [-v]
+chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [--no-wait] [-v]
 chapmk watch [MAIN] [same options]        # future: rebuild on change of any recorded input
 chapmk check [MAIN]                       # = build --check: incremental vs --full, criterion §3.3
-chapmk clean [MAIN]
+chapmk clean [MAIN] [--no-wait]
 chapmk graph [MAIN] [--format text|dot|json]   # compilation units and dependencies
 ```
+
+**One process per build directory (C6):** `build`, `check` and `clean` hold an exclusive OS file lock on `<build>/lock` (`fcntl.flock` / `msvcrt.locking`; released when the process ends, also when killed). A second process waits with a message, or fails with exit 2 under `--no-wait`. Temporary names of published outputs carry the PID.
+
+**Signals (C8):** every external program runs in its own process group and is registered while it runs. On SIGTERM (editors stop a build when the next save starts one) or SIGINT, chapmk kills all registered process groups (SIGTERM, SIGKILL after 1 s), starts no new ones and exits with 143 / 130. An interrupted commit is redone by the journal (§6.6).
 
 **`chapmk graph`** shows the build structure from the analysis and the last state:
 - the compilation units (§6.1) with their includes;
@@ -661,9 +670,6 @@ verbatim = []                  # extra verbatim environments, e.g. ["codeexample
 shortverb = []                 # short verbatim characters, e.g. ["|"]
 [units]
 heading = []                   # extra chapter-level heading commands (A5)
-[aux]
-self = []                      # extra regexes of aux lines classified "self"
-ignore = []
 [state]
 ignore = []                    # extra \count registers excluded from the state vector
 [pictures]
@@ -706,6 +712,9 @@ Measured on the user's document (M6): up to 70 % of a unit's TeX time is spent i
 - **Validity** (stricter than externalize's md5, so the result equals a fresh externalized build):
   - key: md5 of the picture code, a stamp (format stamp and main-file fingerprints), the state at the picture start if the code shows counters (`\the…` except `\theta`, `\arabic`, `\value`, …; incremental: the state vector without run-local registers; full mode: all `\count` registers; otherwise shifted page numbers would invalidate every later figure), `\linewidth`, `\hsize`, the current font, `\baselineskip` and colour; full mode also a digest of all label and citation values;
   - references: an exported figure stores its code (`.src`) and the values of the label and citation keys the code references (`.deps`, text scan as in §6.8); before each batch, figures with a changed, new or removed referenced key are removed, so the picture is exported again. References hidden in preamble macros are not seen (as with externalize).
+  - files: the `.deps` also hold digests of the source files the picture read while it was exported (`\input`, graphics; `f` records) and of source files named in its code (e.g. pgfplots tables); a changed or missing file removes the figure before the next batch or full pass (stricter than externalize, which keeps such figures).
+  - distribution files: the cache records those read by the exporting runs (`inputs.json`, size and mtime); a change (package update) empties the cache. The full-mode stamp is the format stamp (distribution, `chapmk-ini.sty`, `chapmk.sty`, chapmk version) plus the main-file fingerprints.
+  - `check` builds its `--full` reference with a fresh picture cache, so a stale figure cannot be on both sides.
   - A typo leaves all keys unchanged; a new label elsewhere leaves pictures that do not reference it cached.
 - **PDF merge:** pdfTeX writes the font descriptor of a font that also occurs in an included PDF with font-file metrics (Ascent = FontBBox top, no XHeight), otherwise with TFM metrics. Runs see only some figures, so the merge normalises the descriptors to the whole-document rule (text extraction, §3.3 item 2, depends on them).
 - Driver parameters: `chapmk-pics.tex` in the run (or full-mode output) directory, read at `\begin{document}`. `[pictures] cache = false`: pictures are typeset inline (externalize effectively off).
@@ -851,7 +860,7 @@ Each test starts from a built state, applies an edit, runs `chapmk build`, asser
 | **M6** | *Done* (`docs/bench.md`). Benchmarks on large documents (§8.4), time breakdown per phase and resulting optimisations, README (short: usage, assumptions A1–A5, limitations) | §8.4 numbers and breakdown recorded |
 | **M7** | *Done.* Picture cache (§6.17). First spike S12: evaluate TikZ's `external` library under chapmk (per-unit names, figures built via the format in the pool without shell escape, §3.3 equality with inline pictures, cache validity, glue pictures, `remember picture`); **decision point** with the results; then the implementation (active for documents with `\tikzexternalize`, results identical to an externalized build; opt-out in `chapmk.toml`) | S12 note written; typo scenario in a picture-heavy unit reuses its pictures; all scenario and acceptance tests green with the cache |
 | **M8** | *Done* (`docs/review/M8.md`). Engineering review (intermission): reusable functionality and duplication, software design and layering, modularity, dependencies, test coverage and test design; findings fixed or recorded in `docs/review/M8.md`. Known items: config `aux.self`/`aux.ignore` are parsed but not used by the classification; the `.sty` change → cold-build rule makes benchmarks sensitive to package edits | review note written; module maps match the code; all tests green |
-| **R0.9** | First test release 0.9: the "must" items of `docs/review/M8.md` §6. In order: (0) renaming to `latex-chapmk` / `chapmk` (R13), then the build directory per job (C17); (1) stale-output paths C1–C5 with scenarios; (2) robustness C6–C9 with the enabling refactors D1–D4; (3) remove `aux.self`/`aux.ignore` (E3); (4) coverage in CI (T3) and the scenarios T1; (5) release items R1–R5, R9–R12 (packaging, CHANGELOG, README, help, config doc, REUSE, issue template, CONTRIBUTING, history scan, pinned CI image). The cleanup of this plan into a current design document (R7) follows after 0.9 | all "must" items done; `ruff`, `mypy --strict` and the full suite green; wheel smoke test passes; `0.9.0` tagged |
+| **R0.9** | *Implemented* (open: tag `v0.9.0`; D2 deferred). First test release 0.9: the "must" items of `docs/review/M8.md` §6. In order: (0) renaming to `latex-chapmk` / `chapmk` (R13), then the build directory per job (C17); (1) stale-output paths C1–C5 with scenarios; (2) robustness C6–C9 with the enabling refactors D1–D4; (3) remove `aux.self`/`aux.ignore` (E3); (4) coverage in CI (T3) and the scenarios T1; (5) release items R1–R5, R9–R12 (packaging, CHANGELOG, README, help, config doc, REUSE, issue template, CONTRIBUTING, history scan, pinned CI image). The cleanup of this plan into a current design document (R7) follows after 0.9 | all "must" items done; `ruff`, `mypy --strict` and the full suite green; wheel smoke test passes; `0.9.0` tagged |
 | **M9** | Spike S11 (MiKTeX), MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
 | Future | `watch` (F8) | rebuild on change of a recorded input |
 
@@ -862,7 +871,7 @@ Each test starts from a built state, applies an edit, runs `chapmk build`, asser
 | Risk | Mitigation |
 |---|---|
 | mylatexformat incompatibility with a package | Deny list and config `split_before`; S1 |
-| Partial-run differences not captured by the count-register vector (marks, dimens/skips, `\everypar` state, …) | Acceptance tests on every scenario; extend vectors to `\dimen`/`\skip` if needed; S7 |
+| Partial-run differences not captured by the count-register vector (dimens/skips, `\everypar` state, …; marks of the kernel's mark classes are in the vector since R0.9) | Acceptance tests on every scenario; extend vectors to `\dimen`/`\skip` if needed; S7 |
 | Read-order issues with `-output-directory` | Shadow tree (§6.5) excludes stale build files; S2 |
 | Text-scan import misses (keys built by macros) | Accepted for v1; `check` detects; config option to mark keys global |
 | PDF merge subtleties (OpenAction, forms, OCGs) | Copy rules §6.11.6; fallback on unknown catalog entries |
@@ -916,6 +925,8 @@ Each test starts from a built state, applies an edit, runs `chapmk build`, asser
 | counters (M4) | main aux, header | `\chapmk@counters{<name>=<register>:<child>/<child>/;...}`: register and `\cl@<name>` reset list of each checkpointed counter |
 | layout (M5) | main aux, header | `\chapmk@layout{twoside=0|1,openright=0|1}` |
 | unit start layout | `.frec` | `O <seg> 0\|1` (twoside and openright at the unit start) |
+| mark classes (R0.9) | `.frec` | `K <pseudo register> <class>` per class; `K primitive <n>` for a `\marks` register of no class holding a mark (unit end, `\end{document}`) |
+| unit marks (R0.9) | unit aux, before `\chapmk@ckpt` | `\chapmk@mk{<pseudo register>}{<class>}{<region>_<top\|first\|last>}{<text>}` for the `page` and `column` regions |
 | unit start (M5) | unit aux, first statement | `\chapmk@ustart{U<k>}`: at `\end{document}` writes `\chapmk@lmark{U<k>}` into the open list files; `\chapmk@entry{<seg>}` writes `\chapmk@lmark{/<seg>}` |
 | page map | `<job>.frec` | `P <shipout#> <seg> <\c@page> <\thepage text>` per line |
 | elapsed time (M6) | `<job>.frec` | `T <point> <\pdfelapsedtime>`: points `load`, `begin`, each segment id, `end`, `picture+`/`picture-` around every `\pgfpicture` |

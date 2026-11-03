@@ -13,6 +13,7 @@ from pathlib import Path, PurePosixPath
 
 from chapmk.config import Config
 from chapmk.errors import AnalysisError
+from chapmk.facts import SECTION_HEADINGS, UNIT_HEADINGS, UNSUPPORTED_PACKAGES
 from chapmk.texsource import (
     LineIndex,
     depth_at_line_starts,
@@ -36,28 +37,6 @@ DENY_SPLIT: tuple[str, ...] = (
     r"\\(tikzfading|pgfdeclarefading|pgfdeclareimage)(?![A-Za-z@])",
     r"\\pdf(xform|ximage)(?![A-Za-z@])",
 )
-
-#: Packages that force full-build mode in v1 (PLAN §1).
-UNSUPPORTED_PACKAGES = frozenset(
-    {"glossaries", "glossaries-extra", "imakeidx", "makeidx", "minted", "cleveref"}
-)
-
-#: First commands that start a compilation unit (A5, §6.1 step 5). Config adds
-#: ``units.heading`` (treated like these).
-UNIT_HEADINGS: tuple[str, ...] = (
-    "chapter",
-    "chapter*",
-    "addchap",
-    "addchap*",
-    "part",
-    "part*",
-    "addpart",
-    "addpart*",
-)
-
-#: Top-level headings of article-like classes (no ``\\chapter``): they start a compilation unit
-#: only if no include starts with one of :data:`UNIT_HEADINGS`.
-SECTION_HEADINGS: tuple[str, ...] = ("section", "section*", "addsec", "addsec*")
 
 _INPUT_MACROS = {"input", "include"}
 _MAX_INPUT_DEPTH = 20

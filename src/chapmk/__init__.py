@@ -1,3 +1,3 @@
-"""chapmk: incremental, parallel pdfLaTeX builds (see PLAN.md)."""
+"""chapmk: incremental, parallel pdfLaTeX builds for documents split with \\include."""
 
-__version__ = "0.1.0"
+__version__ = "0.9.0"

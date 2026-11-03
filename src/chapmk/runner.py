@@ -10,19 +10,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from chapmk.analysis import Analysis
-from chapmk.gensrc import run_main, write_if_changed
+from chapmk.facts import DEFAULT_LIST_SUFFIXES, derived_suffixes
+from chapmk.files import write_if_changed
+from chapmk.gensrc import run_main
 from chapmk.layout import Layout
 from chapmk.logs import first_error, map_paths
-from chapmk.proc import run
+from chapmk.proc import run, terminate_all
 from chapmk.texdist import TexDistribution
 
 #: File name of the generated run main. TeX reads the command line with the catcodes of the
 #: format, where e.g. the ``underscore`` package makes ``_`` active; so the command line holds
 #: only this fixed name and the file is found via ``TEXINPUTS`` (run directory first).
 RUN_MAIN = "chapmk-run.tex"
-
-#: Derived files copied from the canonical state into a run directory (read by the glue).
-DERIVED_SUFFIXES = (".toc", ".lof", ".lot", ".loalg", ".lol", ".tdo", ".bbl", ".nls")
 
 
 @dataclass(frozen=True)
@@ -53,6 +52,7 @@ def prepare_run_dir(
     *,
     canon_dir: Path | None = None,
     deny_names: Sequence[str] = (),
+    list_suffixes: Sequence[str] = DEFAULT_LIST_SUFFIXES,
 ) -> Path:
     """Create an empty run directory with the canonical aux files, derived files, include
     subdirectories (S2) and the generated run main :data:`RUN_MAIN` (§6.2)."""
@@ -62,7 +62,7 @@ def prepare_run_dir(
     run_dir.mkdir(parents=True)
     job = analysis.jobname
     names = [f"{job}.aux", *(inc.aux_name for inc in analysis.includes)]
-    names += [f"{job}{suffix}" for suffix in DERIVED_SUFFIXES]
+    names += [f"{job}{suffix}" for suffix in derived_suffixes(list_suffixes)]
     for inc in analysis.includes:
         (run_dir / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
     if canon_dir is not None:
@@ -70,7 +70,9 @@ def prepare_run_dir(
             src = canon_dir / name
             if src.is_file():
                 shutil.copyfile(src, run_dir / name)
-    write_if_changed(run_dir / RUN_MAIN, run_main(analysis, spec.selection, deny_names))
+    write_if_changed(
+        run_dir / RUN_MAIN, run_main(analysis, spec.selection, deny_names, list_suffixes)
+    )
     return run_dir
 
 
@@ -91,7 +93,9 @@ def run_one(
     argv = dist.pdflatex(RUN_MAIN, job, run_dir, fmt=fmt_name)
     result = run(argv, cwd=layout.shadow_dir, env=run_env, log_path=run_dir / "pdflatex.out")
     log = run_dir / f"{job}.log"
-    ok = result.ok and (run_dir / f"{job}.pdf").is_file()
+    # a run without pages (glue-only run of a document whose glue ships none) writes no PDF
+    no_pages = log.is_file() and "No pages of output." in log.read_text(errors="replace")
+    ok = result.ok and ((run_dir / f"{job}.pdf").is_file() or no_pages)
     err = None
     if not ok:
         text = log.read_text(errors="replace") if log.is_file() else result.output
@@ -115,8 +119,14 @@ def run_batch(
 ) -> list[RunResult]:
     """Run prepared runs with at most ``jobs`` parallel pdflatex processes (N2). Results are
     returned in the order of ``specs``. Threads only wait for subprocesses (no fork)."""
-    with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
+    pool = ThreadPoolExecutor(max_workers=max(1, jobs))
+    try:
         futures = [
             pool.submit(run_one, analysis, layout, dist, env, spec, fmt_name) for spec in specs
         ]
         return [f.result() for f in futures]
+    except BaseException:  # a signal in the main thread: stop the workers' processes (C8)
+        terminate_all()
+        raise
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
