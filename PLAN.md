@@ -185,7 +185,7 @@ All generated files keep the user's line numbers, so errors and SyncTeX map back
 pdflatex -ini -jobname=pre -output-directory=.chapmk/fmt "&pdflatex" mylatexformat.ltx .chapmk/fmt/pre.tex
 ```
 
-- Rebuild when `pre`, the TeX Live version string, or the `chapmk-ini.sty` version changes.
+- Rebuild when `pre`, the TeX Live version string, `chapmk-ini.sty`, `chapmk.sty`, the chapmk version, a source file read by the build, or a distribution file read by the build changes (size and mtime from `fmt/pre.fls`: the version string changes only yearly, `tlmgr` updates do not change it).
 - The class options are part of `pre` (the `draft` option freezes `\ifdraft`).
 - Run usage: `TEXFORMATS=.chapmk/fmt:` and `-fmt=pre`. An absolute `-fmt=` path breaks `-recorder` (S1).
 
@@ -327,11 +327,12 @@ Per segment, `state.json` stores:
 - **Cold build:** one run with all units, format and chapmk.sty, to the fixpoint (`fullbuild.converge`). Its aux, derived and `.bcf`/`.nlo` files become `canon/`. `state.json` records:
   - per segment the run and page indices;
   - per segment the source files attributed by the `F` records, with sha256;
-  - global inputs: source files in the `.fls` attributed to no segment (incl. those read by the preamble after the split point, segment `P`), source files read by the format build (`fmt/pre.fls`, also in the format stamp), plus the `.bcf` data sources.
+  - global inputs: source files in the `.fls` attributed to no segment (incl. those read by the preamble after the split point, segment `P`), source files read by the format build (`fmt/pre.fls`, also in the format stamp), plus the `.bcf` data sources;
+  - distribution files read by the format build and the runs (`.fls` lines outside the shadow tree, build and source directory) with size and mtime (cheap `stat`).
 - **Incremental step:** the dirty compilation units (attributed files changed) are compiled in one run from `canon/`. They are accepted only if the unit aux, the unit's main-aux slice and its nomenclature entries equal the canonical ones. The comparison ignores structural lines (`\relax`, `\providecommand`), which packages write once per run into whichever aux comes first, and replaces bookmark ids by levels (run-local, S6).
   - Then glue and all other units are still valid: only the unit's pages and files are committed.
   - Otherwise: cold build with the reason. M4 replaces this with the dependency model and the fixpoint.
-- **Cold-build triggers:** no state, format stamp, main-file fingerprints, include list, a glue segment's attributed files, or global inputs changed.
+- **Cold-build triggers:** no state, format stamp (incl. the chapmk version), main-file fingerprints, include list, a glue segment's attributed files, global inputs or distribution files changed. Any change of the `state.json` semantics bumps `STATE_VERSION`. `full-only.json` (persistent full-mode fallback) is keyed by the main fingerprints and the chapmk version.
 
 ### 6.7 Aux linker and aux classification
 
@@ -379,7 +380,7 @@ Aux files are parsed as brace-balanced statements, not lines: `\@setckpt` and `\
 
 1. **Format and preamble:** `pre`, `post`. A change dirties everything.
 2. **Main body:** `body`. A change dirties everything (A3).
-3. **Own sources:** files attributed to *u* via `.ffl`, plus graphics. Files from `.fls` under the source tree that are attributed to no segment are global inputs (a change dirties everything). Not tracked by hash: files in the TeX distribution (covered by the TeX Live version string and the format fingerprint, §6.3.1) and files generated in the build directory (aux, derived lists, `.bbl`, `.nls`; covered by the dependency model).
+3. **Own sources:** files attributed to *u* via `.ffl`, plus graphics. Files from `.fls` under the source tree that are attributed to no segment are global inputs (a change dirties everything). Not tracked by hash: files in the TeX distribution (tracked by size and mtime: a change gives a cold build, §6.6) and files generated in the build directory (aux, derived lists, `.bbl`, `.nls`; covered by the dependency model).
 4. **Entry state:** the observed entry vector (§6.9 defines validity).
 5. **Imports:** label keys and cite keys used by *u*. These are determined by a **text scan** of *u*'s attributed TeX files for every known key K: regex `(?<=[{,\[\s])K(?=[},\]\s])`. Comments count too, so this is a safe over-approximation. A label value changes when the whole `\newlabel` argument changes (number, page, title, anchor). A cite value is the key's `.bbl` entry block plus its position in the `.bbl`.
 6. **Self aux:** the class-*self* lines of *u*'s aux at compile start must equal those after compile (standard rerun rule).
@@ -707,6 +708,7 @@ Measured on the user's document (M6): up to 70 % of a unit's TeX time is spent i
   - key: md5 of the picture code, a stamp (format stamp and main-file fingerprints), the state at the picture start if the code shows counters (`\the…` except `\theta`, `\arabic`, `\value`, …; incremental: the state vector without run-local registers; full mode: all `\count` registers; otherwise shifted page numbers would invalidate every later figure), `\linewidth`, `\hsize`, the current font, `\baselineskip` and colour; full mode also a digest of all label and citation values;
   - references: an exported figure stores its code (`.src`) and the values of the label and citation keys the code references (`.deps`, text scan as in §6.8); before each batch, figures with a changed, new or removed referenced key are removed, so the picture is exported again. References hidden in preamble macros are not seen (as with externalize).
   - files: the `.deps` also hold digests of the source files the picture read while it was exported (`\input`, graphics; `f` records) and of source files named in its code (e.g. pgfplots tables); a changed or missing file removes the figure before the next batch or full pass (stricter than externalize, which keeps such figures).
+  - distribution files: the cache records those read by the exporting runs (`inputs.json`, size and mtime); a change (package update) empties the cache. The full-mode stamp is the format stamp (distribution, `chapmk-ini.sty`, `chapmk.sty`, chapmk version) plus the main-file fingerprints.
   - `check` builds its `--full` reference with a fresh picture cache, so a stale figure cannot be on both sides.
   - A typo leaves all keys unchanged; a new label elsewhere leaves pictures that do not reference it cached.
 - **PDF merge:** pdfTeX writes the font descriptor of a font that also occurs in an included PDF with font-file metrics (Ascent = FontBBox top, no XHeight), otherwise with TFM metrics. Runs see only some figures, so the merge normalises the descriptors to the whole-document rule (text extraction, §3.3 item 2, depends on them).
