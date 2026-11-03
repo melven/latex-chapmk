@@ -5,6 +5,20 @@ on:
   pull_request:
 
 jobs:
+  # unit tests (no TeX) on every supported Python (R1); the slow suite runs in the image
+  python:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e ".[dev]"
+      - run: pytest -n auto tests/unit
+
   linux-texlive:
     runs-on: ubuntu-latest
     steps:
