@@ -670,9 +670,6 @@ verbatim = []                  # extra verbatim environments, e.g. ["codeexample
 shortverb = []                 # short verbatim characters, e.g. ["|"]
 [units]
 heading = []                   # extra chapter-level heading commands (A5)
-[aux]
-self = []                      # extra regexes of aux lines classified "self"
-ignore = []
 [state]
 ignore = []                    # extra \count registers excluded from the state vector
 [pictures]
