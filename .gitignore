@@ -14,3 +14,5 @@ __pycache__/
 .coverage
 .coverage.*
 coverage.xml
+coverage-total.txt
+coverage.md

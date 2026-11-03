@@ -38,7 +38,7 @@ jobs:
   linux-texlive:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write  # the coverage badge on the branch badges (pushes to main only)
       packages: write  # the dev image in GHCR
     steps:
       - uses: actions/checkout@v4
@@ -81,7 +81,34 @@ jobs:
             ruff check . && ruff format --check .
             mypy --strict src
             pytest -n auto --cov --cov-report=term
+            coverage report --format=total --fail-under=0 > coverage-total.txt
+            coverage report --format=markdown --skip-covered --fail-under=0 > coverage.md
           '
+      - name: Coverage summary
+        # the overview in the run summary; the README badge links to these runs
+        if: always() && hashFiles('coverage.md') != ''
+        run: |
+          {
+            echo "## Coverage: $(cat coverage-total.txt) % (branch coverage, full suite)"
+            echo
+            echo "Modules below 100 % (Miss: statements, BrPart: partial branches):"
+            echo
+            cat coverage.md
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Coverage badge
+        # an SVG on the branch badges, replaced on every push to main (no external service)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/badges
+          python3 .github/scripts/coverage_badge.py "$(cat coverage-total.txt)" /tmp/badges/coverage.svg
+          cd /tmp/badges
+          git init -q -b badges
+          git add coverage.svg
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" \
+            commit -q -m "coverage badge for ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
       - name: Wheel smoke test
         # the built wheel installs into a clean venv, runs and ships the LaTeX packages (R3)
         run: |
