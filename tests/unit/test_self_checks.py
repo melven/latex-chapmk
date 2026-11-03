@@ -36,3 +36,30 @@ def test_kept_list_sections() -> None:
     _check_kept_sections(new, "", {"U1"}, "main.toc")  # no previous section: nothing to check
     with pytest.raises(SelfCheckError, match=r"main.toc: the entries of U1"):
         _check_kept_sections(new, old, {"U1", "U2"}, "main.toc")
+
+
+def _run_pdf(path: Path, style: str) -> None:
+    import pikepdf
+
+    pdf = pikepdf.new()
+    for _ in range(2):
+        pdf.add_blank_page()
+    nums = pikepdf.Array([0, pikepdf.Dictionary(S=pikepdf.Name(style))])
+    pdf.Root.PageLabels = pikepdf.Dictionary(Nums=nums)
+    pdf.save(path)
+
+
+def test_page_label_check(tmp_path: Path) -> None:
+    """(c) the merged labels (inferred from the \\thepage records) equal the run's own; pages
+    after an extra picture page are not checked."""
+    from chapmk.merge_pdf import PageSource, merge_pdf
+
+    run = tmp_path / "r1.pdf"
+    _run_pdf(run, "/r")  # the run's labels: i, ii
+    pages = [PageSource(run, i, i + 1, ["i", "ii"][i]) for i in range(2)]
+    merge_pdf(pages, [], run, tmp_path / "ok.pdf")
+    wrong = [PageSource(run, i, i + 1, str(i + 1)) for i in range(2)]  # records say 1, 2
+    with pytest.raises(SelfCheckError, match="page 1: merged page label '1'"):
+        merge_pdf(wrong, [], run, tmp_path / "bad.pdf")
+    unchecked = [PageSource(run, i, i + 1, str(i + 1), check_label=False) for i in range(2)]
+    merge_pdf(unchecked, [], run, tmp_path / "unchecked.pdf")
