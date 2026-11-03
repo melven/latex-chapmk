@@ -6,14 +6,18 @@ import pytest
 
 from chapmk.config import ConfigError, parse_config_file
 from chapmk.pictures import (
+    INPUTS_FILE,
     PictureRecord,
+    check_inputs,
     collect_garbage,
     driver_file,
     read_pictures,
+    record_inputs,
     remove_figures,
     stale_figures,
     store_references,
 )
+from chapmk.shadow import stat_signatures
 
 KEY_A = "0B1360971630C73019099E9F886EC9A7"
 KEY_B = "40DEAF2B0E91DA6C2B120A60FC4ECAE6"
@@ -102,3 +106,19 @@ def test_stale_figures_files(tmp_path: Path) -> None:
     store_references(fig, PictureRecord(KEY_A, "U1", True, 0, "0pt", code, ("./inc.tex",)), {}, src)
     (src / "inc.tex").unlink()
     assert stale_figures(fig, None, src) == [KEY_A]
+
+
+def test_cache_inputs(tmp_path: Path) -> None:
+    """C4: the cache records the distribution files of exporting runs; garbage collection
+    keeps the record; a changed file empties the cache."""
+    fig, pkg = tmp_path / "fig", tmp_path / "pgf.sty"
+    pkg.write_text("v1")
+    record_inputs(fig, stat_signatures([pkg]))
+    (fig / f"{KEY_A}.pdf").write_text("x")
+    collect_garbage(fig, {KEY_A})
+    assert sorted(p.name for p in fig.iterdir()) == [f"{KEY_A}.pdf", INPUTS_FILE]
+    assert check_inputs(fig) is False
+    pkg.write_text("v22")
+    assert check_inputs(fig) is True
+    assert list(fig.iterdir()) == []
+    assert check_inputs(fig) is False

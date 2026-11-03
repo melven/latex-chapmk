@@ -11,7 +11,14 @@ from chapmk.config import Config
 from chapmk.errors import ToolError
 from chapmk.layout import make_layout
 from chapmk.proc import run
-from chapmk.shadow import build_output_filter, sync_project_shadow, sync_shadow
+from chapmk.shadow import (
+    build_output_filter,
+    changed_signatures,
+    external_inputs,
+    stat_signatures,
+    sync_project_shadow,
+    sync_shadow,
+)
 from chapmk.texdist import TEX_DIR, TeXLive, detect, deterministic_env, tex_path
 
 
@@ -178,3 +185,29 @@ def test_shadow_skips_given_dirs(tmp_path: Path) -> None:
         excluded=lambda _: False,
     )
     assert files_in(tmp_path / "sh") == {"a"}
+
+
+def test_external_inputs_and_signatures(tmp_path: Path) -> None:
+    """C4: files read outside the shadow tree, build and source directory (the distribution)
+    are found by their .fls lines; a size or mtime change or a removal is detected."""
+    src, build, dist = tmp_path / "src", tmp_path / "build", tmp_path / "texmf"
+    shadow = build / "src"
+    for d in (src, shadow, dist):
+        d.mkdir(parents=True)
+    (src / "a.tex").write_text("x")
+    (shadow / "a.tex").symlink_to(src / "a.tex")
+    (dist / "p.sty").write_text("p")
+    (dist / "q.sty").write_text("q")
+    (build / "main.aux").write_text("")
+    fls = tmp_path / "main.fls"
+    fls.write_text(
+        f"PWD {shadow}\nINPUT ./a.tex\nINPUT {dist}/p.sty\nINPUT {dist}/../texmf/q.sty\n"
+        f"INPUT {build}/main.aux\nINPUT {dist}/missing.sty\nOUTPUT {dist}/out.tex\n"
+    )
+    found = external_inputs(fls, shadow, (shadow, build, src))
+    assert found == {dist / "p.sty", dist / "q.sty"}
+    sigs = stat_signatures(found)
+    assert changed_signatures(sigs) == []
+    (dist / "p.sty").write_text("pp")
+    (dist / "q.sty").unlink()
+    assert sorted(changed_signatures(sigs)) == [(dist / n).as_posix() for n in ("p.sty", "q.sty")]
