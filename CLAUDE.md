@@ -56,7 +56,7 @@ Behind a proxy: pass it as build args (`--build-arg HTTPS_PROXY=...`, `--network
 - Update them in the same commit as any new, removed or changed module or public function.
 
 **Python:**
-- ≥ 3.10, type hints everywhere, `ruff` (lint and format), `mypy --strict` for `src/`.
+- ≥ 3.11, type hints everywhere, `ruff` (lint and format), `mypy --strict` for `src/`.
 - `pathlib` internally; forward slashes when passing paths to TeX.
 - Use `subprocess` for external tools (no shell strings, no `fork`).
 - Tests do not use the network.
