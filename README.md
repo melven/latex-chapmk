@@ -1,7 +1,7 @@
 # latex-chapmk
 
 [![ci](https://github.com/melven/latex-chapmk/actions/workflows/ci.yml/badge.svg)](https://github.com/melven/latex-chapmk/actions/workflows/ci.yml)
-[![coverage](https://github.com/melven/latex-chapmk/raw/badges/coverage.svg)](https://github.com/melven/latex-chapmk/actions/workflows/ci.yml?query=branch%3Amain)
+[![coverage](https://melven.github.io/latex-chapmk/coverage.svg)](https://melven.github.io/latex-chapmk/)
 [![license](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
 
 `chapmk`: latexmk for books. It rebuilds only the changed `\include`'d chapters of a pdfLaTeX

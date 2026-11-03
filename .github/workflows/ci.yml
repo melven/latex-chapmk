@@ -38,7 +38,7 @@ jobs:
   linux-texlive:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # the coverage badge on the branch badges (pushes to main only)
+      contents: read
       packages: write  # the dev image in GHCR
     steps:
       - uses: actions/checkout@v4
@@ -83,6 +83,10 @@ jobs:
             pytest -n auto --cov --cov-report=term
             coverage report --format=total --fail-under=0 > coverage-total.txt
             coverage report --format=markdown --skip-covered --fail-under=0 > coverage.md
+            # coverage site for GitHub Pages: badge and HTML report (published from main)
+            coverage html --fail-under=0 -q -d site
+            pip install -q anybadge
+            anybadge --value="$(cat coverage-total.txt)" --file=site/coverage.svg --overwrite coverage
           '
       - name: Coverage summary
         # the overview in the run summary; the README badge links to these runs
@@ -95,20 +99,11 @@ jobs:
             echo
             cat coverage.md
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Coverage badge
-        # an SVG on the branch badges, replaced on every push to main (no external service)
+      - name: Coverage site
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          mkdir -p /tmp/badges
-          python3 .github/scripts/coverage_badge.py "$(cat coverage-total.txt)" /tmp/badges/coverage.svg
-          cd /tmp/badges
-          git init -q -b badges
-          git add coverage.svg
-          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" \
-            commit -q -m "coverage badge for ${GITHUB_SHA::7}"
-          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" badges
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
       - name: Wheel smoke test
         # the built wheel installs into a clean venv, runs and ships the LaTeX packages (R3)
         run: |
@@ -121,5 +116,21 @@ jobs:
             test -f /tmp/v/lib/python3*/site-packages/chapmk/tex/chapmk.sty
             test -f /tmp/v/lib/python3*/site-packages/chapmk/tex/chapmk-ini.sty
           '
+
+
+  # coverage badge and HTML report on GitHub Pages (main only; the repository is not changed)
+  pages:
+    needs: linux-texlive
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
 
   # M7: add macos-texlive, windows-texlive and windows-miktex (PLAN.md §6.16).
