@@ -87,3 +87,45 @@ def test_publish_propagates_write_errors(tmp_path: Path) -> None:
 
     with pytest.raises(OSError, match="disk full"):
         publish(broken, tmp_path / "x.pdf")
+
+
+def test_publish_all_writes_everything_before_renaming(tmp_path: Path) -> None:
+    """C16: all files are written before the first rename; a failing writer leaves the old
+    set and no temporary files."""
+    from chapmk.publish import publish_all
+
+    pdf, syn = tmp_path / "main.pdf", tmp_path / "main.synctex.gz"
+    pdf.write_text("old pdf")
+    syn.write_text("old syn")
+    renamed: list[str] = []
+
+    def replace(src: Path, dst: Path) -> None:
+        renamed.append(dst.name)
+        src.replace(dst)
+
+    def fail(_tmp: Path) -> None:
+        raise OSError("disk full")
+
+    with pytest.raises(OSError):
+        publish_all([(lambda t: t.write_text("new syn"), syn), (fail, pdf)], replace=replace)
+    assert (pdf.read_text(), syn.read_text()) == ("old pdf", "old syn") and renamed == []
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["main.pdf", "main.synctex.gz"]
+    written: list[str] = []
+
+    def writer(text: str, name: str):  # type: ignore[no-untyped-def]
+        def write(t: Path) -> None:
+            assert renamed == []  # nothing renamed while writing
+            written.append(name)
+            t.write_text(text)
+
+        return write
+
+    out = publish_all(
+        [(writer("new syn", "syn"), syn), (writer("new pdf", "pdf"), pdf)], replace=replace
+    )
+    assert (
+        out == [syn, pdf]
+        and written == ["syn", "pdf"]
+        and renamed == ["main.synctex.gz", "main.pdf"]
+    )
+    assert (pdf.read_text(), syn.read_text()) == ("new pdf", "new syn")
