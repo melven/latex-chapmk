@@ -327,7 +327,7 @@ Per segment, `state.json` stores:
 - **Cold build:** one run with all units, format and chapmk.sty, to the fixpoint (`fullbuild.converge`). Its aux, derived and `.bcf`/`.nlo` files become `canon/`. `state.json` records:
   - per segment the run and page indices;
   - per segment the source files attributed by the `F` records, with sha256;
-  - global inputs: source files in the `.fls` attributed to no segment, plus the `.bcf` data sources.
+  - global inputs: source files in the `.fls` attributed to no segment (incl. those read by the preamble after the split point, segment `P`), source files read by the format build (`fmt/pre.fls`, also in the format stamp), plus the `.bcf` data sources.
 - **Incremental step:** the dirty compilation units (attributed files changed) are compiled in one run from `canon/`. They are accepted only if the unit aux, the unit's main-aux slice and its nomenclature entries equal the canonical ones. The comparison ignores structural lines (`\relax`, `\providecommand`), which packages write once per run into whichever aux comes first, and replaces bookmark ids by levels (run-local, S6).
   - Then glue and all other units are still valid: only the unit's pages and files are committed.
   - Otherwise: cold build with the reason. M4 replaces this with the dependency model and the fixpoint.
