@@ -28,7 +28,10 @@ pytest -m acceptance -n auto          # scenarios compared with a plain full bui
 ```
 
 CI runs all of these, measures branch coverage (floor in `pyproject.toml`) and installs the
-built wheel into a clean venv.
+built wheel into a clean venv. It runs on pull requests and on `main`, in the dev image from
+GHCR (tagged by the hash of `Dockerfile` and `requirements-dev.txt`; built and published when
+missing), and restores the reference cache of an earlier run with the same image and
+full-mode code.
 
 - Test layout:
   - `tests/unit` (no TeX);

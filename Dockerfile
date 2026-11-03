@@ -3,6 +3,8 @@
 # To update: build with texlive/texlive:latest, take the digest from the build log, run the
 # full suite, then rm -rf .test-cache (references depend on the TeX version).
 FROM texlive/texlive:latest@sha256:07e8062637249c4f780ca59f42cc2ed592bc2dc1db4320769406aee3f98aa70e
+LABEL org.opencontainers.image.source="https://github.com/melven/latex-chapmk" \
+      org.opencontainers.image.description="chapmk dev and CI image: TeX Live full, Python tooling"
 
 ARG USERNAME=dev
 ARG UID=1000
