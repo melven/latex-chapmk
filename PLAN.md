@@ -631,12 +631,14 @@ Each trigger prints a one-line reason.
 ### 6.15 CLI and configuration
 
 ```
-chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [-v]
+chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [--no-wait] [-v]
 chapmk watch [MAIN] [same options]        # future: rebuild on change of any recorded input
 chapmk check [MAIN]                       # = build --check: incremental vs --full, criterion §3.3
-chapmk clean [MAIN]
+chapmk clean [MAIN] [--no-wait]
 chapmk graph [MAIN] [--format text|dot|json]   # compilation units and dependencies
 ```
+
+**One process per build directory (C6):** `build`, `check` and `clean` hold an exclusive OS file lock on `<build>/lock` (`fcntl.flock` / `msvcrt.locking`; released when the process ends, also when killed). A second process waits with a message, or fails with exit 2 under `--no-wait`. Temporary names of published outputs carry the PID.
 
 **`chapmk graph`** shows the build structure from the analysis and the last state:
 - the compilation units (§6.1) with their includes;
