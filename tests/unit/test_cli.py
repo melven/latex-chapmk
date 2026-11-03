@@ -2,13 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from fastinc.cli import main
+from chapmk.cli import main
 
 
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit):
         main(["--version"])
-    assert "fastinc 0.1.0" in capsys.readouterr().out
+    assert "chapmk 0.1.0" in capsys.readouterr().out
 
 
 def test_config_errors_exit_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

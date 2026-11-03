@@ -20,7 +20,7 @@ CORPUS = REPO / "tests" / "corpus"
 # test runs on this machine. Not keyed: the TeX installation and the full-mode code. After a TeX
 # update or an intended change of the --full output: rm -rf .test-cache (CI starts without it).
 REFERENCE_CACHE = REPO / ".test-cache"
-_SRC_PLACEHOLDER = "/@fastinc-test-source@"
+_SRC_PLACEHOLDER = "/@chapmk-test-source@"
 # files with a sibling .tex of the same stem are build outputs (fig/*.pdf, main.pdf, ...)
 _OUTPUT_SUFFIXES = (".pdf", ".log", ".aux", ".synctex.gz")
 
@@ -52,7 +52,7 @@ def reuse_reference(
 ) -> None:
     """Copy the cached reference files ``outputs`` (name -> target) for ``key`` into place, or
     ``build()`` them and store them. SyncTeX files are stored with ``src`` replaced."""
-    from fastinc.synctex import rewrite_paths
+    from chapmk.synctex import rewrite_paths
 
     entry = REFERENCE_CACHE / key
     if all((entry / name).is_file() for name in outputs):
@@ -83,12 +83,12 @@ def reuse_reference(
 
 @pytest.fixture(scope="session", autouse=True)
 def _cached_check_reference() -> Iterator[None]:
-    """`--check` builds its --full reference through ``fastinc.cli.full_build``; reuse cached
+    """`--check` builds its --full reference through ``chapmk.cli.full_build``; reuse cached
     references. (`build --full` itself, the code under test in the acceptance tests, is not
-    cached: it goes through ``fastinc.incremental``.)"""
-    import fastinc.cli
+    cached: it goes through ``chapmk.incremental``.)"""
+    import chapmk.cli
 
-    real = fastinc.cli.full_build
+    real = chapmk.cli.full_build
 
     def cached(analysis: Any, layout: Any, dist: Any, env: Any, **kwargs: Any) -> None:
         src = analysis.source_dir
@@ -103,7 +103,7 @@ def _cached_check_reference() -> Iterator[None]:
         reuse_reference(key, src, outputs, lambda: real(analysis, layout, dist, env, **kwargs))
 
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(fastinc.cli, "full_build", cached)
+        mp.setattr(chapmk.cli, "full_build", cached)
         yield
 
 
@@ -156,7 +156,7 @@ def thesis_template(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[
     """(live source dir, cache dir): the thesis corpus after a cold build with --check,
     built once per session. Restored copies live at the same absolute path: the shadow tree
     (symlinks), run directories and SyncTeX files contain absolute paths."""
-    from fastinc.cli import main
+    from chapmk.cli import main
 
     base = tmp_path_factory.mktemp("thesis")
     live, cache = base / "live" / "src", base / "cache"

@@ -2,9 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from fastinc.analysis import analyse
-from fastinc.config import Config
-from fastinc.errors import AnalysisError
+from chapmk.analysis import analyse
+from chapmk.config import Config
+from chapmk.errors import AnalysisError
 
 PREAMBLE = """\\documentclass{scrbook}
 \\usepackage{tikz}

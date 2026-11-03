@@ -1,4 +1,4 @@
-from fastinc.texsource import (
+from chapmk.texsource import (
     LineIndex,
     control_sequences,
     depth_at_line_starts,
@@ -74,7 +74,7 @@ def test_backslash_at_line_end_does_not_stop_scanning() -> None:
 
 
 def test_open_conditionals() -> None:
-    from fastinc.texsource import open_conditional_at_line_starts
+    from chapmk.texsource import open_conditional_at_line_starts
 
     lines = [
         "\\newif\\ifext\n",

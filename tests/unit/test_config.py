@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from fastinc.config import Config, load_config, parse_config_file
-from fastinc.errors import ConfigError
+from chapmk.config import Config, load_config, parse_config_file
+from chapmk.errors import ConfigError
 
 
 def write(p: Path, text: str) -> Path:
@@ -23,7 +23,7 @@ def test_defaults_without_file(tmp_path: Path) -> None:
 def test_file_values_and_cli_override(tmp_path: Path) -> None:
     write(tmp_path / "thesis.tex", "x")
     write(
-        tmp_path / "fastinc.toml",
+        tmp_path / "chapmk.toml",
         'main = "thesis.tex"\njobs = 3\nbuild_dir = "b"\n'
         '[format]\nsplit_before = ["\\\\foo"]\n[units]\nheading = ["mychapter"]\n',
     )
@@ -47,7 +47,7 @@ def test_file_values_and_cli_override(tmp_path: Path) -> None:
     ],
 )
 def test_invalid_files(tmp_path: Path, text: str, message: str) -> None:
-    f = write(tmp_path / "fastinc.toml", text)
+    f = write(tmp_path / "chapmk.toml", text)
     with pytest.raises(ConfigError, match=message):
         parse_config_file(f)
 

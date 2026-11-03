@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from fastinc.check import Report, compare_pdfs, compare_synctex
-from fastinc.cli import main
+from chapmk.check import Report, compare_pdfs, compare_synctex
+from chapmk.cli import main
 
 pytestmark = pytest.mark.slow
 

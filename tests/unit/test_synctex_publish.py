@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from fastinc.publish import copy_bytes, publish
-from fastinc.synctex import map_input_paths, read_lines, serialise, write_lines
+from chapmk.publish import copy_bytes, publish
+from chapmk.synctex import map_input_paths, read_lines, serialise, write_lines
 
 SAMPLE = [
     "SyncTeX Version:1",
@@ -64,21 +64,21 @@ def test_publish_atomic_and_fallback(tmp_path: Path) -> None:
     target = tmp_path / "out" / "thesis.pdf"
     assert publish(copy_bytes(src), target) == target
     assert target.read_bytes() == b"new"
-    assert not list(target.parent.glob(".*fastinc-tmp"))
+    assert not list(target.parent.glob(".*chapmk-tmp"))
 
     calls: list[Path] = []
 
     def locked(a: Path, b: Path) -> None:  # a viewer locks the regular output names
         calls.append(b)
-        if ".fastinc." not in b.name:
+        if ".chapmk." not in b.name:
             raise PermissionError("locked")
         a.replace(b)
 
     syn = tmp_path / "out" / "thesis.synctex.gz"
     got = publish(copy_bytes(src), syn, retry_seconds=0.0, replace=locked)
-    assert got == tmp_path / "out" / "thesis.fastinc.synctex.gz" and got.read_bytes() == b"new"
+    assert got == tmp_path / "out" / "thesis.chapmk.synctex.gz" and got.read_bytes() == b"new"
     got = publish(copy_bytes(src), target, retry_seconds=0.0, replace=locked)
-    assert got.name == "thesis.fastinc.pdf"
+    assert got.name == "thesis.chapmk.pdf"
 
 
 def test_publish_propagates_write_errors(tmp_path: Path) -> None:

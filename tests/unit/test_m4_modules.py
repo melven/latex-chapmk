@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from fastinc.aux import (
+from chapmk.aux import (
     ABSPAGE,
     AGGREGATE,
     BIBDATA,
@@ -20,9 +20,9 @@ from fastinc.aux import (
     statement_key,
     statements,
 )
-from fastinc.deps import TokenScan, changed_imports, cite_values, imports, label_values
-from fastinc.lint import lint_text
-from fastinc.tools import ToolInputError, citations_by_segment, patch_bcf
+from chapmk.deps import TokenScan, changed_imports, cite_values, imports, label_values
+from chapmk.lint import lint_text
+from chapmk.tools import ToolInputError, citations_by_segment, patch_bcf
 
 # --- aux statements ------------------------------------------------------------------------
 
@@ -72,7 +72,7 @@ def test_statement_key() -> None:
 
 
 def test_counter_records_and_reset_closure() -> None:
-    from fastinc.records import RunRecords, parse_counters
+    from chapmk.records import RunRecords, parse_counters
 
     c = parse_counters(
         "chapter=279:section/figure/;section=280:subsection/;subsection=281:;"
@@ -90,17 +90,17 @@ def test_biblatex_instcount_is_not_data() -> None:
     assert statement_key(a) == statement_key(b) == "\\abx@aux@number{}{k}{0}{ctx}"
     assert run_input_main_aux(
         [
-            "\\fastinc@entry{U1}{}",
+            "\\chapmk@entry{U1}{}",
             "\\abx@aux@cite{0}{x}",
             "\\BKM@entry{id=1}{41}",
-            "\\fastinc@entry{U2}{}",
+            "\\chapmk@entry{U2}{}",
             "\\abx@aux@cite{0}{y}",
         ],
         {"U1"},
     ) == [
-        "\\fastinc@entry{U1}{}",
+        "\\chapmk@entry{U1}{}",
         "\\BKM@entry{id=1}{41}",
-        "\\fastinc@entry{U2}{}",
+        "\\chapmk@entry{U2}{}",
         "\\abx@aux@cite{0}{y}",
     ]
 
@@ -108,37 +108,37 @@ def test_biblatex_instcount_is_not_data() -> None:
 def test_canonical_main_aux_keeps_unit_content_of_excluded_units() -> None:
     old = [
         "\\relax",
-        "\\fastinc@entry{G0}{}",
-        "\\fastinc@gexit{G0}{}",
-        "\\fastinc@unit{U1}{a.tex}",
-        "\\fastinc@entry{U1}{1=1,}",
+        "\\chapmk@entry{G0}{}",
+        "\\chapmk@gexit{G0}{}",
+        "\\chapmk@unit{U1}{a.tex}",
+        "\\chapmk@entry{U1}{1=1,}",
         "\\abx@aux@cite{0}{k1}",
         "\\BKM@entry{id=1,dest={41}}{41}",
         "\\abx@aux@category{lit}{k1}",
-        "\\fastinc@entry{G1}{}",
+        "\\chapmk@entry{G1}{}",
         "\\expandafter\\gdef\\csname eqp@this@A\\endcsname{1pt}",
         "\\expandafter\\gdef\\csname eqp@this@B\\endcsname{2pt}",
-        "\\fastinc@gexit{G1}{}",
+        "\\chapmk@gexit{G1}{}",
         "\\global\\csname @altsecnumformattrue\\endcsname",
         "\\abx@aux@defaultrefcontext{0}{k1}{c}",
         "\\gdef \\@abspage@last{10}",
     ]
     run = [
         "\\relax",
-        "\\fastinc@entry{G0}{}",
-        "\\fastinc@gexit{G0}{}",
-        "\\fastinc@unit{U1}{a.tex}",
-        "\\fastinc@entry{U1}{1=1,}",
+        "\\chapmk@entry{G0}{}",
+        "\\chapmk@gexit{G0}{}",
+        "\\chapmk@unit{U1}{a.tex}",
+        "\\chapmk@entry{U1}{1=1,}",
         "\\@writefile{toc}{\\addvspace}",  # delayed glue write: stays
-        "\\fastinc@entry{G1}{}",
+        "\\chapmk@entry{G1}{}",
         "\\expandafter\\gdef\\csname eqp@this@B\\endcsname{3pt}",
-        "\\fastinc@gexit{G1}{}",
+        "\\chapmk@gexit{G1}{}",
         "\\gdef \\@abspage@last{4}",
     ]
     out = canonical_main_aux(
         run, old, {"U1"}, ["\\global\\csname @altsecnumformattrue\\endcsname"], 12
     )
-    i = out.index("\\fastinc@entry{U1}{1=1,}")
+    i = out.index("\\chapmk@entry{U1}{1=1,}")
     assert out[i + 1 : i + 4] == [
         "\\abx@aux@cite{0}{k1}",
         "\\BKM@entry{id=1,dest={41}}{41}",
@@ -218,16 +218,16 @@ BCF = """<?xml?>
 
 def test_citations_by_segment_and_patch() -> None:
     aux = [
-        "\\fastinc@entry{G0}{}",
-        "\\fastinc@gexit{G0}{}",
-        "\\fastinc@entry{U1}{}",
+        "\\chapmk@entry{G0}{}",
+        "\\chapmk@gexit{G0}{}",
+        "\\chapmk@entry{U1}{}",
         "\\abx@aux@cite{0}{a}",
-        "\\fastinc@entry{G1}{}",
-        "\\fastinc@gexit{G1}{}",
-        "\\fastinc@entry{U2}{}",
+        "\\chapmk@entry{G1}{}",
+        "\\chapmk@gexit{G1}{}",
+        "\\chapmk@entry{U2}{}",
         "\\abx@aux@cite{0}{b}",
         "\\abx@aux@cite{0}{c}",
-        "\\fastinc@entry{G2}{}",
+        "\\chapmk@entry{G2}{}",
     ]
     cites = citations_by_segment(aux, BCF)
     assert [len(cites[s]) for s in ("G0", "U1", "G1", "U2", "G2")] == [0, 1, 0, 2, 0]
@@ -291,7 +291,7 @@ def test_lint_global_commands_comments_verbatim_allow() -> None:
 
 
 def test_graph_renderers() -> None:
-    from fastinc.graph import Graph, IncludeNode, to_dot, to_json, to_text
+    from chapmk.graph import Graph, IncludeNode, to_dot, to_json, to_text
 
     g = Graph(
         units=[["a"], ["b", "b2"]],
@@ -311,13 +311,13 @@ def test_graph_renderers() -> None:
 
 
 def test_graph_without_state(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    from fastinc.cli import main
+    from chapmk.cli import main
 
     (tmp_path / "d.tex").write_text(
         "\\documentclass{article}\n\\begin{document}\nx\n\\end{document}\n"
     )
     assert main(["graph", "d.tex"], cwd=tmp_path) == 2
-    assert "run 'fastinc build' first" in capsys.readouterr().err
+    assert "run 'chapmk build' first" in capsys.readouterr().err
 
 
 # --- planning ------------------------------------------------------------------------------
@@ -326,7 +326,7 @@ def test_graph_without_state(tmp_path: Path, capsys: pytest.CaptureFixture[str])
 def _planner(n: int, groups: list[list[int]], global_units: set[int]):  # type: ignore[no-untyped-def]
     from types import SimpleNamespace
 
-    from fastinc.incremental import Fixpoint
+    from chapmk.incremental import Fixpoint
 
     fp = object.__new__(Fixpoint)
     fp.units = [f"U{k}" for k in range(1, n + 1)]
@@ -351,7 +351,7 @@ def test_plan_groups_and_global_units() -> None:
 
 
 def test_register_names(tmp_path: Path) -> None:
-    from fastinc.records import register_names
+    from chapmk.records import register_names
 
     log = tmp_path / "x.log"
     log.write_text(
@@ -393,7 +393,7 @@ def test_referenced_equals_references() -> None:
 
 def test_lint_cache(tmp_path: Path) -> None:
     """Cached hits equal fresh ones; a changed file or changed options are linted again."""
-    from fastinc.lint import lint_files
+    from chapmk.lint import lint_files
 
     (tmp_path / "a.tex").write_text("\\chapter{A}\n\\def\\x{1}\n")
     cache: dict[str, list[list[object]]] = {}
@@ -408,7 +408,7 @@ def test_lint_cache(tmp_path: Path) -> None:
 
 def test_bcf_datalists() -> None:
     """Datalists of a .bcf are read by section/name and replaced in sorted order."""
-    from fastinc.tools import datalists, with_datalists
+    from chapmk.tools import datalists, with_datalists
 
     dl = (
         '  <bcf:datalist section="0"\n                name="{}"\n  type="entry">\n  </bcf:datalist>'
@@ -443,7 +443,7 @@ def test_glue_hints() -> None:
     """Slow glue blocks: the part from the first chapter-level heading or list command can be
     \\include'd (state commands before it stay; list commands need a units.heading entry);
     otherwise the reason; fast blocks: nothing."""
-    from fastinc.lint import glue_hints
+    from chapmk.lint import glue_hints
 
     lines = [
         "\\documentclass{book}\n",  # 1

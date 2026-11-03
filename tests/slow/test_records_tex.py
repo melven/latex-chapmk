@@ -1,4 +1,4 @@
-"""M2: fastinc.sty records in real runs (PLAN §6.4.2), run directories and the runner."""
+"""M2: chapmk.sty records in real runs (PLAN §6.4.2), run directories and the runner."""
 
 import hashlib
 import os
@@ -9,14 +9,14 @@ from pathlib import Path
 import pikepdf
 import pytest
 
-from fastinc.analysis import analyse
-from fastinc.config import Config
-from fastinc.fmt import ensure_format
-from fastinc.layout import make_layout
-from fastinc.records import read_run_records
-from fastinc.runner import RunSpec, prepare_run_dir, run_batch
-from fastinc.shadow import sync_project_shadow
-from fastinc.texdist import detect
+from chapmk.analysis import analyse
+from chapmk.config import Config
+from chapmk.fmt import ensure_format
+from chapmk.layout import make_layout
+from chapmk.records import read_run_records
+from chapmk.runner import RunSpec, prepare_run_dir, run_batch
+from chapmk.shadow import sync_project_shadow
+from chapmk.texdist import detect
 
 pytestmark = pytest.mark.slow
 EPOCH = 1700000000

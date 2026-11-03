@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from fastinc.analysis import analyse
-from fastinc.config import Config
-from fastinc.gensrc import format_source, full_mode_input, run_main, write_if_changed
-from fastinc.texsource import split_lines
+from chapmk.analysis import analyse
+from chapmk.config import Config
+from chapmk.gensrc import format_source, full_mode_input, run_main, write_if_changed
+from chapmk.texsource import split_lines
 
 
 def project(tmp_path: Path, newline: str = "\n") -> Config:
@@ -26,8 +26,8 @@ def test_format_source(tmp_path: Path) -> None:
     a = analyse(project(tmp_path))
     assert a.split_line == 3
     assert format_source(a) == (
-        "\\RequirePackage{fastinc-ini}\\documentclass{book}\n\\usepackage{tikz}\n"
-        "\\ifdefined\\pdflastobj\\typeout{fastinc-pdf-objects:\\the\\pdflastobj,"
+        "\\RequirePackage{chapmk-ini}\\documentclass{book}\n\\usepackage{tikz}\n"
+        "\\ifdefined\\pdflastobj\\typeout{chapmk-pdf-objects:\\the\\pdflastobj,"
         "\\the\\pdflastxform,\\the\\pdflastximage}\\fi\\endofdump\n"
     )
 
@@ -37,14 +37,14 @@ def test_run_main_keeps_line_numbers(tmp_path: Path) -> None:
     lines = split_lines(run_main(a, ["a"]))
     assert len(lines) == len(a.lines)
     assert lines[0] == "\n"
-    assert lines[1] == "\\csname endofdump\\endcsname\\usepackage{fastinc}\\includeonly{a}\n"
+    assert lines[1] == "\\csname endofdump\\endcsname\\usepackage{chapmk}\\includeonly{a}\n"
     assert lines[2:] == list(a.lines[2:])  # the split statement starts on a fresh line
     assert "\\includeonly{}" in run_main(a, [])
     assert "includeonly" not in run_main(a, None)
     deny = split_lines(run_main(a, None, ["foo@cnt", "bar"]))[1]
     assert deny.startswith(
-        "\\csname endofdump\\endcsname\\expandafter\\def\\csname fastinc@denynames\\endcsname"
-        "{foo@cnt,bar}\\usepackage{fastinc}"
+        "\\csname endofdump\\endcsname\\expandafter\\def\\csname chapmk@denynames\\endcsname"
+        "{foo@cnt,bar}\\usepackage{chapmk}"
     )
 
 
@@ -56,7 +56,7 @@ def test_crlf_is_preserved(tmp_path: Path) -> None:
 
 def test_full_mode_input(tmp_path: Path) -> None:
     a = analyse(project(tmp_path))
-    assert full_mode_input(a) == "\\RequirePackage{fastinc-ini}\\input{doc.tex}"
+    assert full_mode_input(a) == "\\RequirePackage{chapmk-ini}\\input{doc.tex}"
 
 
 def test_write_if_changed(tmp_path: Path) -> None:

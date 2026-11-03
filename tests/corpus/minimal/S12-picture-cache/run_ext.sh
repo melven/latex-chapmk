@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Spike S12, part 2: reference = the document with a real \tikzexternalize (shell escape,
-# figure jobs); compared with the fastinc-style cache embedded by TikZ external's own code.
+# figure jobs); compared with the chapmk-style cache embedded by TikZ external's own code.
 # Usage (dev container, cwd = this directory): ./run_ext.sh OUTDIR [SRCDIR]
 set -u
 HERE=$(pwd); OUT=$(realpath -m "${1:?outdir}"); rm -rf "$OUT"; mkdir -p "$OUT"

@@ -15,7 +15,7 @@ from _helpers import build, edit, selections
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
 
 PLOTS = "chapters/plots"
-_RECORD = re.compile(r"^fastinc-picture: ([xu]) \S+ .*?(\S+)$", re.MULTILINE)
+_RECORD = re.compile(r"^chapmk-picture: ([xu]) \S+ .*?(\S+)$", re.MULTILINE)
 
 
 def checked(src: Path, capsys: pytest.CaptureFixture[str]) -> dict[str, Any]:
@@ -32,7 +32,7 @@ def reasons(rep: dict[str, Any]) -> list[str]:
 
 def records(src: Path, run: str) -> list[tuple[str, str]]:
     """(kind, segment) of the picture records of a run."""
-    log = (src / ".fastinc" / "runs" / run / "main.log").read_text(errors="replace")
+    log = (src / ".chapmk" / "runs" / run / "main.log").read_text(errors="replace")
     return _RECORD.findall(log)
 
 
@@ -42,7 +42,7 @@ def pictures(copy_corpus, capsys: pytest.CaptureFixture[str]) -> Path:  # type: 
     rep = checked(src, capsys)
     assert rep["mode"] == "cold"
     assert any(r.startswith("pictures exported") for r in reasons(rep))
-    figs = list((src / ".fastinc" / "fig").glob("*.pdf"))
+    figs = list((src / ".chapmk" / "fig").glob("*.pdf"))
     assert len(figs) >= 7  # unit and glue pictures; todo notes stay inline
     return src
 
