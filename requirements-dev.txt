@@ -1,5 +1,5 @@
 # Runtime
-pikepdf>=9
+pikepdf>=10
 
 # Development / tests (same as the "dev" extra in pyproject.toml)
 pytest>=8

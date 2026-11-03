@@ -67,7 +67,7 @@ class Report:
 Target = tuple[Any, ...]
 
 
-def _resolve(pdf: pikepdf.Pdf, pages: dict[tuple[int, int], int], dest: Any) -> Target:
+def _resolve(pdf: pikepdf.Pdf, pages: dict[Any, int], dest: Any) -> Target:
     """Named or explicit destination → (page index, view type, rounded coordinates)."""
     if isinstance(dest, (pikepdf.String, str)):
         names = pdf.Root.get("/Names")

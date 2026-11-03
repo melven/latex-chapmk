@@ -4,17 +4,12 @@ from __future__ import annotations
 
 import os
 import re
-import sys
+import tomllib
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
 from chapmk.errors import ConfigError
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:  # pragma: no cover
-    import tomli as tomllib
 
 CONFIG_NAME = "chapmk.toml"
 
