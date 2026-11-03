@@ -166,3 +166,17 @@ def test_biber_error_is_shown(
     assert main(["build", "main.tex", *mode], cwd=src) == 2
     err = capsys.readouterr().err
     assert "biber failed" in err and "syntax error" in err and "main.blg" in err, err
+
+
+def test_unreadable_state_gives_a_cold_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """E7: a corrupt state.json is a cold build with the reason, not an error."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    _document(src)
+    assert checked(src, capsys)["mode"] == "cold"
+    state = src / ".chapmk" / "main" / "canon" / "state.json"
+    state.write_text(state.read_text()[:100])
+    rep = checked(src, capsys)
+    assert rep["mode"] == "cold" and "unreadable" in rep["reason"], rep
