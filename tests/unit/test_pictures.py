@@ -6,14 +6,18 @@ import pytest
 
 from chapmk.config import ConfigError, parse_config_file
 from chapmk.pictures import (
+    INPUTS_FILE,
     PictureRecord,
+    check_inputs,
     collect_garbage,
     driver_file,
     read_pictures,
+    record_inputs,
     remove_figures,
     stale_figures,
     store_references,
 )
+from chapmk.shadow import stat_signatures
 
 KEY_A = "0B1360971630C73019099E9F886EC9A7"
 KEY_B = "40DEAF2B0E91DA6C2B120A60FC4ECAE6"
@@ -66,7 +70,7 @@ def test_stale_figures(tmp_path: Path) -> None:
     becomes undefined; other keys do not matter."""
     rec = PictureRecord(KEY_A, "U1", True, 0, "0pt", "\\node {see \\ref{fig:a} and \\cite{k}};")
     values = {"L:fig:a": "1", "L:other": "2"}
-    store_references(tmp_path, rec, values)
+    store_references(tmp_path, rec, values, tmp_path)
     assert stale_figures(tmp_path, values) == []
     assert stale_figures(tmp_path, {**values, "L:other": "3"}) == []
     assert stale_figures(tmp_path, {**values, "L:fig:a": "9"}) == [KEY_A]
@@ -84,3 +88,37 @@ def test_config_picture_cache(tmp_path: Path) -> None:
     cfg.write_text("[pictures]\ncache = 1\n")
     with pytest.raises(ConfigError, match="true or false"):
         parse_config_file(cfg)
+
+
+def test_stale_figures_files(tmp_path: Path) -> None:
+    """A figure is stale when a file it read (recorded) or names in its code (a table) changes
+    or disappears."""
+    src, fig = tmp_path / "src", tmp_path / "fig"
+    (src / "data").mkdir(parents=True)
+    fig.mkdir()
+    (src / "data" / "t.dat").write_text("1 2\n")
+    (src / "inc.tex").write_text("x")
+    code = "\\begin{axis}\\addplot table {data/t.dat};\\end{axis}"
+    store_references(fig, PictureRecord(KEY_A, "U1", True, 0, "0pt", code, ("./inc.tex",)), {}, src)
+    assert stale_figures(fig, None, src) == []
+    (src / "data" / "t.dat").write_text("1 3\n")
+    assert stale_figures(fig, None, src) == [KEY_A]
+    store_references(fig, PictureRecord(KEY_A, "U1", True, 0, "0pt", code, ("./inc.tex",)), {}, src)
+    (src / "inc.tex").unlink()
+    assert stale_figures(fig, None, src) == [KEY_A]
+
+
+def test_cache_inputs(tmp_path: Path) -> None:
+    """C4: the cache records the distribution files of exporting runs; garbage collection
+    keeps the record; a changed file empties the cache."""
+    fig, pkg = tmp_path / "fig", tmp_path / "pgf.sty"
+    pkg.write_text("v1")
+    record_inputs(fig, stat_signatures([pkg]))
+    (fig / f"{KEY_A}.pdf").write_text("x")
+    collect_garbage(fig, {KEY_A})
+    assert sorted(p.name for p in fig.iterdir()) == [f"{KEY_A}.pdf", INPUTS_FILE]
+    assert check_inputs(fig) is False
+    pkg.write_text("v22")
+    assert check_inputs(fig) is True
+    assert list(fig.iterdir()) == []
+    assert check_inputs(fig) is False

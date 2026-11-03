@@ -1,8 +1,11 @@
 from pathlib import Path
 
+import pytest
+
 from chapmk.analysis import analyse
 from chapmk.config import Config
-from chapmk.gensrc import format_source, full_mode_input, run_main, write_if_changed
+from chapmk.files import write_if_changed
+from chapmk.gensrc import format_source, full_mode_input, run_main
 from chapmk.texsource import split_lines
 
 
@@ -64,3 +67,24 @@ def test_write_if_changed(tmp_path: Path) -> None:
     assert write_if_changed(p, "a\udcff")  # surrogate-escaped byte round-trips
     assert p.read_bytes() == b"a\xff"
     assert not write_if_changed(p, "a\udcff")
+
+
+def test_write_atomic_keeps_old_file_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """C7: a write that fails midway (disk full, kill) leaves the old file, no temp file."""
+    from chapmk.files import write_atomic
+
+    p = tmp_path / "canon" / "a.aux"
+    write_atomic(p, "old\n")
+    real = Path.write_bytes
+
+    def partial(self: Path, data: bytes) -> int:
+        real(self, data[:2])
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(Path, "write_bytes", partial)
+    with pytest.raises(OSError):
+        write_atomic(p, "new content\n")
+    monkeypatch.undo()
+    assert p.read_text() == "old\n" and [f.name for f in p.parent.iterdir()] == ["a.aux"]

@@ -8,8 +8,9 @@ import pytest
 from chapmk.analysis import analyse
 from chapmk.config import Config
 from chapmk.errors import TexError
+from chapmk.files import write_if_changed
 from chapmk.fmt import ensure_format
-from chapmk.gensrc import run_main, write_if_changed
+from chapmk.gensrc import run_main
 from chapmk.layout import make_layout
 from chapmk.proc import run
 from chapmk.shadow import sync_project_shadow

@@ -12,7 +12,10 @@
 \providecommand\chapmk@denynames{}
 
 %% ---------------------------------------------------------------- helpers
-\def\chapmk@seg{G0}%  current segment id
+% current segment id: P (preamble after the split point: its files are global inputs of the
+% build, a change is a cold build), G0 from \begin{document} on, then U<k>/G<k>
+\def\chapmk@seg{P}%
+\AddToHook{begindocument/before}{\gdef\chapmk@seg{G0}}
 \def\chapmk@k{0}%     number of \include commands seen so far
 \def\chapmk@wrapped{-1}% \include index whose checkpoint wrapper ran (excluded units)
 \def\chapmk@inc#1{\xdef#1{\the\numexpr#1+1\relax}}
@@ -55,7 +58,8 @@
 \def\chapmk@all{all}
 \def\chapmk@one#1{\ifx\chapmk@pfx\chapmk@all#1=\the\count#1,\else
   \ifnum\count#1=\chapmk@ref{#1} \else#1=\the\count#1,\fi\fi}
-\def\chapmk@vec{\expandafter\chapmk@kvec\chapmk@kidx\@nil,\chapmk@rvec@start}
+\def\chapmk@vec{\chapmk@cvec\chapmk@mvec}
+\def\chapmk@cvec{\expandafter\chapmk@kvec\chapmk@kidx\@nil,\chapmk@rvec@start}
 \def\chapmk@kvec#1,{\ifx\@nil#1\else\chapmk@one{#1}\expandafter\chapmk@kvec\fi}
 \def\chapmk@rvec@start{%
   \expandafter\chapmk@rvec\expandafter{\the\numexpr\chapmk@kernelcount+1}}
@@ -67,10 +71,84 @@
   \@for\chapmk@tmp:=\chapmk@kidx\do{\ifx\chapmk@tmp\@empty\else
     \expandafter\xdef\csname#1@\chapmk@tmp\endcsname{\the\count\chapmk@tmp}\fi}%
   \xdef\chapmk@i{\the\numexpr\chapmk@kernelcount+1}%
-  \chapmk@store@}
+  \chapmk@store@
+  \chapmk@markmap\chapmk@mstore}
 \def\chapmk@store@{\ifnum\chapmk@i>\count10 \else
   \expandafter\xdef\csname\chapmk@pfx @\chapmk@i\endcsname{\the\count\chapmk@i}%
   \chapmk@inc\chapmk@i\expandafter\chapmk@store@\fi}
+
+%% ---------------------------------------------------------------- running-head marks
+% The kernel's mark classes (\NewMarkClass; \markboth, \markright, \InsertMark) keep the
+% marks of the last output page in g__mark_<region>_<top|first|last>_<class>_tl, as
+% \__mark_value:nn{<id>}{<text>}. They belong to the state vector as pseudo registers
+% \chapmk@markbase + <marks register of the class>: 0 if the last mark of the "page" region
+% is empty, else a 28-bit digest of its text (ids are run-local). A unit records the texts
+% of its page and column regions at its end (\chapmk@mk in the unit aux); an excluded unit
+% restores those of the pseudo registers in its checkpoint, like its counters.
+\def\chapmk@markbase{100000}
+\ExplSyntaxOn
+\cs_new:Npn \chapmk@markmap #1 { \seq_map_function:NN \g__mark_classes_seq #1 }
+\ExplSyntaxOff
+\def\chapmk@mid#1{\the\numexpr\chapmk@markbase+\csname c__mark_class_#1_mark\endcsname\relax}
+\def\chapmk@mtext#1#2#3{\detokenize{#3}}
+\def\chapmk@mtextof#1{%
+  \expandafter\expandafter\expandafter\chapmk@mtext\csname g__mark_page_last_#1_tl\endcsname}
+\def\chapmk@seven#1#2#3#4#5#6#7#8\@nil{#1#2#3#4#5#6#7}
+% the digest is taken of the text as an aux file gives it back (written and re-read: e.g.
+% the robust "\MakeUppercase " becomes \MakeUppercase), so a restored mark has the digest of
+% the original; \chapmk@mprep computes the digests before a vector is written
+\def\chapmk@mprep{\chapmk@markmap\chapmk@mprep@}
+\def\chapmk@mprep@#1{\begingroup
+  \edef\chapmk@tmp{\chapmk@mtextof{#1}}%
+  \ifx\chapmk@tmp\@empty\global\let\chapmk@tmpa\@empty\else
+    \makeatletter\endlinechar\m@ne\everyeof{}%
+    \expandafter\scantokens\expandafter{\expandafter\gdef\expandafter\chapmk@tmpa
+      \expandafter{\chapmk@tmp}}\fi
+  \endgroup
+  \expandafter\xdef\csname chapmk@md@#1\endcsname{\ifx\chapmk@tmpa\@empty0\else
+    \number"\expandafter\chapmk@seven\pdfmdfivesum{\detokenize\expandafter{\chapmk@tmpa}}%
+    \@nil\fi}}
+\def\chapmk@mdigest#1{\csname chapmk@md@#1\endcsname}
+% vector part (expandable, like \chapmk@one)
+\def\chapmk@mvec{\chapmk@markmap\chapmk@mone}
+\def\chapmk@mone#1{\expandafter\chapmk@mone@\expandafter{\the\numexpr\chapmk@mid{#1}}{#1}}
+\def\chapmk@mone@#1#2{\ifx\chapmk@pfx\chapmk@all#1=\chapmk@mdigest{#2},\else
+  \ifnum\chapmk@mdigest{#2}=\chapmk@ref{#1} \else#1=\chapmk@mdigest{#2},\fi\fi}
+\def\chapmk@mstore#1{%
+  \expandafter\xdef\csname\chapmk@pfx @\chapmk@mid{#1}\endcsname{\chapmk@mdigest{#1}}}
+% segment start: snapshot of the last marks; at its end a changed one is an absolute
+% assignment of the segment (prediction: the exit does not depend on the entry)
+\def\chapmk@msnap#1{\expandafter\global\expandafter\let\csname chapmk@msnap@#1\expandafter
+  \endcsname\csname g__mark_page_last_#1_tl\endcsname}
+\def\chapmk@mabs#1{\expandafter\ifx\csname chapmk@msnap@#1\expandafter\endcsname
+  \csname g__mark_page_last_#1_tl\endcsname\else
+  \edef\chapmk@absidx{\chapmk@absidx\chapmk@mid{#1},}\fi}
+% unit end: "\chapmk@mk{<id>}{<class>}{<region_slot>}{<text>}" for the page and column regions
+\def\chapmk@mkrec#1{\@for\chapmk@slot:=page_top,page_first,page_last,column_top,%
+  column_first,column_last\do{\chapmk@mkrec@{#1}}}
+\def\chapmk@mkrec@#1{\expandafter\expandafter\expandafter\chapmk@mkrec@@
+  \csname g__mark_\chapmk@slot _#1_tl\endcsname{#1}}
+\def\chapmk@mkrec@@#1#2#3#4{\immediate\write\@partaux{\string\chapmk@mk
+  {\chapmk@mid{#4}}{#4}{\chapmk@slot}{\unexpanded{#3}}}}
+% read from the unit aux before its \@setckpt (collected per unit, see \@setckpt below)
+\def\chapmk@lastmk{}
+\long\def\chapmk@mk#1#2#3#4{\xdef\chapmk@lastmk{\unexpanded\expandafter{\chapmk@lastmk}%
+  \noexpand\chapmk@mset{#1}{#2}{#3}{\unexpanded{#4}}}}
+% restore (excluded unit): only the pseudo registers listed in the checkpoint
+\long\def\chapmk@mset#1#2#3#4{\ifcsname chapmk@mon@#1\endcsname
+  \expandafter\xdef\csname g__mark_#3_#2_tl\endcsname{%
+    \expandafter\noexpand\csname __mark_value:nn\endcsname{0}{\unexpanded{#4}}}\fi}
+% primitive marks (\mark, \marks outside the kernel's classes) cannot be restored: record
+% their use ("K primitive"; the driver falls back to full mode)
+\def\chapmk@mclass#1{\expandafter\let\csname chapmk@mreg@\number
+  \csname c__mark_class_#1_mark\endcsname\endcsname\@empty
+  \immediate\write\chapmk@rec{K \chapmk@mid{#1} #1}}
+\def\chapmk@primitive{\begingroup\count@\z@
+  \loop\ifnum\count@>\count256 \else
+    \ifcsname chapmk@mreg@\the\count@\endcsname\else
+      \if\relax\detokenize\expandafter{\botmarks\count@}\relax\else
+        \immediate\write\chapmk@rec{K primitive \the\count@}\count@\count256 \fi\fi
+    \advance\count@\@ne\repeat\endgroup}
 
 %% ---------------------------------------------------------------- records
 \newwrite\chapmk@rec
@@ -85,9 +163,10 @@
   \AddToHook{cmd/pgfpicture/before}{\chapmk@time{picture+}}%
   \AddToHook{cmd/endpgfpicture/after}{\chapmk@time{picture-}}\fi}
 \def\chapmk@main#1{\immediate\write\@mainaux{#1}}
-\def\chapmk@entry@rec{\chapmk@time{\chapmk@seg}\def\chapmk@pfx{chapmk@b}%
+\def\chapmk@entry@rec{\chapmk@time{\chapmk@seg}\chapmk@markmap\chapmk@msnap\chapmk@mprep
+  \def\chapmk@pfx{chapmk@b}%
   \chapmk@main{\string\chapmk@entry{\chapmk@seg}{\chapmk@vec}}}
-\def\chapmk@gexit@rec{\def\chapmk@pfx{chapmk@b}%
+\def\chapmk@gexit@rec{\chapmk@mprep\def\chapmk@pfx{chapmk@b}%
   \chapmk@main{\string\chapmk@gexit{\chapmk@seg}{\chapmk@vec}}}
 % segment marker in the nomenclature stream (delayed, like nomencl's own writes; S2b)
 \def\chapmk@mark{\ifdefined\@nomenclaturefile
@@ -100,6 +179,7 @@
   \def\chapmk@absidx{}%
   \@for\chapmk@tmp:=\chapmk@absnames\do{\ifx\chapmk@tmp\@empty\else
     \edef\chapmk@absidx{\chapmk@absidx\chapmk@idx{c@\chapmk@tmp},}\fi}%
+  \chapmk@markmap\chapmk@mabs
   \immediate\write#1{\string\chapmk@abs{\chapmk@seg}{\chapmk@absidx}}%
   \gdef\chapmk@absnames{}}
 % (\protected: never expanded in \edef/\write contexts)
@@ -139,6 +219,9 @@
 % exclusion itself (e.g. calc's \setcounter scratch register during the kernel restore).
 \AddToHook{include/after}{%
   \let\chapmk@pfx\chapmk@all
+  \chapmk@markmap\chapmk@mkrec
+  \chapmk@primitive
+  \chapmk@mprep
   \immediate\write\@partaux{\string\chapmk@ckpt{\chapmk@seg}{\chapmk@vec}}%
   \chapmk@abs@rec\@partaux
   \chapmk@glue@begin}
@@ -152,15 +235,23 @@
 \def\@setckpt#1#2{%
   \expandafter\global\expandafter\let\csname chapmk@ck@#1\endcsname\chapmk@lastckpt
   \global\let\chapmk@lastckpt\@empty
+  \expandafter\global\expandafter\let\csname chapmk@mk@#1\endcsname\chapmk@lastmk
+  \global\let\chapmk@lastmk\@empty
   \chapmk@orig@setckpt{#1}{\chapmk@excluded@begin{#1}#2\chapmk@restore{#1}}}
 \def\chapmk@excluded@begin#1{\chapmk@unit@begin{#1}\xdef\chapmk@wrapped{\chapmk@k}}
-\def\chapmk@restore#1{% assign the stored post-kernel registers (S4)
+\def\chapmk@restore#1{% assign the stored post-kernel registers (S4) and marks
   \edef\chapmk@tmp{\csname chapmk@ck@#1\endcsname}%
   \@for\chapmk@tmp:=\chapmk@tmp\do{\ifx\chapmk@tmp\@empty\else
-    \expandafter\chapmk@assign\chapmk@tmp\@nil\fi}}
+    \expandafter\chapmk@assign\chapmk@tmp\@nil\fi}%
+  \csname chapmk@mk@#1\endcsname
+  \chapmk@markmap\chapmk@moff}
+\def\chapmk@moff#1{\expandafter\global\expandafter\let\csname chapmk@mon@\chapmk@mid{#1}%
+  \endcsname\@undefined}
 \def\chapmk@assign#1=#2\@nil{%
-  \ifnum#1>\chapmk@kernelcount\relax
-    \ifcsname chapmk@deny@#1\endcsname\else\global\count#1=#2\relax\fi\fi}
+  \ifnum#1<\chapmk@markbase\relax\else
+    \expandafter\global\expandafter\let\csname chapmk@mon@#1\endcsname\@empty\fi
+  \ifnum#1<\chapmk@markbase\relax\ifnum#1>\chapmk@kernelcount\relax
+    \ifcsname chapmk@deny@#1\endcsname\else\global\count#1=#2\relax\fi\fi\fi}
 \AddToHook{include/excluded}{%
   \ifnum\chapmk@wrapped=\chapmk@k\else % never compiled: no checkpoint, no entry
     \chapmk@inc\chapmk@k\chapmk@glue@end
@@ -200,6 +291,9 @@
 % statement of its aux) and \chapmk@lmark{/<seg>} after each entry record, written while
 % the aux files are read at \end{document}; the driver splices list files by them
 \providecommand\chapmk@listexts{toc,lof,lot,loalg,lol,tdo}
+% "L <ext>": a list file read by \@starttoc (lists with other extensions: algorithm's .loa,
+% tocbasic's \DeclareNewTOC); the driver then copies, stores and splices them too
+\AddToHookWithArguments{cmd/@starttoc/before}{\immediate\write\chapmk@rec{L #1}}
 \def\chapmk@lmark#1{}
 \def\chapmk@listmarks#1{\@for\chapmk@ext:=\chapmk@listexts\do{%
   \@writefile{\chapmk@ext}{\chapmk@lmark{#1}}}}
@@ -229,9 +323,11 @@
     \string\providecommand\string\chapmk@abs[2]{}\string\providecommand\string\chapmk@unit[2]{}%
     \string\providecommand\string\chapmk@ckpt[2]{}\string\providecommand\string\chapmk@bkmlevels[1]{}%
     \string\providecommand\string\chapmk@counters[1]{}\string\providecommand\string\chapmk@layout[1]{}%
-    \string\providecommand\string\chapmk@ustart[1]{}}%
+    \string\providecommand\string\chapmk@ustart[1]{}\string\providecommand\string\chapmk@mk[4]{}}%
   \chapmk@time{begin}%
   \chapmk@setup@vector
+  \chapmk@markmap\chapmk@mclass
+  \chapmk@mprep
   \chapmk@counters@rec
   \chapmk@layout@rec
   \chapmk@store{chapmk@b}%
@@ -244,6 +340,7 @@
 \def\chapmk@lvl#1#2#3{#2}
 \AddToHook{enddocument}{%
   \chapmk@time{end}%
+  \chapmk@primitive
   \chapmk@glue@end
   \ifdefined\BKM@id
     \def\chapmk@tmp{}\gdef\chapmk@i{1}%
@@ -258,7 +355,7 @@
 % the state vector (run-local registers excluded, so keys do not depend on the selection)
 \def\chapmk@picseg{\chapmk@seg}
 \def\chapmk@picstate@setup{\let\chapmk@pfx\chapmk@all}
-\def\chapmk@picstate{\chapmk@vec}
+\def\chapmk@picstate{\chapmk@cvec}
 % the deferral table (§6.3.3)
 \chapmk@deferred
 

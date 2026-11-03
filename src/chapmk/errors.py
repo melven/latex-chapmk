@@ -11,6 +11,23 @@ class ChapmkError(Exception):
     exit_code = 2
 
 
+class FallbackError(ChapmkError):
+    """The incremental machinery cannot handle this build, full mode can (§6.14): unsupported
+    construct, unreadable or inconsistent records, tool inputs, merge. Handled only by the
+    builder (``incremental.build``), which falls back to full mode (D3). ``persistent``: the
+    reason holds until the main file changes (the next builds skip the attempt)."""
+
+    def __init__(self, message: str, persistent: bool = False):
+        super().__init__(message)
+        self.persistent = persistent
+
+
+class InternalError(ChapmkError):
+    """An unexpected exception (a bug): exit code 3."""
+
+    exit_code = 3
+
+
 class ConfigError(ChapmkError):
     """Invalid command line or ``chapmk.toml``."""
 

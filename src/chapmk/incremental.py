@@ -21,7 +21,6 @@ and an empty canonical state (§6.9.4).
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 import shutil
@@ -31,18 +30,27 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from chapmk.analysis import UNIT_HEADINGS, Analysis
+import chapmk
+from chapmk.analysis import Analysis
 from chapmk.aux import AGGREGATE, GLOBAL, command_name, read_lines, run_input_main_aux, statements
 from chapmk.canon import CanonView, commit_lists, commit_run, read_canon, run_tools, segments
 from chapmk.config import Config
 from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
-from chapmk.errors import ChapmkError, TexError
-from chapmk.fmt import FormatInfo, ensure_format, format_stamp
-from chapmk.fullbuild import full_build, read_inputs
+from chapmk.errors import FallbackError, TexError
+from chapmk.facts import UNIT_HEADINGS, UNSUPPORTED_PACKAGES, derived_suffixes
+from chapmk.files import digest, write_atomic
+from chapmk.fmt import (
+    FormatInfo,
+    ensure_format,
+    format_dist_inputs,
+    format_inputs,
+    format_stamp,
+    internal_dirs,
+)
+from chapmk.fullbuild import full_build
 from chapmk.layout import Layout
 from chapmk.lint import LintHit, glue_hints, lint_files
 from chapmk.outputs import (
-    MergeFailedError,
     failed_run,
     is_published,
     mark_published,
@@ -50,10 +58,12 @@ from chapmk.outputs import (
 )
 from chapmk.pictures import (
     PICS_FILE,
+    check_inputs,
     collect_garbage,
     driver_file,
     export_figures,
     read_pictures,
+    record_inputs,
     remove_figures,
     stale_figures,
     store_references,
@@ -68,7 +78,6 @@ from chapmk.predict import (
     rewrite_checkpoint,
 )
 from chapmk.records import (
-    RecordError,
     RunRecords,
     glue_times,
     read_main_records,
@@ -76,31 +85,16 @@ from chapmk.records import (
     register_names,
     tex_phases,
 )
-from chapmk.runner import DERIVED_SUFFIXES, RunSpec, prepare_run_dir, run_batch
+from chapmk.runner import RunSpec, prepare_run_dir, run_batch
+from chapmk.shadow import changed_signatures, external_inputs, read_inputs, stat_signatures
 from chapmk.state import State, UnitInputs, load_state, save_state
 from chapmk.texdist import TexDistribution
 from chapmk.timing import Timings
-from chapmk.tools import ToolInputError
 
 MAX_ITERATIONS = 8
-#: Packages that force full mode when loaded at all (also by the class; seen in the .fls).
-RUNTIME_UNSUPPORTED = (
-    "imakeidx.sty",
-    "makeidx.sty",
-    "glossaries.sty",
-    "cleveref.sty",
-    "minted.sty",
-)
 FULL_ONLY_FILE = "full-only.json"
-
-
-class FallbackError(ChapmkError):
-    """The incremental machinery cannot handle this build; use full mode (§6.14).
-    ``persistent``: the reason holds until the main file changes (skip the attempt next time)."""
-
-    def __init__(self, message: str, persistent: bool = False):
-        super().__init__(message)
-        self.persistent = persistent
+#: present in ``canon/`` while a batch commits (C7)
+JOURNAL_FILE = ".in-progress"
 
 
 @dataclass
@@ -146,10 +140,6 @@ class Context:
 # --- file attribution ------------------------------------------------------------------------
 
 
-def _sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 def _source_file(ctx: Context, recorded: str) -> str | None:
     """Source-tree path (relative, posix) of a file name recorded by a run, if it is one."""
     name = recorded.lstrip("/")
@@ -163,7 +153,7 @@ def _source_file(ctx: Context, recorded: str) -> str | None:
 
 
 def _hashes(ctx: Context, names: set[str]) -> dict[str, str]:
-    return {n: _sha(ctx.analysis.source_dir / n) for n in sorted(names)}
+    return {n: digest(ctx.analysis.source_dir / n) for n in sorted(names)}
 
 
 def _segment_files(ctx: Context, recs: RunRecords) -> dict[str, dict[str, str]]:
@@ -181,7 +171,7 @@ def _global_files(ctx: Context, run_dir: Path, attributed: set[str]) -> dict[str
     for path in read_inputs(
         run_dir / f"{ctx.job}.fls", ctx.layout.shadow_dir, ctx.layout.shadow_dir
     ):
-        rel = path.relative_to(ctx.layout.shadow_dir.resolve()).as_posix()
+        rel = path.relative_to(Path(ctx.layout.shadow_dir).absolute()).as_posix()
         if (ctx.analysis.source_dir / rel).is_file() and rel not in attributed:
             names.add(rel)
     bcf = run_dir / f"{ctx.job}.bcf"
@@ -194,9 +184,9 @@ def _global_files(ctx: Context, run_dir: Path, attributed: set[str]) -> dict[str
 
 def _changed(ctx: Context, files: dict[str, str]) -> list[str]:
     out = []
-    for name, digest in files.items():
+    for name, stored in files.items():
         path = ctx.analysis.source_dir / name
-        if not path.is_file() or _sha(path) != digest:
+        if not path.is_file() or digest(path) != stored:
             out.append(name)
     return out
 
@@ -208,24 +198,17 @@ def _check_runtime_support(ctx: Context, run_dir: Path, fmt: FormatInfo) -> None
         if fls.is_file():
             lines = fls.read_text(errors="replace").splitlines()
             loaded |= {Path(line[6:]).name for line in lines if line.startswith("INPUT ")}
-    for pkg in RUNTIME_UNSUPPORTED:
-        if pkg in loaded:
-            raise FallbackError(f"package {pkg[:-4]!r} is not supported (loaded at runtime)", True)
+    for pkg in sorted(UNSUPPORTED_PACKAGES):
+        if f"{pkg}.sty" in loaded:
+            raise FallbackError(f"package {pkg!r} is not supported (loaded at runtime)", True)
     if "hyperref.sty" in loaded and "bookmark.sty" not in loaded:
         raise FallbackError(
             "hyperref without the bookmark package (outline via .out is phase 2)", True
         )
 
 
-def _records(ctx: Context, run_dir: Path) -> RunRecords:
-    try:
-        return read_run_records(run_dir, ctx.analysis)
-    except RecordError as err:
-        raise FallbackError(f"records: {err}") from err
-
-
 def _write(path: Path, stmts: list[str]) -> None:
-    path.write_text("\n".join(stmts) + "\n", encoding="utf-8", errors="surrogateescape")
+    write_atomic(path, "\n".join(stmts) + "\n")
 
 
 def _eqp_tag(key: str) -> str:
@@ -360,7 +343,8 @@ class Fixpoint:
         if not ctx.config.picture_cache:
             return driver_file(None, ctx.layout.shadow_dir, "", {})
         fig = ctx.layout.fig_dir
-        remove_figures(fig, stale_figures(fig, view.values))
+        check_inputs(fig)  # package updates
+        remove_figures(fig, stale_figures(fig, view.values, self.a.source_dir))
         stamp = short_hash(
             self.state.format_stamp + json.dumps(self.state.fingerprints, sort_keys=True)
         )
@@ -594,7 +578,7 @@ class Fixpoint:
         t = ctx.timings
         t.lap("plan")  # dirty-set planning, groups, predictions
         registers = {n: reg for n, (reg, _) in self._canon_records(canon).counters.items()}
-        pre = self._view if self._view is not None else read_canon(a, canon)
+        pre = self._view if self._view is not None else read_canon(a, canon, state.list_suffixes)
         pre_glue = self.glue_inputs(pre)
         t.lap("canon")
         pictures_text = self.pictures_file(pre)
@@ -618,6 +602,7 @@ class Fixpoint:
                 spec,
                 canon_dir=canon if canon.is_dir() else None,
                 deny_names=ctx.config.state_ignore,
+                list_suffixes=state.list_suffixes,
             )
             main_aux = run_dir / f"{ctx.job}.aux"
             if main_aux.is_file():
@@ -641,43 +626,54 @@ class Fixpoint:
             if not r.ok:
                 err = TexError("pdflatex failed", first_error=r.first_error)
                 raise failed_run(a, ctx.layout, r.directory, err)
-        all_recs = [_records(ctx, r.directory) for r in results]
+        all_recs = [read_run_records(r.directory, ctx.analysis) for r in results]
+        for recs in all_recs:  # list files with other extensions: stored and spliced from now on
+            for suffix in sorted(recs.list_suffixes - set(state.list_suffixes)):
+                state.list_suffixes.append(suffix)
         for r in results:
             _check_runtime_support(ctx, r.directory, self.fmt)
+        for recs in all_recs:
+            if recs.primitive_marks:
+                regs = ", ".join(f"\\marks{n}" for n in sorted(recs.primitive_marks))
+                raise FallbackError(
+                    f"running heads use primitive marks ({regs}; e.g. \\mark in a package): "
+                    "excluded units cannot restore them, so every build is a full build "
+                    "(supported: the kernel's mark classes, \\markboth, \\markright, \\InsertMark)",
+                    True,
+                )
         if not self.register_names:
             self.register_names = register_names(
                 [self.fmt.directory / f"{self.fmt.name}.log", results[0].log]
             )
+            for reg, name in all_recs[0].mark_classes.items():
+                self.register_names[reg] = f"marks {name}"
         t.lap("records")
+        # journal (C7): canon files and state change from here until save_state; an
+        # interrupted commit leaves the marker, and the next build is cold
+        write_atomic(canon / JOURNAL_FILE, " ".join(s.name for s in specs))
         for spec, recs, compiled in zip(specs, all_recs, compiled_by_run, strict=True):
-            try:
-                commit_run(a, ctx.layout, state, spec.name, recs, compiled)
-            except ToolInputError as err:
-                raise FallbackError(str(err)) from err
+            commit_run(a, ctx.layout, state, spec.name, recs, compiled)
             self._attribute(recs, compiled, ctx.layout.runs_dir / spec.name)
             for seg in compiled:
                 if seg in recs.openright:
                     state.openright[seg] = recs.openright[seg]
         exported = self._pictures(specs, compiled_by_run, pre)
         t.lap("commit")
-        lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name)
+        lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name, [s.name for s in specs])
         t.lap("lists")
-        try:
-            tools = run_tools(
-                a,
-                ctx.layout,
-                ctx.dist,
-                env,
-                state,
-                specs[-1].name,
-                [s.name for s in specs],
-                complete=any(g is None for g in groups),
-            )
-        except ToolInputError as err:
-            raise FallbackError(str(err)) from err
+        tools = run_tools(
+            a,
+            ctx.layout,
+            ctx.dist,
+            env,
+            state,
+            specs[-1].name,
+            [s.name for s in specs],
+            complete=any(g is None for g in groups),
+        )
         t.lap("tools")
-        post = self._view = read_canon(a, canon)
-        derived = tuple(f"{ctx.job}{x}" for x in DERIVED_SUFFIXES)
+        post = self._view = read_canon(a, canon, state.list_suffixes)
+        derived = tuple(f"{ctx.job}{x}" for x in derived_suffixes(state.list_suffixes))
         for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
             for seg in compiled:
                 scan = self.scan(seg)
@@ -713,6 +709,7 @@ class Fixpoint:
                 glue_after = glue_after or f"pictures exported ({n} in the glue)"
         state.pending, state.glue_pending = dirty_after, glue_after
         save_state(state, canon)
+        (canon / JOURNAL_FILE).unlink()
         t.lap("dirty")
         reports = []
         for j, (spec, result) in enumerate(zip(specs, results, strict=True)):
@@ -811,8 +808,10 @@ class Fixpoint:
                 state.pictures[seg] = sorted({p.key for p in pics if p.segment == seg})
             for p in pics:
                 if p.exported:
-                    store_references(fig, p, pre.values)
+                    store_references(fig, p, pre.values, self.a.source_dir)
                     exported[p.segment] = exported.get(p.segment, 0) + 1
+        if exported:
+            record_inputs(fig, state.dist_files)
         return exported
 
     def _attribute(self, recs: RunRecords, compiled: set[str], run_dir: Path) -> None:
@@ -827,9 +826,18 @@ class Fixpoint:
         attributed = {n for files in state.segment_files.values() for n in files}
         state.global_files = {
             n: h
-            for n, h in {**state.global_files, **_global_files(ctx, run_dir, attributed)}.items()
+            for n, h in {
+                **state.global_files,
+                **_global_files(ctx, run_dir, attributed),
+                **format_inputs(ctx.layout),  # read by the format build, not by the runs
+            }.items()
             if n not in attributed
         }
+        fls = run_dir / f"{ctx.job}.fls"
+        state.dist_files.update(format_dist_inputs(ctx.layout))
+        state.dist_files.update(
+            stat_signatures(external_inputs(fls, ctx.layout.shadow_dir, internal_dirs(ctx.layout)))
+        )
 
     def _canon_records(self, canon: Path) -> RunRecords:
         """Header records of the canonical main aux (counters, layout)."""
@@ -884,15 +892,23 @@ def _full(ctx: Context, epoch: int, reason: str, start: float) -> BuildReport:
         [inc.arg for inc in ctx.analysis.includes],
         time.monotonic() - start,
         str(result.pdf),
+        # a fallback is reported as a warning (§6.14), --full is not
+        warnings=[] if reason == "--full" else [f"full build: {reason}"],
         timings=ctx.timings.as_dict(),
     )
 
 
 def _cold_reason(ctx: Context, state: State | None, stamp: str) -> str | None:
+    if (ctx.layout.canon_dir / JOURNAL_FILE).exists():
+        return "the previous build was interrupted while committing"
     if state is None:
         return "no previous state"
     if state.format_stamp != stamp:
-        return "preamble (format part) or TeX installation changed"
+        return "preamble (format part), TeX installation or chapmk version changed"
+    changed_dist = changed_signatures(state.dist_files)
+    if changed_dist:
+        names = [Path(p).name for p in changed_dist]
+        return f"TeX distribution files changed ({_short(names)})"
     if state.fingerprints != asdict(ctx.analysis.fingerprints):
         return "main file changed (preamble or body)"
     if state.includes != [inc.arg for inc in ctx.analysis.includes]:
@@ -912,11 +928,18 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
     if ctx.analysis.fallback_reasons:
         return _full(ctx, epoch, "; ".join(ctx.analysis.fallback_reasons), start)
     marker = canon / FULL_ONLY_FILE
-    stamp_data = {"fingerprints": asdict(ctx.analysis.fingerprints)}
-    if marker.is_file():
-        data = json.loads(marker.read_text())
-        if data.get("fingerprints") == stamp_data["fingerprints"]:
-            return _full(ctx, epoch, data["reason"], start)
+    # keyed by the version too: an upgrade may support what forced full mode
+    stamp_data = {"fingerprints": asdict(ctx.analysis.fingerprints), "chapmk": chapmk.__version__}
+    try:
+        data = json.loads(marker.read_text()) if marker.is_file() else {}
+    except (OSError, ValueError):
+        data = {}  # unreadable: ignored (attempt the incremental build)
+    if (
+        isinstance(data, dict)
+        and "reason" in data
+        and all(data.get(k) == v for k, v in stamp_data.items())
+    ):
+        return _full(ctx, epoch, data["reason"], start)
     try:
         state = load_state(canon)
         stamp = format_stamp(ctx.analysis, ctx.dist.version)
@@ -962,7 +985,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         for hint in hints:
             ctx.say(f"hint: {hint}")
         if runs:  # a no-op build lints nothing
-            (canon / LINT_CACHE).write_text(json.dumps(dict(loop.lint_cache)))
+            write_atomic(canon / LINT_CACHE, json.dumps(dict(loop.lint_cache)))
         if runs or not is_published(ctx.layout):
             pdf = publish_state(ctx.analysis, ctx.layout, state, ctx.timings)
             mark_published(ctx.layout)
@@ -992,10 +1015,10 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
             ctx.timings.as_dict(),
             hints,
         )
-    except (FallbackError, MergeFailedError) as fb:
-        if isinstance(fb, FallbackError) and fb.persistent:
+    except FallbackError as fb:
+        if fb.persistent:
             canon.mkdir(parents=True, exist_ok=True)
-            marker.write_text(json.dumps({**stamp_data, "reason": str(fb)}))
+            write_atomic(marker, json.dumps({**stamp_data, "reason": str(fb)}))
         return _full(ctx, epoch, str(fb), start)
 
 

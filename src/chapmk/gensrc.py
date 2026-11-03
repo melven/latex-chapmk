@@ -1,14 +1,14 @@
 """Generated TeX sources that keep the user's line numbers (PLAN §6.2).
 
-All functions return text; writing files is the caller's job (:func:`write_if_changed`).
+All functions return text; writing files is the caller's job
+(:func:`chapmk.files.write_if_changed`).
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from pathlib import Path
 
-from chapmk.analysis import Analysis, encode_source
+from chapmk.analysis import Analysis
 
 INI_PACKAGE = "chapmk-ini"
 RUNTIME_PACKAGE = "chapmk"
@@ -37,13 +37,17 @@ def format_source(analysis: Analysis) -> str:
 
 
 def run_main(
-    analysis: Analysis, selection: Sequence[str] | None, deny_names: Sequence[str] = ()
+    analysis: Analysis,
+    selection: Sequence[str] | None,
+    deny_names: Sequence[str] = (),
+    list_suffixes: Sequence[str] = (),
 ) -> str:
     """Per-run main file for a run with the format.
 
     Lines ``1..s-1`` become empty lines (they are in the format). Line ``s-1`` gets
     ``\\csname endofdump\\endcsname``, the driver parameters for chapmk.sty (extra run-local
-    register names ``deny_names``, config ``[state] ignore``), ``\\usepackage{chapmk}`` and, if
+    register names ``deny_names``, config ``[state] ignore``; the list files ``list_suffixes`` that
+    get unit markers), ``\\usepackage{chapmk}`` and, if
     ``selection`` is not ``None``, ``\\includeonly{...}`` (an empty selection gives a glue-only
     run). The rest is verbatim, so line numbers equal the user's main file.
     """
@@ -53,6 +57,9 @@ def run_main(
     if deny_names:
         names = ",".join(deny_names)
         prefix += f"\\expandafter\\def\\csname chapmk@denynames\\endcsname{{{names}}}"
+    if list_suffixes:
+        exts = ",".join(s.lstrip(".") for s in list_suffixes)
+        prefix += f"\\expandafter\\def\\csname chapmk@listexts\\endcsname{{{exts}}}"
     prefix += f"\\usepackage{{{RUNTIME_PACKAGE}}}"
     if selection is not None:
         prefix += "\\includeonly{" + ",".join(selection) + "}"
@@ -69,14 +76,3 @@ def full_mode_input(analysis: Analysis) -> str:
     """TeX command-line input for full-mode and reference runs: the unmodified main file with
     ``chapmk-ini`` loaded before ``\\documentclass`` (externalize neutralisation, §6.4.1)."""
     return f"\\RequirePackage{{{INI_PACKAGE}}}\\input{{{analysis.main.name}}}"
-
-
-def write_if_changed(path: Path, text: str) -> bool:
-    """Write ``text`` (exact bytes, see :func:`chapmk.analysis.encode_source`) unless the file
-    already has this content. Returns whether the file was written."""
-    data = encode_source(text)
-    if path.is_file() and path.read_bytes() == data:
-        return False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(data)
-    return True

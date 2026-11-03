@@ -6,7 +6,6 @@ Library used by the acceptance tests and by ``chapmk check`` (M3). Needs poppler
 
 from __future__ import annotations
 
-import hashlib
 import os
 import re
 import tempfile
@@ -18,6 +17,7 @@ from typing import Any
 import pikepdf
 
 from chapmk.errors import ToolError
+from chapmk.files import digest
 from chapmk.proc import run
 
 DPI = 150
@@ -159,7 +159,7 @@ def _rasters(pdf: Path, workdir: Path, dpi: int, chunk: int = 25) -> list[str]:
                 f"pdftoppm failed on {pdf} pages {first}-{last}: {r.output.strip()[-300:]}"
             )
         for f in files:
-            digests.append(hashlib.sha256(f.read_bytes()).hexdigest())
+            digests.append(digest(f))
             f.unlink()
     return digests
 

@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-import shutil
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -29,12 +28,13 @@ from chapmk.aux import (
 )
 from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import ToolError
+from chapmk.facts import DEFAULT_LIST_SUFFIXES, derived_suffixes
+from chapmk.files import copy_atomic, digest, write_if_changed
 from chapmk.fullbuild import NOMENCL_STYLE
 from chapmk.layout import Layout
 from chapmk.predict import SegmentVectors, normalized
 from chapmk.proc import run
 from chapmk.records import RunRecords, read_nomenclature
-from chapmk.runner import DERIVED_SUFFIXES
 from chapmk.state import SegmentArtifact, State
 from chapmk.texdist import TexDistribution
 from chapmk.tools import (
@@ -46,7 +46,6 @@ from chapmk.tools import (
 )
 
 #: list files written by every run (glue typesets them); .bbl and .nls come from the tools
-LIST_SUFFIXES = tuple(s for s in DERIVED_SUFFIXES if s not in (".bbl", ".nls"))
 
 
 def segments(analysis: Analysis) -> list[str]:
@@ -55,7 +54,7 @@ def segments(analysis: Analysis) -> list[str]:
 
 
 def _digest(path: Path) -> str | None:
-    return hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+    return digest(path) if path.is_file() else None
 
 
 @dataclass
@@ -119,7 +118,9 @@ class CanonView:
         ]
 
 
-def read_canon(analysis: Analysis, canon: Path) -> CanonView:
+def read_canon(
+    analysis: Analysis, canon: Path, list_suffixes: Sequence[str] = DEFAULT_LIST_SUFFIXES
+) -> CanonView:
     job = analysis.jobname
     main_path = canon / f"{job}.aux"
     main = statements(read_lines(main_path)) if main_path.is_file() else []
@@ -131,7 +132,7 @@ def read_canon(analysis: Analysis, canon: Path) -> CanonView:
     values.update(cite_values(canon / f"{job}.bbl", main))
     h = hashlib.sha256()
     digests = {}
-    for suffix in DERIVED_SUFFIXES:
+    for suffix in derived_suffixes(list_suffixes):
         digests[suffix] = _digest(canon / f"{job}{suffix}")
         h.update(f"{suffix}:{digests[suffix]}\n".encode())
     return CanonView(main, unit_aux, values, h.hexdigest()[:16], digests)
@@ -162,7 +163,7 @@ def commit_run(
     for k, inc in enumerate(analysis.includes, start=1):
         if f"U{k}" in compiled:
             (canon / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(run_dir / inc.aux_name, canon / inc.aux_name)
+            copy_atomic(run_dir / inc.aux_name, canon / inc.aux_name)
     for seg in taken:
         state.segments[seg] = SegmentArtifact(
             run_name, tuple(p.index for p in recs.pages if p.segment == seg)
@@ -195,7 +196,7 @@ def commit_run(
         [a for s in order for a in state.aggregates.get(s, [])],
         pages,
     )
-    _write_if_changed(old_path, "\n".join(canonical) + "\n")
+    write_if_changed(old_path, "\n".join(canonical) + "\n")
     bcf = run_dir / f"{job}.bcf"
     if bcf.is_file():
         by_seg = citations_by_segment(
@@ -208,7 +209,7 @@ def commit_run(
         entries = read_nomenclature(nlo) if nlo.is_file() else {}
         for seg in taken:
             entries[seg] = recs.nomenclature.get(seg, [])
-        if _write_if_changed(nlo, nomenclature_file(order, entries)):
+        if write_if_changed(nlo, nomenclature_file(order, entries)):
             (canon / _NLO_CHANGED).touch()
 
 
@@ -258,13 +259,21 @@ def splice_list(base: str, sections: Mapping[str, list[str]]) -> str | None:
     return "".join(out)
 
 
-def commit_lists(analysis: Analysis, layout: Layout, state: State, last_run: str) -> bool:
-    """Canonical list files: the last run's, with each unit's section from the run that
-    committed the unit (a parallel batch: no run read all new contributions). Returns False
-    if markers are missing (the list files then come from the last run unchanged)."""
+def commit_lists(
+    analysis: Analysis,
+    layout: Layout,
+    state: State,
+    last_run: str,
+    batch_runs: Sequence[str] = (),
+) -> bool:
+    """Canonical list files: the last run's, with the section of each unit committed by
+    another run of the batch (``batch_runs``) from that run (a parallel batch: no run read
+    all new contributions). The sections of the other units are right in the last run: it
+    wrote them from their canonical aux. Returns False if markers are missing (the list
+    files then come from the last run unchanged)."""
     canon, job = layout.canon_dir, analysis.jobname
     complete = True
-    for suffix in LIST_SUFFIXES:
+    for suffix in state.list_suffixes:
         src, dst = layout.runs_dir / last_run / f"{job}{suffix}", canon / f"{job}{suffix}"
         if not src.is_file():
             dst.unlink(missing_ok=True)
@@ -273,7 +282,7 @@ def commit_lists(analysis: Analysis, layout: Layout, state: State, last_run: str
         sections: dict[str, list[str]] = {}
         for k in range(1, len(analysis.includes) + 1):
             run = state.segments[f"U{k}"].run
-            if run == last_run:
+            if run == last_run or run not in batch_runs:
                 continue
             other = layout.runs_dir / run / f"{job}{suffix}"
             found = (
@@ -288,24 +297,18 @@ def commit_lists(analysis: Analysis, layout: Layout, state: State, last_run: str
         spliced = splice_list(base, sections)
         if spliced is None:
             complete, spliced = False, base
-        _write_if_changed(dst, spliced)
+        write_if_changed(dst, spliced)
     return complete
 
 
-def list_files(directory: Path, job: str) -> dict[str, bytes | None]:
+def list_files(
+    directory: Path, job: str, suffixes: Sequence[str] = DEFAULT_LIST_SUFFIXES
+) -> dict[str, bytes | None]:
     """Contents of the run-written list files (``.toc`` ...) in ``directory``."""
     return {
         s: (directory / f"{job}{s}").read_bytes() if (directory / f"{job}{s}").is_file() else None
-        for s in LIST_SUFFIXES
+        for s in suffixes
     }
-
-
-def _write_if_changed(path: Path, text: str) -> bool:
-    data = text.encode("utf-8", "surrogateescape")
-    if path.is_file() and path.read_bytes() == data:
-        return False
-    path.write_bytes(data)
-    return True
 
 
 def run_tools(
@@ -341,7 +344,7 @@ def run_tools(
                 text = run_bcf.read_text(encoding="utf-8", errors="surrogateescape")
                 blocks.update(datalists(text))
         patched = with_datalists(patched, blocks)
-        if _write_if_changed(target, patched) or not (canon / f"{job}.bbl").is_file():
+        if write_if_changed(target, patched) or not (canon / f"{job}.bbl").is_file():
             r = run(
                 dist.biber(job, canon), cwd=layout.shadow_dir, env=env, log_path=canon / "biber.out"
             )

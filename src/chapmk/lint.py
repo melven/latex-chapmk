@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import chapmk
 from chapmk.texsource import LineIndex, strip_comments
 
 #: hits only outside an explicit group
@@ -125,7 +126,7 @@ def lint_files(
     """Hits in the TeX sources among ``names`` (relative to ``source_dir``). ``cache`` maps a
     digest of file name, content and options to the file's hits (as lists, JSON-ready);
     entries are added for linted files."""
-    options = json.dumps([sorted(allow), sorted(verbatim), sorted(shortverb)])
+    options = json.dumps([chapmk.__version__, sorted(allow), sorted(verbatim), sorted(shortverb)])
     hits: list[LintHit] = []
     for name in names:
         path = source_dir / name

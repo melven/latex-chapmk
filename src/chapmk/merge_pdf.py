@@ -11,12 +11,12 @@ from typing import Any
 import pikepdf
 from pikepdf import Array, Dictionary, Name, String
 
-from chapmk.errors import ChapmkError
+from chapmk.errors import FallbackError
 
 _DUMMY = re.compile(r"name\{([^}]*)\} has been referenced but does not exist")
 
 
-class MergeError(ChapmkError):
+class MergeError(FallbackError):
     """The merge cannot reproduce the document (missing destination, ...); fall back."""
 
 

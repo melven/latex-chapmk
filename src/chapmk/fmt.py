@@ -9,12 +9,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+import chapmk
 from chapmk.analysis import Analysis
 from chapmk.errors import TexError
-from chapmk.gensrc import format_source, write_if_changed
+from chapmk.files import digest, write_atomic, write_if_changed
+from chapmk.gensrc import format_source
 from chapmk.layout import Layout
 from chapmk.logs import first_error, map_paths
 from chapmk.proc import run
+from chapmk.shadow import changed_signatures, external_inputs, read_inputs, stat_signatures
 from chapmk.texdist import TEX_DIR, TexDistribution
 
 FORMAT_NAME = "pre"
@@ -33,7 +36,7 @@ class FormatInfo:
 def format_stamp(analysis: Analysis, dist_version: str) -> str:
     """Everything the format and the canonical state depend on (§6.3.1): the ``pre``
     fingerprint (lines and inlined inputs), the split line, the distribution version,
-    chapmk-ini.sty and chapmk.sty."""
+    chapmk-ini.sty, chapmk.sty and the driver version (record parsing, state semantics)."""
     ini = (TEX_DIR / "chapmk-ini.sty").read_bytes()
     runtime = (TEX_DIR / "chapmk.sty").read_bytes()
     data = {
@@ -43,8 +46,48 @@ def format_stamp(analysis: Analysis, dist_version: str) -> str:
         "ini": hashlib.sha256(ini).hexdigest(),
         # not in the format, but its records are the canonical state's: a change means cold
         "runtime": hashlib.sha256(runtime).hexdigest(),
+        "chapmk": chapmk.__version__,
     }
     return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
+
+
+def _read_stamp(stamp_file: Path) -> tuple[str, dict[str, str], dict[str, str]]:
+    """(stamp, source inputs, distribution inputs) of a format; empty if missing or
+    unreadable."""
+    try:
+        data = json.loads(stamp_file.read_text())
+        return (
+            str(data["stamp"]),
+            {str(k): str(v) for k, v in data["inputs"].items()},
+            {str(k): str(v) for k, v in data["dist"].items()},
+        )
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return "", {}, {}
+
+
+def format_inputs(layout: Layout) -> dict[str, str]:
+    """Source files read by the format build (local class, packages, ``.cfg`` files before the
+    split point; relative to the source directory) with their digests at the build. They are
+    global inputs of the canonical state: a change means a cold build and a new format."""
+    return _read_stamp(layout.fmt_dir / STAMP_FILE)[1]
+
+
+def format_dist_inputs(layout: Layout) -> dict[str, str]:
+    """Distribution files read by the format build with their stat signatures
+    (:func:`chapmk.shadow.stat_signatures`): an update (``tlmgr``) means a new format and a
+    cold build, the pdfTeX banner changes only yearly (C4)."""
+    return _read_stamp(layout.fmt_dir / STAMP_FILE)[2]
+
+
+def internal_dirs(layout: Layout) -> tuple[Path, ...]:
+    """Directories whose files are not distribution inputs (:func:`external_inputs`)."""
+    return (layout.shadow_dir, layout.build_dir, layout.source_dir)
+
+
+def _current(source_dir: Path, inputs: Mapping[str, str]) -> bool:
+    return all(
+        (source_dir / n).is_file() and digest(source_dir / n) == d for n, d in inputs.items()
+    )
 
 
 def ensure_format(
@@ -59,7 +102,13 @@ def ensure_format(
     fmt_file = fmt_dir / f"{FORMAT_NAME}.fmt"
     stamp_file = fmt_dir / STAMP_FILE
     stamp = format_stamp(analysis, dist.version)
-    if fmt_file.is_file() and stamp_file.is_file() and stamp_file.read_text() == stamp:
+    old_stamp, inputs, dist_inputs = _read_stamp(stamp_file)
+    if (
+        fmt_file.is_file()
+        and old_stamp == stamp
+        and _current(layout.source_dir, inputs)
+        and not changed_signatures(dist_inputs)
+    ):
         return FormatInfo(fmt_dir, FORMAT_NAME, rebuilt=False)
 
     fmt_dir.mkdir(parents=True, exist_ok=True)
@@ -90,5 +139,16 @@ def ensure_format(
                 "move that code after the split point (chapmk.toml: split.before)"
             ),
         )
-    stamp_file.write_text(stamp)
+    shadow = Path(layout.shadow_dir).absolute()
+    fls = fmt_dir / f"{FORMAT_NAME}.fls"
+    inputs = {}
+    for path in read_inputs(fls, layout.shadow_dir, layout.shadow_dir):
+        name = path.relative_to(shadow).as_posix()
+        if (layout.source_dir / name).is_file():
+            inputs[name] = digest(layout.source_dir / name)
+    dist_inputs = stat_signatures(external_inputs(fls, layout.shadow_dir, internal_dirs(layout)))
+    write_atomic(
+        stamp_file,
+        json.dumps({"stamp": stamp, "inputs": inputs, "dist": dist_inputs}, sort_keys=True),
+    )
     return FormatInfo(fmt_dir, FORMAT_NAME, rebuilt=True)

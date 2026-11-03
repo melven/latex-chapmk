@@ -81,6 +81,19 @@ def reuse_reference(
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+def _texinputs_hashes(env: Any) -> list[str]:
+    """Hashes of the test's own TEXINPUTS directories (packages outside the source directory,
+    standing in for distribution files): a reference depends on them too."""
+    from chapmk.texdist import TEX_DIR
+
+    out = []
+    for entry in str(env.get("TEXINPUTS", "")).split(os.pathsep):
+        d = Path(entry.rstrip("/"))
+        if entry and d.is_dir() and d.resolve() != TEX_DIR:
+            out.append(source_hash(d))
+    return out
+
+
 @pytest.fixture(scope="session", autouse=True)
 def _cached_check_reference() -> Iterator[None]:
     """`--check` builds its --full reference through ``chapmk.cli.full_build``; reuse cached
@@ -98,6 +111,7 @@ def _cached_check_reference() -> Iterator[None]:
             analysis.main.name,
             str(env.get("SOURCE_DATE_EPOCH")),
             str(kwargs.get("picture_cache")),
+            *_texinputs_hashes(env),
         )
         outputs = {f"ref{s}": layout.output(s) for s in (".pdf", ".synctex.gz", ".log")}
         reuse_reference(key, src, outputs, lambda: real(analysis, layout, dist, env, **kwargs))
