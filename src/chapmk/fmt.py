@@ -147,7 +147,8 @@ def ensure_format(
     log_file = fmt_dir / f"{FORMAT_NAME}.log"
     if not result.ok or not fmt_file.is_file():
         log = log_file.read_text(errors="replace") if log_file.is_file() else result.output
-        err = first_error(map_paths(log, layout.path_map()))
+        mapping = layout.path_map()
+        err = first_error(map_paths(log, mapping), map_paths(result.output, mapping))
         raise TexError("format build failed", log=log_file, first_error=err)
     lost = _lost_state(log_file.read_text(errors="replace"))
     if lost:

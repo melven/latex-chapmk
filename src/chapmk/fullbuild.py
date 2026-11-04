@@ -240,7 +240,10 @@ def full_build(
             return PassResult(True, None, f"{exported} pictures exported" if exported else None)
         log = out / f"{job}.log"
         text = log.read_text(errors="replace") if log.is_file() else result.output
-        return PassResult(False, first_error(map_paths(text, layout.path_map())))
+        mapping = layout.path_map()
+        return PassResult(
+            False, first_error(map_paths(text, mapping), map_paths(result.output, mapping))
+        )
 
     try:
         passes, tools = converge(

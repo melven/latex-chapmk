@@ -114,7 +114,8 @@ def run_one(
     err = None
     if not ok:
         text = log.read_text(errors="replace") if log.is_file() else result.output
-        err = first_error(map_paths(text, run_path_map(analysis, layout, run_dir)))
+        mapping = run_path_map(analysis, layout, run_dir)
+        err = first_error(map_paths(text, mapping), map_paths(result.output, mapping))
     return RunResult(spec, run_dir, ok, result.seconds, err, log)
 
 
