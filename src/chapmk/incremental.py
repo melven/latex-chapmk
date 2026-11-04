@@ -216,15 +216,6 @@ def _eqp_tag(key: str) -> str:
     return m.group(1) if m else key
 
 
-def _lists_now(stored: str, view: CanonView) -> str:
-    """The current value of a unit's stored list dependency (``.bbl,.toc=<hash>``, or the
-    hash of all list files)."""
-    if "=" not in stored:
-        return view.lists
-    names = stored.split("=", 1)[0]
-    return view.lists_key(names.split(",") if names else [])
-
-
 class _UsedCache(dict[str, list[list[Any]]]):
     """A cache that looks up ``old`` entries and holds only the entries used or added (saved
     after the build, so it does not grow with every edit)."""
@@ -319,15 +310,14 @@ class Fixpoint:
     def is_global(self, seg: str) -> bool:
         return bool(self.lint(seg))
 
-    def glue_inputs(self, view: CanonView) -> str:
-        """The glue's inputs (§6.8.2) as ``lists=..;labels=..;aux=..``."""
+    def glue_inputs(self, view: CanonView) -> dict[str, str]:
+        """Hashes of the glue's inputs (§6.8.2): derived files, imported values, aux data."""
         values = imports(self.scan("glue"), view.values)
-        parts = {
+        return {
             "lists": view.lists,
             "labels": short_hash(json.dumps(sorted(values.items()))),
             "aux": short_hash("\n".join(view.glue_data())),
         }
-        return ";".join(f"{k}={v}" for k, v in parts.items())
 
     def pictures_file(self, view: CanonView) -> str:
         """Driver parameters of the picture cache (§6.17) for runs from ``view``: directory and
@@ -375,6 +365,7 @@ class Fixpoint:
     ) -> tuple[dict[str, list[str]], str | None]:
         """Dirty units and glue after committing a run (§6.9.1)."""
         dirty: dict[str, list[str]] = {}
+        moved: list[int] = []  # indices of the units whose entry state changed
 
         def add(seg: str, reason: str) -> None:
             dirty.setdefault(seg, []).append(reason)
@@ -422,21 +413,17 @@ class Fixpoint:
                 if regs:
                     shown = [self.register_names.get(r, f"\\count{r}") for r in regs]
                     add(seg, f"entry state changed ({short_list(shown)})")
+                    moved.append(int(seg[1:]) - 1)
             keys = changed_imports(info.imports, self.scan(seg), post.values)
             if keys:
                 add(seg, f"imports changed ({short_list(keys)})")
-            if info.lists is not None and info.lists != _lists_now(info.lists, post):
+            if info.lists is not None and info.lists != post.lists_key(info.list_reads):
                 add(seg, "list files changed")
             changed = _changed(self.ctx, self.state.segment_files.get(seg, {}))
             if changed:
                 add(seg, f"sources changed ({short_list(changed)})")
         # tail run (§6.9.2, no prediction in M4): recompiling a unit whose entry changed may
         # change its exit, so all later units are compiled with it, in one run
-        moved = [
-            i
-            for i, seg in enumerate(self.units)
-            if any(r.startswith("entry state changed") for r in dirty.get(seg, []))
-        ]
         if moved:
             first = self.a.includes[moved[0]].arg
             for seg in self.units[moved[0] + 1 :]:
@@ -444,8 +431,7 @@ class Fixpoint:
         glue = None
         now = self.glue_inputs(post)
         if now != self.state.glue_inputs:
-            old = dict(p.split("=", 1) for p in self.state.glue_inputs.split(";") if "=" in p)
-            parts = [k for k, v in (p.split("=", 1) for p in now.split(";")) if old.get(k) != v]
+            parts = [k for k, v in now.items() if self.state.glue_inputs.get(k) != v]
             glue = f"glue inputs changed ({', '.join(parts)})"
         changed = self._glue_sources_changed()
         if changed:
@@ -693,6 +679,7 @@ class Fixpoint:
                     imports=imports(scan, pre.values),
                     lists=pre.lists_key(reads) if reads is None or reads else None,
                     self_stable=pre_self[seg] == post.unit_self(seg),
+                    list_reads=None if reads is None else sorted(reads),
                 )
                 changed = set(pre_self[seg]) ^ set(post.unit_self(seg))
                 self.self_changes[seg] = sorted({command_name(s) for s in changed})
