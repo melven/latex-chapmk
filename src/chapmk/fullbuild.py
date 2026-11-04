@@ -19,11 +19,11 @@ from chapmk.analysis import Analysis
 from chapmk.auxfile import read_lines
 from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import TexError
-from chapmk.files import digest, write_atomic
+from chapmk.files import digest, read_log, write_atomic
 from chapmk.fmt import format_stamp, internal_dirs
 from chapmk.gensrc import full_mode_input
 from chapmk.layout import Layout
-from chapmk.logs import first_error, map_paths, short_list
+from chapmk.logs import map_paths, run_error, short_list
 from chapmk.pictures import (
     PICS_FILE,
     check_inputs,
@@ -37,7 +37,7 @@ from chapmk.pictures import (
     store_references,
 )
 from chapmk.proc import run
-from chapmk.publish import copy_bytes, publish
+from chapmk.publish import copy_bytes, publish, publish_all, text_writer
 from chapmk.shadow import external_inputs, read_inputs, stat_signatures
 from chapmk.synctex import rewrite_paths
 from chapmk.texdist import TexDistribution
@@ -167,12 +167,8 @@ def converge(
 
 def _publish_log(analysis: Analysis, layout: Layout) -> Path:
     log = layout.full_dir / f"{analysis.jobname}.log"
-    text = map_paths(log.read_text(errors="replace"), layout.path_map()) if log.is_file() else ""
-
-    def write(tmp: Path) -> None:
-        tmp.write_text(text, encoding="utf-8")
-
-    return publish(write, layout.output(".log"))
+    text = map_paths(read_log(log), layout.path_map()) if log.is_file() else ""
+    return publish(text_writer(text), layout.output(".log"))
 
 
 def full_build(
@@ -238,9 +234,7 @@ def full_build(
                     record_inputs(fig_dir, stat_signatures(dist_files))
                 collect_garbage(fig_dir, {p.key for p in pictures})
             return PassResult(True, None, f"{exported} pictures exported" if exported else None)
-        log = out / f"{job}.log"
-        text = log.read_text(errors="replace") if log.is_file() else result.output
-        return PassResult(False, first_error(map_paths(text, layout.path_map())))
+        return PassResult(False, run_error(out / f"{job}.log", result.output, layout.path_map()))
 
     try:
         passes, tools = converge(
@@ -252,11 +246,18 @@ def full_build(
         raise
     journal.unlink()
 
-    pdf = publish(copy_bytes(out / f"{job}.pdf"), layout.output(".pdf"))
+    # PDF and SyncTeX as one step, SyncTeX first (C16, as the incremental builder)
     syn_src = out / f"{job}.synctex.gz"
-    syn: Path | None = None
+    items: list[tuple[Callable[[Path], None], Path]] = []
     if syn_src.is_file():
-        syn = publish(
-            lambda tmp: rewrite_paths(syn_src, tmp, layout.path_map()), layout.output(".synctex.gz")
+        items.append(
+            (
+                lambda tmp: rewrite_paths(syn_src, tmp, layout.path_map()),
+                layout.output(".synctex.gz"),
+            )
         )
-    return FullBuildResult(pdf, syn, _publish_log(analysis, layout), passes, tuple(tools.runs))
+    items.append((copy_bytes(out / f"{job}.pdf"), layout.output(".pdf")))
+    *syn, pdf = publish_all(items)
+    return FullBuildResult(
+        pdf, syn[0] if syn else None, _publish_log(analysis, layout), passes, tuple(tools.runs)
+    )

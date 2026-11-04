@@ -11,12 +11,11 @@ from chapmk.analysis import Analysis
 from chapmk.auxfile import parse_bookmark, read_lines, segment_slices
 from chapmk.canon import segments
 from chapmk.errors import FallbackError, TexError
-from chapmk.files import digest, write_atomic
+from chapmk.files import digest, read_log, write_atomic
 from chapmk.layout import Layout
-from chapmk.logs import map_paths
 from chapmk.publish import publish, publish_all, text_writer
 from chapmk.records import RunRecords, read_run_records
-from chapmk.runner import RUN_MAIN, run_path_map
+from chapmk.runner import RUN_MAIN, map_run_paths
 from chapmk.state import State
 from chapmk.synctex import SyncTexError
 from chapmk.synctex import merge as merge_synctex
@@ -34,15 +33,10 @@ class MergeFailedError(FallbackError):
     """The PDF or SyncTeX merge failed (falls back to full mode, §6.14)."""
 
 
-def map_run_paths(analysis: Analysis, layout: Layout, run_dir: Path, text: str) -> str:
-    """Map run-directory and shadow paths in ``text`` to the user's paths (§6.13)."""
-    return map_paths(text, run_path_map(analysis, layout, run_dir))
-
-
 def failed_run(analysis: Analysis, layout: Layout, run_dir: Path, err: TexError) -> TexError:
     """Publish the failing run's log (paths mapped) and point the error at it (§6.13)."""
     log = run_dir / f"{analysis.jobname}.log"
-    text = log.read_text(errors="replace") if log.is_file() else ""
+    text = read_log(log) if log.is_file() else ""
     err.log = publish(
         text_writer(map_run_paths(analysis, layout, run_dir, text)), layout.output(".log")
     )
@@ -140,7 +134,7 @@ def publish_state(
         log = layout.runs_dir / run / f"{job}.log"
         texts.append(
             f"%%% chapmk: log of run {run}\n"
-            + map_run_paths(analysis, layout, log.parent, log.read_text(errors="replace"))
+            + map_run_paths(analysis, layout, log.parent, read_log(log))
         )
     publish(text_writer("\n".join(texts)), layout.output(".log"))
     t.lap("log")
@@ -163,7 +157,7 @@ def is_published(layout: Layout) -> bool:
     a plain latexmk run in the same directory)."""
     marker = layout.canon_dir / PUBLISHED_FILE
     try:
-        return bool(json.loads(marker.read_text()) == _published_stamp(layout))
+        return bool(json.loads(marker.read_bytes()) == _published_stamp(layout))
     except (OSError, ValueError):
         return False
 

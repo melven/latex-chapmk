@@ -29,7 +29,7 @@ from chapmk.auxfile import (
 from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import SelfCheckError, ToolError
 from chapmk.facts import DEFAULT_LIST_SUFFIXES, derived_suffixes
-from chapmk.files import copy_atomic, digest, write_if_changed
+from chapmk.files import copy_atomic, digest, read_raw, write_if_changed
 from chapmk.layout import Layout
 from chapmk.predict import SegmentVectors, normalized
 from chapmk.records import RunRecords, read_nomenclature
@@ -47,8 +47,6 @@ from chapmk.tools import (
     run_makeindex,
     with_datalists,
 )
-
-#: list files written by every run (glue typesets them); .bbl and .nls come from the tools
 
 
 def segments(analysis: Analysis) -> list[str]:
@@ -202,9 +200,7 @@ def commit_run(
     write_if_changed(old_path, "\n".join(canonical) + "\n")
     bcf = run_dir / f"{job}.bcf"
     if bcf.is_file():
-        by_seg = citations_by_segment(
-            run_main, bcf.read_text(encoding="utf-8", errors="surrogateescape")
-        )
+        by_seg = citations_by_segment(run_main, read_raw(bcf))
         for seg in taken:
             state.citations[seg] = by_seg.get(seg, [])
     nlo = canon / f"{job}.nlo"
@@ -292,11 +288,11 @@ def commit_lists(
         if not src.is_file():
             dst.unlink(missing_ok=True)
             continue
-        base = src.read_text(encoding="utf-8", errors="surrogateescape")
+        base = read_raw(src)
         if dst.is_file():
             _check_kept_sections(
                 base,
-                dst.read_text(encoding="utf-8", errors="surrogateescape"),
+                read_raw(dst),
                 {f"U{k}" for k in range(1, len(analysis.includes) + 1)}
                 - {
                     seg for seg, art in state.segments.items() if art.run in (*batch_runs, last_run)
@@ -309,11 +305,7 @@ def commit_lists(
             if run == last_run or run not in batch_runs:
                 continue
             other = layout.runs_dir / run / f"{job}{suffix}"
-            found = (
-                unit_sections(other.read_text(encoding="utf-8", errors="surrogateescape"))
-                if other.is_file()
-                else {}
-            )
+            found = unit_sections(read_raw(other)) if other.is_file() else {}
             if f"U{k}" in found:
                 sections[f"U{k}"] = found[f"U{k}"]
             else:
@@ -325,20 +317,10 @@ def commit_lists(
     return complete
 
 
-def list_files(
-    directory: Path, job: str, suffixes: Sequence[str] = DEFAULT_LIST_SUFFIXES
-) -> dict[str, bytes | None]:
-    """Contents of the run-written list files (``.toc`` ...) in ``directory``."""
-    return {
-        s: (directory / f"{job}{s}").read_bytes() if (directory / f"{job}{s}").is_file() else None
-        for s in suffixes
-    }
-
-
 def _check_bcf(patched: str, written: Path) -> None:
     if not written.is_file():
         return
-    tex = written.read_text(encoding="utf-8", errors="surrogateescape")
+    tex = read_raw(written)
     if citekey_lines(patched) != citekey_lines(tex):
         raise SelfCheckError(f"the patched .bcf citations differ from {written}")
     if datalists(patched) != datalists(tex):
@@ -370,15 +352,15 @@ def run_tools(
     bcf = layout.runs_dir / template_run / f"{job}.bcf"
     if bcf.is_file():
         elements = [(seg, e) for seg in segments(analysis) for e in state.citations.get(seg, [])]
-        patched = patch_bcf(bcf.read_text(encoding="utf-8", errors="surrogateescape"), elements)
+        patched = patch_bcf(read_raw(bcf), elements)
         target = canon / f"{job}.bcf"
         blocks: dict[str, str] = {}
         if full_run is None and target.is_file():
-            blocks.update(datalists(target.read_text(encoding="utf-8", errors="surrogateescape")))
+            blocks.update(datalists(read_raw(target)))
         for run_name in [*batch_runs, template_run]:
             run_bcf = layout.runs_dir / run_name / f"{job}.bcf"
             if run_bcf.is_file():
-                text = run_bcf.read_text(encoding="utf-8", errors="surrogateescape")
+                text = read_raw(run_bcf)
                 blocks.update(datalists(text))
         patched = with_datalists(patched, blocks)
         if full_run is not None:

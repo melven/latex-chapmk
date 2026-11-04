@@ -12,12 +12,12 @@ from pathlib import Path
 import chapmk
 from chapmk.analysis import Analysis
 from chapmk.errors import TexError
-from chapmk.files import digest, write_atomic, write_if_changed
+from chapmk.files import changed_files, digest, read_log, write_atomic, write_if_changed
 from chapmk.gensrc import format_source
 from chapmk.layout import Layout
-from chapmk.logs import first_error, map_paths
+from chapmk.logs import run_error
 from chapmk.proc import run
-from chapmk.shadow import changed_signatures, external_inputs, read_inputs, stat_signatures
+from chapmk.shadow import changed_signatures, external_inputs, source_inputs, stat_signatures
 from chapmk.texdist import TEX_DIR, TexDistribution
 
 FORMAT_NAME = "pre"
@@ -60,7 +60,7 @@ def _read_stamp(stamp_file: Path) -> tuple[str, dict[str, str], dict[str, str]]:
     """(stamp, source inputs, distribution inputs) of a format; empty if missing or
     unreadable."""
     try:
-        data = json.loads(stamp_file.read_text())
+        data = json.loads(stamp_file.read_bytes())
         return (
             str(data["stamp"]),
             {str(k): str(v) for k, v in data["inputs"].items()},
@@ -87,12 +87,6 @@ def format_dist_inputs(layout: Layout) -> dict[str, str]:
 def internal_dirs(layout: Layout) -> tuple[Path, ...]:
     """Directories whose files are not distribution inputs (:func:`external_inputs`)."""
     return (layout.shadow_dir, layout.build_dir, layout.source_dir)
-
-
-def _current(source_dir: Path, inputs: Mapping[str, str]) -> bool:
-    return all(
-        (source_dir / n).is_file() and digest(source_dir / n) == d for n, d in inputs.items()
-    )
 
 
 def _lost_state(log: str) -> str | None:
@@ -128,7 +122,7 @@ def ensure_format(
     if (
         fmt_file.is_file()
         and old_stamp == stamp
-        and _current(layout.source_dir, inputs)
+        and not changed_files(layout.source_dir, inputs)
         and not changed_signatures(dist_inputs)
     ):
         return FormatInfo(fmt_dir, FORMAT_NAME, rebuilt=False)
@@ -146,10 +140,9 @@ def ensure_format(
     )
     log_file = fmt_dir / f"{FORMAT_NAME}.log"
     if not result.ok or not fmt_file.is_file():
-        log = log_file.read_text(errors="replace") if log_file.is_file() else result.output
-        err = first_error(map_paths(log, layout.path_map()))
+        err = run_error(log_file, result.output, layout.path_map())
         raise TexError("format build failed", log=log_file, first_error=err)
-    lost = _lost_state(log_file.read_text(errors="replace"))
+    lost = _lost_state(read_log(log_file))
     if lost:
         fmt_file.unlink(missing_ok=True)
         raise TexError(
@@ -160,13 +153,11 @@ def ensure_format(
                 "keep; move that code after the split point (chapmk.toml: format.split_before)"
             ),
         )
-    shadow = Path(layout.shadow_dir).absolute()
     fls = fmt_dir / f"{FORMAT_NAME}.fls"
-    inputs = {}
-    for path in read_inputs(fls, layout.shadow_dir, layout.shadow_dir):
-        name = path.relative_to(shadow).as_posix()
-        if (layout.source_dir / name).is_file():
-            inputs[name] = digest(layout.source_dir / name)
+    inputs = {
+        name: digest(layout.source_dir / name)
+        for name in sorted(source_inputs(fls, layout.shadow_dir, layout.source_dir))
+    }
     dist_inputs = stat_signatures(external_inputs(fls, layout.shadow_dir, internal_dirs(layout)))
     write_atomic(
         stamp_file,

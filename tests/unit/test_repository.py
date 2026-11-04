@@ -18,3 +18,14 @@ def test_paths_are_valid_on_windows() -> None:
         if _RESERVED.match(path.name) or _INVALID.search(path.name):
             bad.append(rel.as_posix())
     assert not bad
+
+
+def test_source_files_are_not_read_in_the_locale_encoding() -> None:
+    """``Path.read_text`` without ``encoding`` decodes with the locale (cp1252 on Windows):
+    TeX files and chapmk's own files are UTF-8 (files.read_raw, files.read_log)."""
+    bad = []
+    for path in sorted((REPO / "src" / "chapmk").glob("*.py")):
+        for n, line in enumerate(path.read_text(encoding="utf-8").split("\n"), start=1):
+            if re.search(r"\.read_text\((?![^)]*encoding=)", line):
+                bad.append(f"{path.name}:{n}")
+    assert not bad

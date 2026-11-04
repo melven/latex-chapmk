@@ -45,7 +45,7 @@ from chapmk.config import Config
 from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
 from chapmk.errors import FallbackError, TexError
 from chapmk.facts import UNIT_HEADINGS, UNSUPPORTED_PACKAGES, derived_suffixes
-from chapmk.files import digest, write_atomic
+from chapmk.files import changed_files, digest, read_log, read_raw, write_atomic
 from chapmk.fmt import (
     FormatInfo,
     ensure_format,
@@ -94,7 +94,7 @@ from chapmk.records import (
     tex_phases,
 )
 from chapmk.runner import RunSpec, prepare_run_dir, run_batch
-from chapmk.shadow import changed_signatures, external_inputs, read_inputs, stat_signatures
+from chapmk.shadow import changed_signatures, external_inputs, source_inputs, stat_signatures
 from chapmk.state import CorruptStateError, State, UnitInputs, load_state, save_state
 from chapmk.texdist import TexDistribution
 from chapmk.texsource import text_lines
@@ -176,28 +176,18 @@ def _segment_files(ctx: Context, recs: RunRecords) -> dict[str, dict[str, str]]:
 
 def _global_files(ctx: Context, run_dir: Path, attributed: set[str]) -> dict[str, str]:
     """Source files read by the run but attributed to no segment, plus biblatex data sources."""
-    names: set[str] = set()
-    for path in read_inputs(
-        run_dir / f"{ctx.job}.fls", ctx.layout.shadow_dir, ctx.layout.shadow_dir
-    ):
-        rel = path.relative_to(Path(ctx.layout.shadow_dir).absolute()).as_posix()
-        if (ctx.analysis.source_dir / rel).is_file() and rel not in attributed:
-            names.add(rel)
+    fls = run_dir / f"{ctx.job}.fls"
+    names = source_inputs(fls, ctx.layout.shadow_dir, ctx.analysis.source_dir) - attributed
     bcf = run_dir / f"{ctx.job}.bcf"
     if bcf.is_file():
-        for m in re.finditer(r"<bcf:datasource[^>]*>([^<]+)</bcf:datasource>", bcf.read_text()):
+        for m in re.finditer(r"<bcf:datasource[^>]*>([^<]+)</bcf:datasource>", read_raw(bcf)):
             if (ctx.analysis.source_dir / m.group(1)).is_file():
                 names.add(Path(m.group(1)).as_posix())
     return _hashes(ctx, names - attributed)
 
 
 def _changed(ctx: Context, files: dict[str, str]) -> list[str]:
-    out = []
-    for name, stored in files.items():
-        path = ctx.analysis.source_dir / name
-        if not path.is_file() or digest(path) != stored:
-            out.append(name)
-    return out
+    return changed_files(ctx.analysis.source_dir, files)
 
 
 def _check_runtime_support(ctx: Context, run_dir: Path, fmt: FormatInfo) -> None:
@@ -205,7 +195,7 @@ def _check_runtime_support(ctx: Context, run_dir: Path, fmt: FormatInfo) -> None
     loaded: set[str] = set()
     for fls in (fmt.directory / f"{fmt.name}.fls", run_dir / f"{ctx.job}.fls"):
         if fls.is_file():
-            lines = text_lines(fls.read_text(errors="replace"))
+            lines = text_lines(read_log(fls))
             loaded |= {Path(line[6:]).name for line in lines if line.startswith("INPUT ")}
     for pkg in sorted(UNSUPPORTED_PACKAGES):
         if f"{pkg}.sty" in loaded:
@@ -276,7 +266,7 @@ class Fixpoint:
         # lint results by file content (persistent: linting all units is the largest Python
         # cost of a typo build otherwise); only entries used by this build are saved
         try:
-            old = json.loads((ctx.layout.canon_dir / LINT_CACHE).read_text())
+            old = json.loads((ctx.layout.canon_dir / LINT_CACHE).read_bytes())
         except (OSError, ValueError):
             old = {}
         self.lint_cache = _UsedCache(old if isinstance(old, dict) else {})
@@ -554,21 +544,11 @@ class Fixpoint:
         entry = observed if observed is not None else self.state.vectors[first].entry
         layout = self._canon_records(self.ctx.layout.canon_dir).layout
         default = bool(layout.get("twoside") and layout.get("openright"))
-        chapter_level = {
-            "part",
-            "part*",
-            "chapter",
-            "chapter*",
-            "addchap",
-            "addchap*",
-            "addpart",
-            "addpart*",
-        }
         # per unit as recorded at its start (a local open=any counts), else the document's
         odd = frozenset(
             f"U{k}"
             for k, inc in enumerate(self.a.includes, start=1)
-            if inc.heading in chapter_level and self.state.openright.get(f"U{k}", default)
+            if inc.heading in UNIT_HEADINGS and self.state.openright.get(f"U{k}", default)
         )
         self.odd = odd
         pred = predict(segments(self.a), self.state.vectors, first, entry, odd)
@@ -957,7 +937,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
     # keyed by the version too: an upgrade may support what forced full mode
     stamp_data = {"fingerprints": asdict(ctx.analysis.fingerprints), "chapmk": chapmk.__version__}
     try:
-        data = json.loads(marker.read_text()) if marker.is_file() else {}
+        data = json.loads(marker.read_bytes()) if marker.is_file() else {}
     except (OSError, ValueError):
         data = {}  # unreadable: ignored (attempt the incremental build)
     if (
