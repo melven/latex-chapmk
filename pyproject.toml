@@ -34,7 +34,7 @@ Issues = "https://github.com/melven/latex-chapmk/issues"
 Changelog = "https://github.com/melven/latex-chapmk/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "pytest-xdist>=3", "pytest-cov>=5", "ruff>=0.6", "mypy>=1.11"]
+dev = ["pytest>=8", "pytest-xdist>=3", "pytest-cov>=5", "hypothesis>=6", "ruff>=0.6", "mypy>=1.11"]
 
 [project.scripts]
 chapmk = "chapmk.cli:main"
