@@ -1,5 +1,6 @@
 """Shared fixtures. Tests marked ``slow`` need TeX Live on PATH (dev container)."""
 
+import functools
 import hashlib
 import json
 import os
@@ -10,17 +11,36 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from hypothesis import settings
+
+# property tests: no deadline (timings vary under xdist), no example database (it would be a
+# shared directory in the working tree)
+settings.register_profile("chapmk", deadline=None, database=None)
+settings.load_profile("chapmk")
 
 REPO = Path(__file__).resolve().parent.parent
 CORPUS = REPO / "tests" / "corpus"
 
 # --- reference cache ----------------------------------------------------------------------------
-# References (the --full build of `--check`, latexmk in the acceptance tests) depend only on the
-# sources, so they are kept in REFERENCE_CACHE by a hash of the source files and reused in later
-# test runs on this machine. Not keyed: the TeX installation and the full-mode code. After a TeX
-# update or an intended change of the --full output: rm -rf .test-cache. CI restores the cache of
-# an earlier run only if the image and the full-mode code are unchanged (.github/workflows/ci.yml).
+# References (the --full build of `--check`, latexmk in the acceptance tests) are kept in
+# REFERENCE_CACHE and reused in later test runs on this machine. Keyed by a hash of the source
+# files, the TeX installation (tex_key) and, for --full references, the full-mode code
+# (FULL_MODE_CODE). Entries of older keys stay unused: rm -rf .test-cache frees the space. CI
+# restores the cache of an earlier run with the same image and full-mode code
+# (.github/workflows/ci.yml; keep its key and FULL_MODE_CODE in sync).
 REFERENCE_CACHE = REPO / ".test-cache"
+FULL_MODE_CODE = tuple(
+    REPO / "src" / "chapmk" / name
+    for name in (
+        "fullbuild.py",
+        "gensrc.py",
+        "texdist.py",
+        "pictures.py",
+        "synctex.py",
+        "publish.py",
+        "tex/chapmk-ini.sty",
+    )
+)
 _SRC_PLACEHOLDER = "/@chapmk-test-source@"
 # files with a sibling .tex of the same stem are build outputs (fig/*.pdf, main.pdf, ...)
 _OUTPUT_SUFFIXES = (".pdf", ".log", ".aux", ".synctex.gz")
@@ -29,9 +49,43 @@ _OUTPUT_SUFFIXES = (".pdf", ".log", ".aux", ".synctex.gz")
 def pytest_report_header(config: pytest.Config) -> list[str]:
     n = len(list(REFERENCE_CACHE.iterdir())) if REFERENCE_CACHE.is_dir() else 0
     return [
-        f"reference cache: {REFERENCE_CACHE} ({n} entries); after a TeX update or an intended "
-        "change of the --full output: rm -rf .test-cache"
+        f"reference cache: {REFERENCE_CACHE} ({n} entries, keyed by sources, TeX installation "
+        "and full-mode code; rm -rf .test-cache frees the space)"
     ]
+
+
+@functools.cache
+def tex_key() -> str:
+    """The TeX installation: pdflatex's version line and the stat signatures of the file name
+    databases (``ls-R``, rewritten by every package update) of the distribution trees."""
+    try:
+        version = subprocess.run(
+            ["pdflatex", "--version"], capture_output=True, text=True, check=False
+        ).stdout.partition("\n")[0]
+        trees = subprocess.run(
+            ["kpsewhich", "-var-value", "TEXMFDIST", "-var-value", "TEXMFLOCAL"],
+            capture_output=True,
+            text=True,
+            check=False,
+        ).stdout.split()
+    except OSError:  # no TeX: nothing to build references with
+        return "no-tex"
+    parts = [version]
+    for tree in trees:
+        db = Path(tree) / "ls-R"
+        if db.is_file():
+            st = db.stat()
+            parts.append(f"{db}:{st.st_size}:{st.st_mtime_ns}")
+    return hashlib.sha256("\0".join(parts).encode()).hexdigest()[:16]
+
+
+@functools.cache
+def full_mode_key() -> str:
+    """Hash of the code the --full output depends on (FULL_MODE_CODE)."""
+    h = hashlib.sha256()
+    for path in FULL_MODE_CODE:
+        h.update(path.read_bytes() + b"\0")
+    return h.hexdigest()[:16]
 
 
 def source_hash(src: Path, *extra: str) -> str:
@@ -55,6 +109,7 @@ def reuse_reference(
     ``build()`` them and store them. SyncTeX files are stored with ``src`` replaced."""
     from chapmk.synctex import rewrite_paths
 
+    key = f"{tex_key()}-{key}"
     entry = REFERENCE_CACHE / key
     if all((entry / name).is_file() for name in outputs):
         for name, target in outputs.items():
@@ -109,6 +164,7 @@ def _cached_check_reference() -> Iterator[None]:
         key = source_hash(
             src,
             "full",
+            full_mode_key(),
             analysis.main.name,
             str(env.get("SOURCE_DATE_EPOCH")),
             str(kwargs.get("picture_cache")),
