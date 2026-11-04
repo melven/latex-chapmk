@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 from _helpers import EPOCH, build, edit, selections
+from conftest import hgb_class_loads_cmap
 
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
 
@@ -86,7 +87,13 @@ def test_compilation_unit_grouping_hgb(
 ) -> None:
     monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = copy_corpus("hgb")
-    assert build(src)[0] == 0
+    rc, rep = build(src)
+    assert rc == 0
+    if hgb_class_loads_cmap():
+        # hgbthesis 2025/02/24 (MiKTeX) loads cmap before the split point: S13 rejects the
+        # format, so every build is a full one with the reason (grouping: T20, thesis corpus)
+        assert rep["mode"] == "full" and "cmap" in rep["reason"], rep.get("reason")
+        return
     edit(src / "chapters" / "usage_details.tex", "param_7 & m", "param_7 & mm")
     rc, rep = build(src, "--check")
     out = capsys.readouterr()

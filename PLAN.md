@@ -687,13 +687,19 @@ cache = true                   # false: pictures inline even with \tikzexternali
 
 All TeX invocations go through a **distribution adapter** (`texdist.py`) with two implementations: `TeXLive` and `MiKTeX`. Driver logic must not hard-code engine flags or search behaviour.
 
-| Topic | TeX Live (all OS) | MiKTeX | Driver rule |
+| Topic | TeX Live (all OS) | MiKTeX (S11, Linux; Windows open) | Driver rule |
 |---|---|---|---|
-| Format build and use | `-ini`, `-fmt=` | `--initialize`, `--undump=` (also `&name`) [S11] | Adapter |
-| Output and aux directories | `-output-directory`, `TEXMF_OUTPUT_DIRECTORY` | `--output-directory`, `--aux-directory`; own search order [S11] | Adapter; S2 is repeated for MiKTeX |
-| On-the-fly package install | n/a | may prompt or block parallel runs | Require "install missing packages: never/always" with no prompting; check at startup, otherwise abort with instructions |
-| `SOURCE_DATE_EPOCH` / `FORCE_SOURCE_DATE` | supported | [S11] | If unsupported: no determinism guarantee; `check` uses a pinned date via a `\today` override in `chapmk-ini.sty` |
-| mylatexformat, biber, makeindex, synctex | available | packages available [S11] | Startup check |
+| Detection | `pdflatex --version` | banner contains "MiKTeX" (on Linux `pdflatex` is `/usr/local/bin/pdflatex`: the path does not tell) | `detect()` by the version banner |
+| Format build | `-ini … "&pdflatex" mylatexformat.ltx` | same argv | Adapter |
+| Format use | `-fmt=<name>` + `TEXFORMATS` (an absolute `-fmt` breaks `-recorder`, S1) | `TEXFORMATS` ignored; `--undump=<absolute path>` (`.fls` complete) | Adapter |
+| Input path | `TEXINPUTS` (trailing separator) | same | – |
+| Output directory, read order | `-output-directory`; the output directory wins once it holds a file (S2) | `-output-directory`; the **working directory is always read first** (S11); no `--aux-directory` needed | Shadow tree (§6.5) required for every input |
+| Log line length | env `max_print_line` | env ignored; `--max-print-line=10000` | Adapter (picture records, error lines) |
+| SyncTeX paths | `<cwd>/./<rel>` | `<cwd>/<rel>` (no `/./`; relative `synctex view` finds nothing) | Path mapping must not assume `/./`; the merged main-file path comes from the adapter; `check` samples with absolute paths |
+| `-recorder` `.fls` | paths relative to `PWD` for the working directory | all absolute; extra `OUTPUT <job>.auxlock` | `read_inputs` resolves both |
+| On-the-fly package install | n/a | unreliable in containers (skips packages silently); dev/CI image: complete MiKTeX, `[MPM]AutoInstall=0`. Windows: open | Require "install missing packages: never/always" with no prompting; check at startup, otherwise abort with instructions |
+| `SOURCE_DATE_EPOCH` / `FORCE_SOURCE_DATE` | supported | supported (`\today`, PDF dates, byte-identical reruns) | – |
+| mylatexformat, biber, makeindex, synctex, latexmk | available | available (biber 2.22) | Startup check |
 
 **OS rules:**
 - **Paths:** use `pathlib` internally; always pass forward slashes to TeX; reject source paths with spaces under `\include` (TeX limitation) with a clear error.
@@ -851,7 +857,8 @@ Each test starts from a built state, applies an edit, runs `chapmk build`, asser
 | S8 | *Done.* Inventory of all aux line kinds produced by the thesis corpus; complete §6.7.2. |
 | S9 | *Done.* pikepdf merge prototype: two runs → merged PDF with working cross-run links, outline, page labels; verified by §3.3 items 1–3. |
 | S10 | *Done.* SyncTeX merge prototype; verified with `synctex view/edit`. |
-| S11 | *Deferred to M9 (needs a Windows CI runner).* MiKTeX: format flags, output/aux-directory read order (repeat S2), on-the-fly install settings, `SOURCE_DATE_EPOCH` support, availability of mylatexformat, biber, makeindex and synctex. |
+| S11 | *Done on Linux* (`docs/spikes/S11.md`, MiKTeX 26.5 in `Dockerfile.miktex`); Windows part in M9 (CI). MiKTeX: format flags, output/aux-directory read order (repeat S2), on-the-fly install settings, `SOURCE_DATE_EPOCH` support, availability of mylatexformat, biber, makeindex and synctex. |
+| S13 | *Planned before 0.9 (R0.9).* pdfTeX state that a format does not keep. Found under MiKTeX with the old `hgbthesis` (2025/02/24), but not MiKTeX-specific (reproduce with TeX Live): (a) font attributes set while fonts load in the format part, e.g. the `cmap` package's ToUnicode CMaps (`\pdffontattr`): text extraction of math differs from `--full` (`𝑥` vs `x`); (b) a colour left open across a page break (`\color{red}` on a title page) is carried to the next page by a plain build but not by a run with the format. Questions: which pdfTeX state is lost in a dump (font attributes, `\pdfglyphtounicode`, colour stacks, other `\pdf…` settings), how to detect it (deny list for the split point, e.g. `cmap`; records), and whether to restore it in `chapmk-ini.sty`, split before it, or fall back. Reproducers for both, then tests. |
 
 **Done when:** all notes except S11 (deferred to M9) are written and the plan is updated.
 
@@ -867,7 +874,7 @@ Each test starts from a built state, applies an edit, runs `chapmk build`, asser
 | **M6** | *Done* (`docs/bench.md`). Benchmarks on large documents (§8.4), time breakdown per phase and resulting optimisations, README (short: usage, assumptions A1–A5, limitations) | §8.4 numbers and breakdown recorded |
 | **M7** | *Done.* Picture cache (§6.17). First spike S12: evaluate TikZ's `external` library under chapmk (per-unit names, figures built via the format in the pool without shell escape, §3.3 equality with inline pictures, cache validity, glue pictures, `remember picture`); **decision point** with the results; then the implementation (active for documents with `\tikzexternalize`, results identical to an externalized build; opt-out in `chapmk.toml`) | S12 note written; typo scenario in a picture-heavy unit reuses its pictures; all scenario and acceptance tests green with the cache |
 | **M8** | *Done* (`docs/review/M8.md`). Engineering review (intermission): reusable functionality and duplication, software design and layering, modularity, dependencies, test coverage and test design; findings fixed or recorded in `docs/review/M8.md`. Known items: config `aux.self`/`aux.ignore` are parsed but not used by the classification; the `.sty` change → cold-build rule makes benchmarks sensitive to package edits | review note written; module maps match the code; all tests green |
-| **R0.9** | *Implemented* (open: tag `v0.9.0`; D2 deferred). First test release 0.9: the "must" items of `docs/review/M8.md` §6. In order: (0) renaming to `latex-chapmk` / `chapmk` (R13), then the build directory per job (C17); (1) stale-output paths C1–C5 with scenarios; (2) robustness C6–C9 with the enabling refactors D1–D4; (3) remove `aux.self`/`aux.ignore` (E3); (4) coverage in CI (T3) and the scenarios T1; (5) release items R1–R5, R9–R12 (packaging, CHANGELOG, README, help, config doc, REUSE, issue template, CONTRIBUTING, history scan, pinned CI image). The cleanup of this plan into a current design document (R7) follows after 0.9 | all "must" items done; `ruff`, `mypy --strict` and the full suite green; wheel smoke test passes; `0.9.0` tagged |
+| **R0.9** | *Implemented* (open: spike S13 (pdfTeX state not kept in a format) and its consequences; tag `v0.9.0`; D2 deferred). First test release 0.9: the "must" items of `docs/review/M8.md` §6. In order: (0) renaming to `latex-chapmk` / `chapmk` (R13), then the build directory per job (C17); (1) stale-output paths C1–C5 with scenarios; (2) robustness C6–C9 with the enabling refactors D1–D4; (3) remove `aux.self`/`aux.ignore` (E3); (4) coverage in CI (T3) and the scenarios T1; (5) release items R1–R5, R9–R12 (packaging, CHANGELOG, README, help, config doc, REUSE, issue template, CONTRIBUTING, history scan, pinned CI image). The cleanup of this plan into a current design document (R7) follows after 0.9 | all "must" items done; `ruff`, `mypy --strict` and the full suite green; wheel smoke test passes; `0.9.0` tagged |
 | **M9** | Spike S11 (MiKTeX), MiKTeX adapter, Windows hardening (§6.16), CI matrix | scenario tests green on all four CI targets |
 | Future | `watch` (F8) | rebuild on change of a recorded input |
 
@@ -878,6 +885,7 @@ Each test starts from a built state, applies an edit, runs `chapmk build`, asser
 | Risk | Mitigation |
 |---|---|
 | mylatexformat incompatibility with a package | Deny list and config `split_before`; S1 |
+| pdfTeX state set in the format part but not dumped (font attributes such as `cmap`'s CMaps, colour across page breaks; found with the old `hgbthesis` under MiKTeX) | S13 before 0.9; acceptance tests on a corpus that triggers it |
 | Partial-run differences not captured by the count-register vector (dimens/skips, `\everypar` state, …; marks of the kernel's mark classes are in the vector since R0.9) | Acceptance tests on every scenario; extend vectors to `\dimen`/`\skip` if needed; S7 |
 | Read-order issues with `-output-directory` | Shadow tree (§6.5) excludes stale build files; S2 |
 | Text-scan import misses (keys built by macros) | Accepted for v1; `check` detects; config option to mark keys global |

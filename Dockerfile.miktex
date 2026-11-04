@@ -1,0 +1,97 @@
+# Dev and CI image for chapmk's MiKTeX backend (M9): Ubuntu 24.04 + MiKTeX + Python tooling.
+#
+#   docker build -f Dockerfile.miktex -t chapmk-miktex .
+#   docker run --rm -it -v "$PWD":/work -w /work chapmk-miktex bash
+#
+# MiKTeX comes from its official Ubuntu repository on one pinned CTAN mirror (MIKTEX_MIRROR;
+# miktex.org/download/ubuntu redirects to the same path on a random mirror). The MiKTeX
+# packages come from the same mirror. The image holds the complete MiKTeX (like the full
+# scheme of the TeX Live image) and on-the-fly installation is off, so tests never use the
+# network and a missing package is an error (PLAN.md §6.16). On-the-fly installation is also
+# unreliable in containers: it silently skipped some packages (xkeyval, biblatex).
+#
+# Behind a proxy: --build-arg HTTPS_PROXY=... (--network host for a local proxy); if it
+# intercepts TLS: --secret id=ca,src=<CA bundle incl. public CAs> (used during the build only).
+FROM ubuntu:24.04
+LABEL org.opencontainers.image.source="https://github.com/melven/latex-chapmk" \
+      org.opencontainers.image.description="chapmk MiKTeX dev and CI image: complete MiKTeX on Ubuntu, Python tooling"
+
+ARG MIKTEX_MIRROR=https://ftp.fau.de/ctan/systems/win32/miktex
+ARG USERNAME=dev
+ARG UID=1000
+ARG GID=1000
+ENV DEBIAN_FRONTEND=noninteractive
+
+# The optional proxy CA is added to the system store for one RUN and removed at its end (apt
+# downloads as user _apt, which cannot read the secret itself). Ubuntu's own archive is http.
+# poppler-utils: pdftoppm/pdftotext for the §3.3 comparison; perl: latexmk (acceptance tests);
+# gnuplot-data: gnuplot-lua-tikz.sty (thesis corpus). Debian puts it directly into
+# /usr/share/texmf/tex/, which MiKTeX does not search for LaTeX files; it is linked into
+# tex/latex/ of a separate MiKTeX root below (as in the TeX Live image).
+RUN --mount=type=secret,id=ca,required=false \
+    set -e; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg python3 python3-venv python3-pip poppler-utils perl git \
+      gnuplot-data; \
+    if [ -s /run/secrets/ca ]; then \
+      cp /run/secrets/ca /usr/local/share/ca-certificates/build-proxy.crt; update-ca-certificates; \
+    fi; \
+    curl -fsSL "$MIKTEX_MIRROR/setup/miktex.org.key" | gpg --dearmor -o /usr/share/keyrings/miktex.gpg; \
+    echo "deb [signed-by=/usr/share/keyrings/miktex.gpg] $MIKTEX_MIRROR/setup/deb noble universe" \
+      > /etc/apt/sources.list.d/miktex.list; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends miktex; \
+    miktexsetup --shared=yes finish; \
+    mpm --admin --set-repository="$MIKTEX_MIRROR/tm/packages/"; \
+    initexmf --admin --set-config-value "[MPM]AutoInstall=0"; \
+    rm -f /usr/local/share/ca-certificates/build-proxy.crt; update-ca-certificates --fresh; \
+    rm -rf /var/lib/apt/lists/*
+
+# Complete MiKTeX without documentation and source files (*__doc, *__source packages): with
+# them the layer has 11.5 GB, too large for the disk of a GitHub runner
+RUN --mount=type=secret,id=ca,required=false \
+    set -e; \
+    if [ -s /run/secrets/ca ]; then \
+      cp /run/secrets/ca /usr/local/share/ca-certificates/build-proxy.crt; update-ca-certificates; \
+    fi; \
+    initexmf --admin --set-config-value "[MPM]InstallDocFiles=0"; \
+    initexmf --admin --set-config-value "[MPM]InstallSourceFiles=0"; \
+    mpm --admin --verbose --package-level=complete --upgrade; \
+    mpm --admin --update; \
+    d=/opt/texmf-system/tex/latex/gnuplot-lua-tikz; mkdir -p "$d"; \
+    ln -s /usr/share/texmf/tex/*gnuplot-lua-tikz* "$d"/; \
+    initexmf --admin --register-root=/opt/texmf-system; \
+    initexmf --admin --update-fndb; \
+    initexmf --admin --mkmaps; \
+    rm -f /usr/local/share/ca-certificates/build-proxy.crt; update-ca-certificates --fresh
+
+# Python venv outside the repo; on PATH for every shell
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv "$VIRTUAL_ENV"
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+COPY requirements-dev.txt /tmp/requirements-dev.txt
+RUN --mount=type=secret,id=ca,required=false \
+    if [ -s /run/secrets/ca ]; then export PIP_CERT=/run/secrets/ca; fi; \
+    pip install --no-cache-dir -r /tmp/requirements-dev.txt
+
+# Non-root user: MiKTeX warns about elevated privileges (shared installation, admin mode only
+# during the build)
+RUN set -e; \
+    if ! getent group "$GID" >/dev/null; then groupadd -g "$GID" "$USERNAME"; fi; \
+    if ! getent passwd "$UID" >/dev/null; then useradd -m -u "$UID" -g "$GID" -s /bin/bash "$USERNAME"; fi; \
+    chown -R "$UID:$GID" "$VIRTUAL_ENV"
+USER ${UID}:${GID}
+
+# Fail the build early if a required tool or file is missing (as the TeX Live image)
+RUN set -e; \
+    for t in pdflatex latexmk biber makeindex synctex kpsewhich initexmf mpm pdftoppm pdftotext; do \
+      command -v "$t" >/dev/null || { echo "missing: $t"; exit 1; }; \
+    done; \
+    for f in mylatexformat.ltx nomencl.sty biblatex.sty hyperref.sty gnuplot-lua-tikz.sty; do \
+      kpsewhich "$f" >/dev/null || { echo "missing: $f"; exit 1; }; \
+    done; \
+    pdflatex --version | head -1
+
+ENV max_print_line=10000
+WORKDIR /work
