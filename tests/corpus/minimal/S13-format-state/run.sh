@@ -6,7 +6,8 @@
 #   colorstack        \pdfcolorstackinit before the split: TeX error "Unknown color stack number 1"
 #   colorstack-driver xcolor with TeX Live 2026's driver (stack 0 only): PASS
 #   colorleak-textpos  a colour set in a textpos block on the title page reaches the next page
-#                     in a plain build, not with the format: FAIL (raster of page 2), undetected;
+#                     in a plain build, not with the format (xcolor's push on the main vertical
+#                     list is not dumped): PASS since the replay, FAIL (page 2) before;
 #                     without chapmk: colorleak-textpos/compare.sh (TeX Live and MiKTeX alike)
 #   catalog-info      \pdfcatalog, \pdfinfo before the split: PASS, but /PageMode and /Keywords
 #                     are missing in the incremental PDF (printed below; check does not compare them)
