@@ -9,6 +9,9 @@ document, in parallel, and merges them into one PDF and SyncTeX file that look l
 full build (`chapmk check` verifies this). Speeds up recompiling after small changes from
 minutes to <5 seconds.
 
+## Declaration of AI usage
+Most of this software was generated using the AI model Claude Opus 5.5 (with effort = High).
+
 ## Install
 
 ```
