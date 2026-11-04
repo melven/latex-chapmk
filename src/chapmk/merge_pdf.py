@@ -210,13 +210,13 @@ def merge_pdf(
         merged.Root.PageLabels = Dictionary(Nums=page_labels([(p.value, p.label) for p in pages]))
         _check_page_labels(merged, pages, sources)
         cat = sources.get(catalog_from)
-        for key in ("/PageMode", "/PageLayout", "/ViewerPreferences"):
-            if key in cat.Root:
-                value = cat.Root[key]
-                if isinstance(value, (Dictionary, Array)):  # copy containers via indirect objects
-                    value = value if value.is_indirect else cat.make_indirect(value)
-                    value = merged.copy_foreign(value)
-                merged.Root[key] = value
+        pages_of = {
+            objgen: where.get((catalog_from, i))
+            for objgen, i in sources.index[catalog_from].items()
+        }
+        for key, value in cat.Root.items():  # \pdfcatalog, hyperref's /OpenAction, ... (S13)
+            if str(key) not in _CATALOG_MERGED:
+                merged.Root[key] = _copy_value(value, merged, pages_of)
         merged.docinfo = merged.copy_foreign(cat.docinfo)  # type: ignore[assignment]
         tmp = out.with_name(f".{out.name}.merge-tmp")
         merged.save(tmp, deterministic_id=True)
@@ -241,6 +241,29 @@ def _check_page_labels(merged: pikepdf.Pdf, pages: Sequence[PageSource], sources
                 f"page {i + 1}: merged page label {got!r}, the run wrote {expected!r} "
                 f"({src.pdf.parent.name})"
             )
+
+
+#: catalog entries the merge builds itself; all others are copied from the catalog run
+_CATALOG_MERGED = {"/Type", "/Pages", "/Outlines", "/PageLabels", "/Names", "/Dests"}
+
+
+def _copy_value(value: Any, merged: pikepdf.Pdf, pages_of: dict[Any, int | None]) -> Any:
+    """``value`` of another PDF for ``merged``: page references point to the merged page
+    (:class:`MergeError` if that page was not taken), streams and other objects are copied."""
+    if isinstance(value, Dictionary) and value.is_indirect and value.objgen in pages_of:
+        target = pages_of[value.objgen]
+        if target is None:
+            raise MergeError("a catalog entry refers to a page that was not taken")
+        return merged.pages[target].obj
+    if isinstance(value, pikepdf.Stream):
+        return merged.copy_foreign(value)
+    if isinstance(value, Dictionary):
+        out = Dictionary({k: _copy_value(v, merged, pages_of) for k, v in value.items()})
+        return merged.make_indirect(out) if value.is_indirect else out
+    if isinstance(value, Array):
+        arr = Array([_copy_value(v, merged, pages_of) for v in value])
+        return merged.make_indirect(arr) if value.is_indirect else arr
+    return value
 
 
 def _font_name(desc: Any) -> str:

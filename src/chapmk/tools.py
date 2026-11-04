@@ -1,14 +1,23 @@
-"""biber and makeindex on the canonical state (PLAN §6.10): ``.bcf`` patch, nomenclature."""
+"""biber and makeindex (PLAN §6.10): ``.bcf`` patch, nomenclature, and the one runner of
+both tools for the full and the incremental builder (D6) with their errors (E7)."""
 
 from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 
 from chapmk.aux import segment_slices
-from chapmk.errors import FallbackError
+from chapmk.errors import FallbackError, ToolError
+from chapmk.proc import run
 from chapmk.records import NLO_MARKER
+from chapmk.texdist import TexDistribution
 from chapmk.texsource import text_lines
+
+#: makeindex style of nomencl
+NOMENCL_STYLE = "nomencl.ist"
+#: at most this many error lines of a tool are shown
+MAX_ERRORS = 5
 
 _CITEKEY = re.compile(r'^(\s*)<bcf:citekey order="(\d+)"( intorder="\d+")?(.*)$')
 _SECTION = re.compile(r'<bcf:section number="(\d+)">')
@@ -16,6 +25,67 @@ _SECTION = re.compile(r'<bcf:section number="(\d+)">')
 
 class ToolInputError(FallbackError):
     """The tool inputs cannot be assembled (e.g. several refsections with citations)."""
+
+
+def _shown(lines: Sequence[str]) -> str:
+    more = f"\n  ... ({len(lines) - MAX_ERRORS} more)" if len(lines) > MAX_ERRORS else ""
+    return "".join(f"\n  {line}" for line in lines[:MAX_ERRORS]) + more
+
+
+def biber_errors(blg: Path) -> list[str]:
+    """The ``ERROR`` messages of a biber log (``.blg``), without the line prefixes."""
+    if not blg.is_file():
+        return []
+    lines = text_lines(blg.read_text(encoding="utf-8", errors="replace"))
+    return [line.split("> ERROR - ", 1)[1] for line in lines if "> ERROR - " in line]
+
+
+def makeindex_errors(ilg: Path) -> list[str]:
+    """The errors of a makeindex transcript (``.ilg``): each ``!!`` line with the next one."""
+    if not ilg.is_file():
+        return []
+    lines = text_lines(ilg.read_text(encoding="utf-8", errors="replace"))
+    return [
+        f"{line.strip()} {lines[i + 1].strip() if i + 1 < len(lines) else ''}".strip()
+        for i, line in enumerate(lines)
+        if line.startswith("!!")
+    ]
+
+
+def run_biber(
+    dist: TexDistribution, job: str, outdir: Path, cwd: Path, env: Mapping[str, str]
+) -> None:
+    """biber on ``outdir/<job>.bcf`` (cwd: shadow tree, for the data sources). A failure
+    raises :class:`ToolError` with the ``ERROR`` lines of the ``.blg`` (E7)."""
+    r = run(dist.biber(job, outdir), cwd=cwd, env=env, log_path=outdir / "biber.out")
+    if not r.ok:
+        blg = outdir / f"{job}.blg"
+        found = biber_errors(blg) or [r.output.strip()[-500:]]
+        raise ToolError(f"biber failed (see {blg}):{_shown(found)}")
+
+
+def run_makeindex(
+    dist: TexDistribution,
+    input_name: str,
+    output_name: str,
+    style: str | None,
+    outdir: Path,
+    env: Mapping[str, str],
+    log_name: str = "makeindex.out",
+) -> None:
+    """makeindex in ``outdir`` (relative names). A failure raises :class:`ToolError` with the
+    errors of the transcript (E7). Input errors makeindex reports with exit code 0 (e.g. for
+    the segment markers of the canonical ``.nlo``) are not failures, as with latexmk."""
+    r = run(
+        dist.makeindex(input_name, output_name, style),
+        cwd=outdir,
+        env=env,
+        log_path=outdir / log_name,
+    )
+    ilg = outdir / f"{Path(input_name).stem}.ilg"
+    if not r.ok:
+        found = makeindex_errors(ilg) or [r.output.strip()[-500:]]
+        raise ToolError(f"makeindex failed on {input_name} (see {ilg}):{_shown(found)}")
 
 
 def citekey_lines(bcf: str) -> list[str]:

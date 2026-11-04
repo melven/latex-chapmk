@@ -20,11 +20,11 @@ from chapmk.config import Config, load_config
 from chapmk.errors import ChapmkError, ConfigError, InternalError, TexError
 from chapmk.fullbuild import full_build
 from chapmk.incremental import Context, build, load_epoch
-from chapmk.layout import DEFAULT_BUILD_DIR, Layout, make_layout
+from chapmk.layout import DEFAULT_BUILD_DIR, Layout, build_dir_of, make_layout
 from chapmk.lock import LOCK_FILE, build_lock
 from chapmk.proc import Interrupted, allow_runs, terminate_all
 from chapmk.shadow import sync_project_shadow
-from chapmk.state import load_state
+from chapmk.state import CorruptStateError, load_state
 from chapmk.texdist import TexDistribution, detect
 from chapmk.timing import Timings
 
@@ -157,7 +157,10 @@ def _build_locked(
         check_tools()  # before the build, not after it
     timings.lap("analysis")
     epoch = int(os.environ.get("SOURCE_DATE_EPOCH", int(time.time())))
-    state = load_state(layout.canon_dir)  # list files found earlier: excluded too
+    try:
+        state = load_state(layout.canon_dir)  # list files found earlier: excluded too
+    except CorruptStateError:
+        state = None  # the builder starts cold and says why
     suffixes = state.list_suffixes if state is not None else ()
     sync_project_shadow(analysis, layout.shadow_dir, layout.build_dir, suffixes)
     timings.lap("shadow")
@@ -217,23 +220,23 @@ def _check(
 
 def cmd_clean(args: argparse.Namespace, cwd: Path) -> int:
     config = load_config(args.main, cwd, build_dir=args.build_dir)
-    layout = make_layout(config, analyse(config))
-    if not layout.build_dir.exists():
+    build_dir = build_dir_of(config)  # no analysis: a broken document can be cleaned (E7)
+    if not build_dir.exists():
         return 0
-    if not (layout.build_dir / BUILD_DIR_MARKER).is_file():
-        raise ConfigError(f"refusing to delete {layout.build_dir}: not a chapmk build directory")
-    with build_lock(layout.build_dir, wait=not args.no_wait, say=_say):
-        for entry in layout.build_dir.iterdir():  # the open lock file last (Windows)
+    if not (build_dir / BUILD_DIR_MARKER).is_file():
+        raise ConfigError(f"refusing to delete {build_dir}: not a chapmk build directory")
+    with build_lock(build_dir, wait=not args.no_wait, say=_say):
+        for entry in build_dir.iterdir():  # the open lock file last (Windows)
             if entry.name == LOCK_FILE:
                 continue
             if entry.is_dir() and not entry.is_symlink():
                 shutil.rmtree(entry)
             else:
                 entry.unlink()
-    (layout.build_dir / LOCK_FILE).unlink(missing_ok=True)
-    layout.build_dir.rmdir()
-    _say(f"removed {layout.build_dir}")
-    root = layout.build_dir.parent
+    (build_dir / LOCK_FILE).unlink(missing_ok=True)
+    build_dir.rmdir()
+    _say(f"removed {build_dir}")
+    root = build_dir.parent
     if root.name == DEFAULT_BUILD_DIR and not any(root.iterdir()):
         root.rmdir()  # the default build root holds no other job
     return 0

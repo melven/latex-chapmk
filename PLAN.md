@@ -204,7 +204,7 @@ pdflatex -ini -jobname=pre -output-directory=.chapmk/fmt "&pdflatex" mylatexform
 
 #### 6.3.3 Deferral (`chapmk-ini.sty`, format mode only)
 
-`\openout` calls during the dump (e.g. `\makenomenclature`) need no handling: mylatexformat replays them at runtime (S1). The deferral table in `chapmk-ini.sty` is kept, empty, as a contingency for state that is opened or frozen by other means.
+`\openout` calls during the dump (e.g. `\makenomenclature`) need no handling: mylatexformat replays them at runtime (S1). pdfTeX does not dump the entries of `\pdfcatalog`, `\pdfinfo`, `\pdfnames` and `\pdftrailer` (S13): in format builds (`\chapmk@formatbuild`, set by the format source) `chapmk-ini.sty` wraps them and their expl3 names, records each call with a braced argument in the deferral table `\chapmk@deferred`, and chapmk.sty replays the table at the split point of every run, then restores the primitives. Other state a dump loses is detected by the format build and makes it fail, so the build falls back to full mode (§6.14, S13): immediate PDF objects (pdfTeX's `dangling objects discarded`, e.g. the `cmap` package), colour stacks (probe `\pdfcolorstackinit` at the end of the format source), unrecorded catalog calls, form xobjects and images. Splitting before `cmap` does not help: the fonts it must reach are already loaded in the format part.
 
 ### 6.4 LaTeX packages
 
@@ -333,7 +333,7 @@ Per segment, `state.json` stores:
 - **Incremental step:** the dirty compilation units (attributed files changed) are compiled in one run from `canon/`. They are accepted only if the unit aux, the unit's main-aux slice and its nomenclature entries equal the canonical ones. The comparison ignores structural lines (`\relax`, `\providecommand`), which packages write once per run into whichever aux comes first, and replaces bookmark ids by levels (run-local, S6).
   - Then glue and all other units are still valid: only the unit's pages and files are committed.
   - Otherwise: cold build with the reason. M4 replaces this with the dependency model and the fixpoint.
-- **Cold-build triggers:** no state, format stamp (incl. the chapmk version), main-file fingerprints, include list, a glue segment's attributed files, global inputs or distribution files changed. Any change of the `state.json` semantics bumps `STATE_VERSION`. **Interrupted builds (C7):** every file kept between builds is written atomically (temp file + rename); while a batch commits (canon files, tools, state), `canon/.in-progress` exists, and a build that finds it is cold (reason: interrupted). Full mode keeps `full/.in-progress` while passes run; a build that finds it starts from an empty `full/`. (A planned-commit object that applies all writes at once, D2 of the review, is deferred: the journal gives the same safety.) `full-only.json` (persistent full-mode fallback) is keyed by the main fingerprints and the chapmk version.
+- **Cold-build triggers:** no state, format stamp (incl. the chapmk version), main-file fingerprints, include list, a glue segment's attributed files, global inputs or distribution files changed. Any change of the `state.json` semantics bumps `STATE_VERSION`. An unreadable `state.json` is a cold build with that reason (E7). **Interrupted builds (C7):** every file kept between builds is written atomically (temp file + rename); while a batch commits (canon files, tools, state), `canon/.in-progress` exists, and a build that finds it is cold (reason: interrupted). Full mode keeps `full/.in-progress` while passes run; a build that finds it starts from an empty `full/`. (A planned-commit object that applies all writes at once, D2 of the review, is deferred: the journal gives the same safety.) `full-only.json` (persistent full-mode fallback) is keyed by the main fingerprints and the chapmk version.
 
 ### 6.7 Aux linker and aux classification
 
@@ -622,7 +622,7 @@ Full mode means plain sequential full runs to a fixpoint inside the build direct
 - an eqparbox tag used in several segments whose width changed while they were last compiled in different runs (C13; the warning suggests one tag per chapter);
 - biblatex refsections (option `refsection=` other than `none`, `\begin{refsection}`, `\newrefsection` in the main file or a unit; C10): detected statically, so no build attempt is wasted; citations in a refsection other than 0 found at runtime also fall back;
 - `\documentclass` not before the split line (e.g. on the `\begin{document}` line);
-- format build failure;
+- format build failure, including state a format cannot keep (S13: immediate PDF objects such as the `cmap` package's, colour stacks, unrecorded `\pdfcatalog`/`\pdfinfo` calls);
 - a merge error (missing destinations, inconsistent SyncTeX header);
 - the fixpoint not reached (§6.9.2);
 - missing, truncated or inconsistent records (e.g. a page without a page-map entry or of an unknown segment);

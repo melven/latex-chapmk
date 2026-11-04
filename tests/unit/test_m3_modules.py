@@ -11,11 +11,11 @@ from chapmk.aux import (
     segment_slices,
     tex_octal_bytes,
 )
-from chapmk.errors import ChapmkError
 from chapmk.merge_pdf import label_style, page_labels
 from chapmk.state import (
     STATE_FILE,
     STATE_VERSION,
+    CorruptStateError,
     SegmentArtifact,
     State,
     UnitInputs,
@@ -51,7 +51,7 @@ def test_state_round_trip(tmp_path: Path) -> None:
     (tmp_path / STATE_FILE).write_text('{"version": 999}')
     assert load_state(tmp_path) is None
     (tmp_path / STATE_FILE).write_text(f'{{"version": {STATE_VERSION}}}')
-    with pytest.raises(ChapmkError, match="corrupt"):
+    with pytest.raises(CorruptStateError, match="unreadable"):  # E7: a cold build
         load_state(tmp_path)
 
 
