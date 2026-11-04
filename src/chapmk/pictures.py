@@ -63,9 +63,11 @@ class PictureRecord:
 
 def read_pictures(log: Path) -> list[PictureRecord]:
     """Picture records of a run's log, in order."""
-    if not log.is_file():
-        return []
-    text = read_log(log)
+    return parse_pictures(read_log(log)) if log.is_file() else []
+
+
+def parse_pictures(text: str) -> list[PictureRecord]:
+    """Picture records of a log's text, in order."""
     sources: dict[str, str] = {}
     lines = text.split("\n")
     for i, line in enumerate(lines):

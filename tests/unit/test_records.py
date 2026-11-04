@@ -157,3 +157,20 @@ def test_register_names(tmp_path: Path) -> None:
         516: "\\Hy@x [hyperref]",
         517: "\\c@later",
     }
+
+
+def test_run_view_parses_each_file_once(tmp_path: Path) -> None:
+    from chapmk.records import RunView
+
+    a = analyse(project(tmp_path))
+    d = tmp_path / "run"
+    write_run(d)
+    (d / "doc.log").write_bytes("Grüße\n".encode())
+    (d / "doc.fls").write_text("PWD /x\nINPUT /usr/tex/hyperref.sty\nINPUT ./ch/a.tex\n")
+    view = RunView(d, a)
+    assert view.name == "run" and view.file(".pdf") == d / "doc.pdf"
+    assert view.records.base == {0: 1, 276: 5}
+    assert view.records is view.records  # cached
+    assert view.slices["U1"][0].startswith("\\chapmk@entry{U1}")
+    assert view.log == "Grüße\n" and view.bcf is None
+    assert view.loaded == {"hyperref.sty", "a.tex"}

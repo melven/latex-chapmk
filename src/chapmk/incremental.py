@@ -45,7 +45,7 @@ from chapmk.config import Config
 from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
 from chapmk.errors import FallbackError, TexError
 from chapmk.facts import UNIT_HEADINGS, UNSUPPORTED_PACKAGES, derived_suffixes
-from chapmk.files import changed_files, digest, read_log, read_raw, write_atomic
+from chapmk.files import changed_files, digest, read_log, write_atomic
 from chapmk.fmt import (
     FormatInfo,
     ensure_format,
@@ -70,7 +70,7 @@ from chapmk.pictures import (
     collect_garbage,
     driver_file,
     export_figures,
-    read_pictures,
+    parse_pictures,
     record_inputs,
     remove_figures,
     stale_figures,
@@ -87,9 +87,9 @@ from chapmk.predict import (
 )
 from chapmk.records import (
     RunRecords,
+    RunView,
     glue_times,
     read_main_records,
-    read_run_records,
     register_names,
     tex_phases,
 )
@@ -174,13 +174,12 @@ def _segment_files(ctx: Context, recs: RunRecords) -> dict[str, dict[str, str]]:
     return {seg: _hashes(ctx, names) for seg, names in files.items()}
 
 
-def _global_files(ctx: Context, run_dir: Path, attributed: set[str]) -> dict[str, str]:
+def _global_files(ctx: Context, run: RunView, attributed: set[str]) -> dict[str, str]:
     """Source files read by the run but attributed to no segment, plus biblatex data sources."""
-    fls = run_dir / f"{ctx.job}.fls"
-    names = source_inputs(fls, ctx.layout.shadow_dir, ctx.analysis.source_dir) - attributed
-    bcf = run_dir / f"{ctx.job}.bcf"
-    if bcf.is_file():
-        for m in re.finditer(r"<bcf:datasource[^>]*>([^<]+)</bcf:datasource>", read_raw(bcf)):
+    names = source_inputs(run.file(".fls"), ctx.layout.shadow_dir, ctx.analysis.source_dir)
+    names -= attributed
+    if run.bcf is not None:
+        for m in re.finditer(r"<bcf:datasource[^>]*>([^<]+)</bcf:datasource>", run.bcf):
             if (ctx.analysis.source_dir / m.group(1)).is_file():
                 names.add(Path(m.group(1)).as_posix())
     return _hashes(ctx, names - attributed)
@@ -190,13 +189,13 @@ def _changed(ctx: Context, files: dict[str, str]) -> list[str]:
     return changed_files(ctx.analysis.source_dir, files)
 
 
-def _check_runtime_support(ctx: Context, run_dir: Path, fmt: FormatInfo) -> None:
+def _check_runtime_support(run: RunView, fmt: FormatInfo) -> None:
     """Packages loaded by the format or the run (also those loaded by the class)."""
-    loaded: set[str] = set()
-    for fls in (fmt.directory / f"{fmt.name}.fls", run_dir / f"{ctx.job}.fls"):
-        if fls.is_file():
-            lines = text_lines(read_log(fls))
-            loaded |= {Path(line[6:]).name for line in lines if line.startswith("INPUT ")}
+    loaded = set(run.loaded)
+    fls = fmt.directory / f"{fmt.name}.fls"
+    if fls.is_file():
+        lines = text_lines(read_log(fls))
+        loaded |= {Path(line[6:]).name for line in lines if line.startswith("INPUT ")}
     for pkg in sorted(UNSUPPORTED_PACKAGES):
         if f"{pkg}.sty" in loaded:
             raise FallbackError(f"package {pkg!r} is not supported (loaded at runtime)", True)
@@ -269,6 +268,7 @@ class Fixpoint:
         self.state_before: dict[str, SegmentVectors] = {}
         self.odd: frozenset[str] = frozenset()  # units starting on an odd page (prediction)
         self.self_changes: dict[str, list[str]] = {}  # macros of changed self data (messages)
+        self.views: dict[str, RunView] = {}  # runs of this build, parsed once (D5)
 
     # sources -------------------------------------------------------------------------------
 
@@ -615,12 +615,14 @@ class Fixpoint:
             if not r.ok:
                 err = TexError("pdflatex failed", first_error=r.first_error)
                 raise failed_run(a, ctx.layout, r.directory, err)
-        all_recs = [read_run_records(r.directory, ctx.analysis) for r in results]
+        views = [RunView(r.directory, a) for r in results]
+        self.views.update((v.name, v) for v in views)
+        all_recs = [v.records for v in views]
         for recs in all_recs:  # list files with other extensions: stored and spliced from now on
             for suffix in sorted(recs.list_suffixes - set(state.list_suffixes)):
                 state.list_suffixes.append(suffix)
-        for r in results:
-            _check_runtime_support(ctx, r.directory, self.fmt)
+        for view in views:
+            _check_runtime_support(view, self.fmt)
         for recs in all_recs:
             if recs.primitive_marks:
                 regs = ", ".join(f"\\marks{n}" for n in sorted(recs.primitive_marks))
@@ -640,13 +642,13 @@ class Fixpoint:
         # journal (C7): canon files and state change from here until save_state; an
         # interrupted commit leaves the marker, and the next build is cold
         write_atomic(canon / JOURNAL_FILE, " ".join(s.name for s in specs))
-        for spec, recs, compiled in zip(specs, all_recs, compiled_by_run, strict=True):
-            commit_run(a, ctx.layout, state, spec.name, recs, compiled)
-            self._attribute(recs, compiled, ctx.layout.runs_dir / spec.name)
+        for view, recs, compiled in zip(views, all_recs, compiled_by_run, strict=True):
+            commit_run(a, ctx.layout, state, view, compiled)
+            self._attribute(view, compiled)
             for seg in compiled:
                 if seg in recs.openright:
                     state.openright[seg] = recs.openright[seg]
-        exported = self._pictures(specs, compiled_by_run, pre)
+        exported = self._pictures(views, compiled_by_run, pre)
         t.lap("commit")
         lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name, [s.name for s in specs])
         t.lap("lists")
@@ -778,7 +780,7 @@ class Fixpoint:
         return dirty, glue
 
     def _pictures(
-        self, specs: list[RunSpec], compiled_by_run: list[set[str]], pre: CanonView
+        self, views: list[RunView], compiled_by_run: list[set[str]], pre: CanonView
     ) -> dict[str, int]:
         """Export the figures of pictures typeset inline (§6.17) with the values of the keys
         their code references (``pre``: the runs' input), and record the figure keys per
@@ -790,10 +792,9 @@ class Fixpoint:
         exported: dict[str, int] = {}
         if fig is None:
             return exported
-        for spec, compiled in zip(specs, compiled_by_run, strict=True):
-            run_dir = ctx.layout.runs_dir / spec.name
-            pics = read_pictures(run_dir / f"{ctx.job}.log")
-            export_figures(run_dir / f"{ctx.job}.pdf", pics, fig)
+        for view, compiled in zip(views, compiled_by_run, strict=True):
+            pics = parse_pictures(view.log)
+            export_figures(view.file(".pdf"), pics, fig)
             for seg in [*compiled, *glue]:
                 state.pictures[seg] = sorted({p.key for p in pics if p.segment == seg})
             for p in pics:
@@ -804,10 +805,10 @@ class Fixpoint:
             record_inputs(fig, state.dist_files)
         return exported
 
-    def _attribute(self, recs: RunRecords, compiled: set[str], run_dir: Path) -> None:
+    def _attribute(self, run: RunView, compiled: set[str]) -> None:
         """Source files of the compiled units and the glue (F records), global inputs."""
         ctx, state = self.ctx, self.state
-        new_files = _segment_files(ctx, recs)
+        new_files = _segment_files(ctx, run.records)
         for seg in [*compiled, *(g for g in segments(self.a) if g.startswith("G"))]:
             state.segment_files[seg] = new_files.get(seg, {})
             self._scans.pop(seg, None)
@@ -818,12 +819,12 @@ class Fixpoint:
             n: h
             for n, h in {
                 **state.global_files,
-                **_global_files(ctx, run_dir, attributed),
+                **_global_files(ctx, run, attributed),
                 **format_inputs(ctx.layout),  # read by the format build, not by the runs
             }.items()
             if n not in attributed
         }
-        fls = run_dir / f"{ctx.job}.fls"
+        fls = run.file(".fls")
         state.dist_files.update(format_dist_inputs(ctx.layout))
         state.dist_files.update(
             stat_signatures(external_inputs(fls, ctx.layout.shadow_dir, internal_dirs(ctx.layout)))
@@ -984,7 +985,9 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         if runs:  # a no-op build lints nothing
             write_atomic(canon / LINT_CACHE, json.dumps(dict(loop.lint_cache)))
         if runs or not is_published(ctx.layout):
-            pdf = publish_state(ctx.analysis, ctx.layout, state, ctx.timings, dist=ctx.dist)
+            pdf = publish_state(
+                ctx.analysis, ctx.layout, state, ctx.timings, dist=ctx.dist, views=loop.views
+            )
             mark_published(ctx.layout)
         else:  # nothing changed: the published files are current (latexmk-like no-op)
             pdf = ctx.layout.output(".pdf")

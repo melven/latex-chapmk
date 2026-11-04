@@ -5,11 +5,13 @@ from __future__ import annotations
 import itertools
 import re
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 
 from chapmk.analysis import Analysis
+from chapmk.auxfile import read_lines, segment_slices, statements
 from chapmk.errors import FallbackError
-from chapmk.files import read_log
+from chapmk.files import read_log, read_raw
 from chapmk.texsource import text_lines
 
 Vector = dict[int, int]
@@ -335,3 +337,59 @@ def _unit_name(recorded: str) -> str:
     if name.startswith("./"):
         name = name[2:]
     return name[:-4] if name.endswith(".tex") else name
+
+
+class RunView:
+    """A finished run directory (D5): each file is read and parsed once, on first use, and
+    shared by the commit, the verification, the picture export and the publish step."""
+
+    def __init__(self, directory: Path, analysis: Analysis) -> None:
+        self.directory = directory
+        self.analysis = analysis
+
+    @property
+    def name(self) -> str:
+        return self.directory.name
+
+    def file(self, suffix: str) -> Path:
+        """``<run>/<job><suffix>``."""
+        return self.directory / f"{self.analysis.jobname}{suffix}"
+
+    @cached_property
+    def records(self) -> RunRecords:
+        return read_run_records(self.directory, self.analysis)
+
+    @cached_property
+    def log(self) -> str:
+        """The run's log ("" if there is none)."""
+        path = self.file(".log")
+        return read_log(path) if path.is_file() else ""
+
+    @cached_property
+    def main_statements(self) -> list[str]:
+        """Statements of the run's main aux."""
+        return statements(self.main_lines)
+
+    @cached_property
+    def main_lines(self) -> list[str]:
+        return read_lines(self.file(".aux"))
+
+    @cached_property
+    def slices(self) -> dict[str, list[str]]:
+        """Main-aux lines per segment (:func:`chapmk.auxfile.segment_slices`)."""
+        return segment_slices(self.main_lines)
+
+    @cached_property
+    def bcf(self) -> str | None:
+        """The run's ``.bcf`` (None without biblatex)."""
+        path = self.file(".bcf")
+        return read_raw(path) if path.is_file() else None
+
+    @cached_property
+    def loaded(self) -> frozenset[str]:
+        """File names (without directory) of the ``INPUT`` lines of the run's ``.fls``."""
+        path = self.file(".fls")
+        if not path.is_file():
+            return frozenset()
+        lines = text_lines(read_log(path))
+        return frozenset(Path(line[6:]).name for line in lines if line.startswith("INPUT "))
