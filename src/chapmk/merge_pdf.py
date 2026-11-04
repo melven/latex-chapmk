@@ -1,4 +1,4 @@
-"""PDF merge (PLAN §6.11, S9): pages of several runs into one PDF with links, outline, labels."""
+"""PDF merge (design §6.11, S9): pages of several runs into one PDF with links, outline, labels."""
 
 from __future__ import annotations
 

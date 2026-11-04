@@ -1,4 +1,4 @@
-"""Incremental runs (PLAN §6.5): run directory preparation and a parallel process pool."""
+"""Incremental runs (design §6.5): run directory preparation and a parallel process pool."""
 
 from __future__ import annotations
 

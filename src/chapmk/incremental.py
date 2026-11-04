@@ -1,4 +1,4 @@
-"""Incremental builder (PLAN §5, §6.9): full mode for fallback reasons, otherwise the
+"""Incremental builder (design §5, §6.9): full mode for fallback reasons, otherwise the
 fixpoint loop.
 
 Each iteration compiles the dirty compilation units (all units: a full run; none: a glue-only

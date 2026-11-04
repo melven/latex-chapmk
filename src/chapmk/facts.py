@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-#: Packages that force full mode (PLAN §1): checked in the preamble (analysis) and, as
+#: Packages that force full mode (design §1): checked in the preamble (analysis) and, as
 #: ``<name>.sty``, in the ``.fls`` of the format build and of every run (also when a class or
 #: another package loads them).
 UNSUPPORTED_PACKAGES = frozenset(

@@ -1,4 +1,4 @@
-"""Dependency model (PLAN §6.8): imported keys found by a text scan, and their current values.
+"""Dependency model (design §6.8): imported keys found by a text scan, and their current values.
 
 Keys are namespaced: ``L:<label>`` for ``\\newlabel`` keys, ``C:<citekey>`` for ``.bbl``
 entries. A value is a short hash of the whole ``\\newlabel`` argument (number, page, title,

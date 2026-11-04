@@ -3,7 +3,7 @@
 Rules (root CLAUDE.md): LaTeX2e with kernel hooks (expl3 allowed), internal prefix `\chapmk@`,
 records and hooks only, no logic. The version in `\ProvidesPackage[... v<version> ...]` must
 equal `chapmk.__version__` (checked by `tests/unit/test_tex_packages.py`).
-**Keep this file in sync** with the packages.
+**Keep this file in sync** with the packages. Section numbers (§) refer to [`docs/design.md`](../../../docs/design.md).
 
 | File | Loaded | Contents |
 |---|---|---|

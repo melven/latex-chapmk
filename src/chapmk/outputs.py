@@ -1,4 +1,4 @@
-"""Published outputs of the incremental builder (PLAN §6.11 to §6.13): merged PDF, merged SyncTeX
+"""Published outputs of the incremental builder (design §6.11 to §6.13): merged PDF, merged SyncTeX
 file, concatenated log, and the log of a failed run."""
 
 from __future__ import annotations

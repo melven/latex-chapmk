@@ -1,4 +1,4 @@
-"""Scenario helpers (PLAN §8.2): builds with ``--report`` and source edits."""
+"""Scenario helpers (design §8.2): builds with ``--report`` and source edits."""
 
 import json
 from pathlib import Path

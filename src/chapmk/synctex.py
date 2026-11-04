@@ -1,4 +1,4 @@
-"""SyncTeX files (PLAN §6.12, S10): read, write with recomputed offsets, map paths, merge."""
+"""SyncTeX files (design §6.12, S10): read, write with recomputed offsets, map paths, merge."""
 
 from __future__ import annotations
 

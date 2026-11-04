@@ -65,7 +65,7 @@ pythonpath = ["src"]
 testpaths = ["tests/unit", "tests/slow", "tests/acceptance", "tests/scenarios", "tests/bench"]
 markers = [
     "slow: runs TeX",
-    "acceptance: compares against a reference build (PLAN §3.3)",
+    "acceptance: compares against a reference build (design §3.3)",
     "bench: manual benchmarks only",
 ]
 addopts = "-m 'not bench'"

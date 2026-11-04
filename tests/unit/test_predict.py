@@ -1,4 +1,4 @@
-"""Unit tests for the composition model and prediction (PLAN §6.9.3)."""
+"""Unit tests for the composition model and prediction (design §6.9.3)."""
 
 from chapmk.predict import (
     SegmentVectors,

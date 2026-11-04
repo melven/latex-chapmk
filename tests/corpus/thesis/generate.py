@@ -1,4 +1,4 @@
-"""Generate the thesis corpus (PLAN §8.1) next to this script. Deterministic; run after
+"""Generate the thesis corpus (design §8.1) next to this script. Deterministic; run after
 changing it and commit the output: ``python3 tests/corpus/thesis/generate.py``.
 
 main.tex = preamble.tex (the user's preamble, verbatim) + generated body.

@@ -1,4 +1,4 @@
-"""Command-line interface (PLAN §6.15): ``build``, ``check``, ``clean``, ``graph``."""
+"""Command-line interface (design §6.15): ``build``, ``check``, ``clean``, ``graph``."""
 
 from __future__ import annotations
 

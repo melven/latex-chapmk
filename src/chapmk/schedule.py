@@ -1,4 +1,4 @@
-"""Scheduling of the fixpoint loop (PLAN §6.9.2, §6.9.3): which compilation units a batch
+"""Scheduling of the fixpoint loop (design §6.9.2, §6.9.3): which compilation units a batch
 compiles, how they are grouped into parallel runs, the predicted start states of the runs
 and the verification of the predictions afterwards."""
 

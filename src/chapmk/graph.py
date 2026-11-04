@@ -1,4 +1,4 @@
-"""``chapmk graph`` (PLAN §6.15, S7): compilation units and their dependencies, from the
+"""``chapmk graph`` (design §6.15, S7): compilation units and their dependencies, from the
 canonical state of the last build."""
 
 from __future__ import annotations

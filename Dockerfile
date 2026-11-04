@@ -13,7 +13,7 @@ ARG USERNAME=dev
 ARG UID=1000
 ARG GID=1000
 
-# poppler-utils: pdftoppm / pdftotext for acceptance tests (PLAN.md §3.3)
+# poppler-utils: pdftoppm / pdftotext for acceptance tests (design §3.3)
 # gnuplot-data: gnuplot-lua-tikz.sty is not part of TeX Live; Debian installs it
 # to /usr/share/texmf, which this TeX Live does not search -> link into TEXMFLOCAL.
 # apt over https: works behind HTTPS-only (CONNECT) proxies
@@ -58,7 +58,7 @@ RUN set -e; \
     chown -R "$UID:$GID" "$VIRTUAL_ENV"
 USER ${UID}:${GID}
 
-# SOURCE_DATE_EPOCH / FORCE_SOURCE_DATE are set by the driver per build (PLAN.md N4),
+# SOURCE_DATE_EPOCH / FORCE_SOURCE_DATE are set by the driver per build (design N4),
 # deliberately not here, so a driver that forgets them is not masked.
 ENV max_print_line=10000
 

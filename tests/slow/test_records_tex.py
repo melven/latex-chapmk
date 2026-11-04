@@ -1,4 +1,4 @@
-"""M2: chapmk.sty records in real runs (PLAN §6.4.2), run directories and the runner."""
+"""chapmk.sty records in real runs (design §6.4.2), run directories and the runner."""
 
 import hashlib
 import os
@@ -97,7 +97,7 @@ def test_records_and_restore(copy_corpus) -> None:  # type: ignore[no-untyped-de
     # absolute sets (chapter counter resets the section counter), bookmark levels, nomencl
     assert full.absolute["U1"]
     assert sorted(set(full.bookmark_levels.values())) == [0, 1, 2]
-    # counter registers and reset lists (M4): the chapter resets section, figure, ...
+    # counter registers and reset lists: the chapter resets section, figure, ...
     chapter_resets = full.reset_registers("chapter")
     assert {full.counters[c][0] for c in ("section", "subsection", "figure")} <= chapter_resets
     assert full.counters["page"][0] == 0

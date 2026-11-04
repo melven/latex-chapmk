@@ -1,4 +1,4 @@
-"""The canonical build files in ``<build>/canon`` (PLAN §6.6, §6.7, §6.10): read views for
+"""The canonical build files in ``<build>/canon`` (design §6.6, §6.7, §6.10): read views for
 the dependency model, the commit of a run (aux files, main aux, list files, vectors,
 citations, ``.nlo``) and the tools on the canonical state (``.bcf`` patch plus biber,
 makeindex)."""
