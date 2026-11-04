@@ -67,6 +67,7 @@ heading is a compilation unit. chapmk records what every unit reads and writes (
 labels, citations, list entries, running heads) and recompiles only the units whose sources
 or inputs changed, several at a time with predicted start states. The pages of all runs are
 merged; any case it cannot handle falls back to a plain full build.
+Details: [docs/design.md](docs/design.md).
 
 ## Document assumptions
 

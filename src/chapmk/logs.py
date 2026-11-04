@@ -1,4 +1,4 @@
-"""TeX log handling (PLAN §6.13): path mapping and error extraction."""
+"""TeX log handling (design §6.13): path mapping and error extraction."""
 
 from __future__ import annotations
 

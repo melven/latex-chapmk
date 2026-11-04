@@ -1,24 +1,20 @@
 # CLAUDE.md
 
 `chapmk` (distribution `latex-chapmk`, formerly `fastinc`): an incremental, parallel pdfLaTeX build driver (Python) plus two small LaTeX packages. Historical documents (`docs/spikes/`, `docs/review/`, spike corpora) keep the old name.
-**`PLAN.md` is the specification. Read it completely before any work.**
+**[`docs/design.md`](docs/design.md) describes the design. Read it completely before any work.** Section numbers (`§6.9.3`) in code, tests and the module maps refer to it.
 
 ## Workflow
 
-1. Milestones are worked in order: M0 (spikes) → M1 … M9 (`PLAN.md` §9; `watch` is future work). Do not start features before M0 is done.
-2. Each spike S# gets:
+1. A mechanism whose TeX behaviour is uncertain starts with a spike S#:
    - a minimal reproducer in `tests/corpus/minimal/S#-*/`,
-   - a note in `docs/spikes/S#.md` (question, setup, result, consequence for the plan).
-3. If a spike contradicts `PLAN.md`, update `PLAN.md` in a separate commit (`plan: ...`). Never silently deviate from the plan.
-4. **Decision points: stop and ask the user** with a short summary and options when:
-   - S2 shows that the shadow tree (`PLAN.md` §6.5) breaks file resolution or SyncTeX paths,
-   - S5 shows that `.bcf` patching is needed or not feasible,
-   - S7 shows that running heads differ between partial and full runs,
-   - S12 is done (picture cache: results and options before implementing),
-   - any change would weaken the acceptance criterion (`PLAN.md` §3.3),
-   - any non-goal (`PLAN.md` §1) seems necessary.
-5. A milestone is done only when its "done when" condition holds and all tests pass.
-6. Commits are small, one logical step each, with messages prefixed by the component: `driver:`, `tex:`, `merge:`, `test:`, `spike:`, `plan:`, `ci:`.
+   - a note in `docs/spikes/S#.md` (question, setup, result, consequence for the design).
+2. A change of the design updates `docs/design.md` in the same pull request, in a separate commit (`plan: ...`). Never silently deviate from the design. Spike notes and the review (`docs/review/`) are history: they refer to the former `PLAN.md`, whose section numbers 1–6 and 8 the design document keeps.
+3. **Decision points: stop and ask the user** with a short summary and options when:
+   - a change would weaken the acceptance criterion ([design §3.3](docs/design.md#33-acceptance-criterion-identical-output)),
+   - a non-goal ([design §1](docs/design.md#1-goal)) seems necessary,
+   - a spike shows that a design decision does not hold (e.g. the shadow tree, [§6.5](docs/design.md#65-runs); the `.bcf` patch, [§6.10](docs/design.md#610-external-tools); the picture cache, [§6.17](docs/design.md#617-picture-cache)).
+4. A change is done when all tests pass.
+5. Commits are small, one logical step each, with messages prefixed by the component: `driver:`, `tex:`, `merge:`, `test:`, `spike:`, `plan:` (design and documentation), `ci:`.
 
 ## Environment
 
@@ -31,7 +27,7 @@ docker run --rm -it -v "$PWD":/work -w /work chapmk-dev bash
 
 or open the repository as a devcontainer (`.devcontainer/devcontainer.json`).
 
-**MiKTeX backend (M9):** `Dockerfile.miktex` (Ubuntu 24.04, complete MiKTeX from a pinned CTAN mirror, on-the-fly installation off), devcontainer `.devcontainer/miktex/`:
+**MiKTeX backend:** `Dockerfile.miktex` (Ubuntu 24.04, complete MiKTeX from a pinned CTAN mirror, on-the-fly installation off), devcontainer `.devcontainer/miktex/`:
 
 ```
 docker build -f Dockerfile.miktex -t chapmk-miktex .
@@ -48,10 +44,10 @@ Behind a proxy: pass it as build args (`--build-arg HTTPS_PROXY=...`, `--network
 
 **User sources and the build:**
 - Never modify user sources. All generated files go into the build directory (`.chapmk/<jobname>/`).
-- All TeX runs use the deterministic environment (`PLAN.md` N4) and go through `texdist.py` (no hard-coded engine flags elsewhere).
+- All TeX runs use the deterministic environment ([design N4](docs/design.md#32-non-functional)) and go through `texdist.py` (no hard-coded engine flags elsewhere).
 
 **Correctness:**
-- Correctness first. Every optimisation needs a verification step or a fallback to a full build (`PLAN.md` §6.14).
+- Correctness first. Every optimisation needs a verification step or a fallback to a full build ([design §6.14](docs/design.md#614-fallbacks-to-full-mode)).
 - Do not weaken, skip or `xfail` acceptance or scenario tests to make them pass. If a test is wrong, explain why in the commit message.
 
 **LaTeX packages** (`src/chapmk/tex/`):
@@ -75,7 +71,7 @@ Behind a proxy: pass it as build args (`--build-arg HTTPS_PROXY=...`, `--network
 ```
 pytest -m "not slow"                  # unit tests, fast
 pytest -n auto --dist worksteal       # all, parallel (pytest-xdist; ~3x faster)
-pytest -m acceptance -n auto          # scenario tests with the PLAN.md §3.3 comparison
+pytest -m acceptance -n auto          # scenario tests with the design §3.3 comparison
 ```
 
 - Layout:
@@ -88,5 +84,6 @@ pytest -m acceptance -n auto          # scenario tests with the PLAN.md §3.3 co
 - Markers: `slow` (runs TeX), `acceptance` (compares against a reference build), `bench` (manual only).
 - References (the `--full` build of `--check`, latexmk in the acceptance tests) are cached in `.test-cache/` by a hash of the source files, the TeX installation (`pdflatex` version, `ls-R` signatures) and, for `--full` references, the full-mode code (`FULL_MODE_CODE` in `tests/conftest.py`). `rm -rf .test-cache` frees the space of unused entries. CI restores it from an earlier run with the same image and full-mode code (`actions/cache`, key in `.github/workflows/ci.yml`); when full-mode output starts to depend on another file, extend both `FULL_MODE_CODE` and that key.
 - Tests must be xdist-safe: no shared paths outside `tmp_path`/`tmp_path_factory`, no global state beyond the process. Session fixtures (e.g. the built thesis state) run once per worker.
-- Scenario tests (`PLAN.md` §8.2) assert both §3.3 equality and the expected set of compiled units, from `chapmk build --report json`.
-- MiKTeX: the whole suite runs in the MiKTeX image (`Dockerfile.miktex`; CI: `.github/workflows/miktex.yml`, manual). Windows/macOS are tested only in CI (extended in M9).
+- Scenario tests ([design §8.2](docs/design.md#82-scenario-tests)) assert both §3.3 equality and the expected set of compiled units, from `chapmk build --report json`.
+- Other TeX versions: `.github/workflows/versions.yml` (weekly; frozen TeX Live releases since 2023, current TeX Live, current MiKTeX; `Dockerfile` takes `--build-arg TEXLIVE_IMAGE=texlive/texlive:TL2024-historic`).
+- MiKTeX: the whole suite runs in the MiKTeX image (`Dockerfile.miktex`; CI: `.github/workflows/miktex.yml`, manual). Windows/macOS are tested only in CI.

@@ -1,4 +1,4 @@
-"""Segment ids (PLAN §6.4): the document is ``G0, U1, G1, ..., Un, Gn``. Unit segment
+"""Segment ids (design §6.4): the document is ``G0, U1, G1, ..., Un, Gn``. Unit segment
 ``U<k>`` is the k-th ``\\include`` (1-based); glue segment ``G<k>`` is the main-file text after
 it (``G0``: before the first include, with the preamble's output)."""
 

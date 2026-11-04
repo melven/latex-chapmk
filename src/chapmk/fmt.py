@@ -1,4 +1,4 @@
-"""Format build (PLAN §6.3): dump the static preamble with mylatexformat, reuse while valid."""
+"""Format build (design §6.3): dump the static preamble with mylatexformat, reuse while valid."""
 
 from __future__ import annotations
 

@@ -1,8 +1,11 @@
 # Dev and CI image for chapmk: TeX Live (full scheme) + Python tooling.
 # The base image is pinned by digest (R12): TeX Live 2026 as used by CI on 2026-11-03.
 # To update: build with texlive/texlive:latest, take the digest from the build log, run the
-# full suite, then rm -rf .test-cache (references depend on the TeX version).
-FROM texlive/texlive:latest@sha256:07e8062637249c4f780ca59f42cc2ed592bc2dc1db4320769406aee3f98aa70e
+# full suite (the reference cache is keyed by the TeX installation).
+# Other TeX Live versions (.github/workflows/versions.yml):
+#   docker build --build-arg TEXLIVE_IMAGE=texlive/texlive:TL2024-historic -t chapmk-dev-tl2024 .
+ARG TEXLIVE_IMAGE=texlive/texlive:latest@sha256:07e8062637249c4f780ca59f42cc2ed592bc2dc1db4320769406aee3f98aa70e
+FROM ${TEXLIVE_IMAGE}
 LABEL org.opencontainers.image.source="https://github.com/melven/latex-chapmk" \
       org.opencontainers.image.description="chapmk dev and CI image: TeX Live full, Python tooling"
 
@@ -10,7 +13,7 @@ ARG USERNAME=dev
 ARG UID=1000
 ARG GID=1000
 
-# poppler-utils: pdftoppm / pdftotext for acceptance tests (PLAN.md §3.3)
+# poppler-utils: pdftoppm / pdftotext for acceptance tests (design §3.3)
 # gnuplot-data: gnuplot-lua-tikz.sty is not part of TeX Live; Debian installs it
 # to /usr/share/texmf, which this TeX Live does not search -> link into TEXMFLOCAL.
 # apt over https: works behind HTTPS-only (CONNECT) proxies
@@ -55,7 +58,7 @@ RUN set -e; \
     chown -R "$UID:$GID" "$VIRTUAL_ENV"
 USER ${UID}:${GID}
 
-# SOURCE_DATE_EPOCH / FORCE_SOURCE_DATE are set by the driver per build (PLAN.md N4),
+# SOURCE_DATE_EPOCH / FORCE_SOURCE_DATE are set by the driver per build (design N4),
 # deliberately not here, so a driver that forgets them is not masked.
 ENV max_print_line=10000
 

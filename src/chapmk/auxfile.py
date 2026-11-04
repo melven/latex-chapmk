@@ -1,4 +1,4 @@
-"""Aux files (PLAN §6.7): statements and their classes, main-aux segment slices, the
+"""Aux files (design §6.7): statements and their classes, main-aux segment slices, the
 canonical main aux, structural lines, bookmark records.
 
 Derived list files (.toc, .lof, ...) are not linked in Python: TeX expands their content when

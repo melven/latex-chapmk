@@ -1,4 +1,4 @@
-"""TeX distribution adapter (PLAN §6.16). The only module that knows engine flags.
+"""TeX distribution adapter (design §6.16). The only module that knows engine flags.
 
 Every TeX, biber and makeindex command line, the TeX environment and the distribution's
 path conventions (SyncTeX input paths) come from here. Two implementations: :class:`TeXLive`
@@ -37,7 +37,7 @@ def tex_path(path: Path) -> str:
 
 
 def deterministic_env(epoch: int) -> dict[str, str]:
-    """Variables that make all runs of one build identical (PLAN N4)."""
+    """Variables that make all runs of one build identical (design N4)."""
     return {"SOURCE_DATE_EPOCH": str(epoch), "FORCE_SOURCE_DATE": "1", "max_print_line": "10000"}
 
 

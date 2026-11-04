@@ -1,4 +1,4 @@
-# Benchmarks (PLAN §8.4)
+# Benchmarks ([design §8.4](design.md#84-benchmarks))
 
 `python tests/bench/run.py --out DIR --chapters 20 --scale 3 --jobs 4` in the dev container,
 4 cores. Corpus: thesis generator with 20 chapters, each 3× as long (319 pages, 22

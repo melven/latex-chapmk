@@ -1,4 +1,4 @@
-"""PDF merge (PLAN §6.11, S9): pages of several runs into one PDF with links, outline, labels."""
+"""PDF merge (design §6.11, S9): pages of several runs into one PDF with links, outline, labels."""
 
 from __future__ import annotations
 
@@ -211,8 +211,10 @@ def merge_pdf(
         merged.Root.PageLabels = Dictionary(Nums=page_labels([(p.value, p.label) for p in pages]))
         _check_page_labels(merged, pages, sources)
         cat = sources.get(catalog_from)
+        # pdfTeX refers to pages by number (hyperref: ``openaction goto page 1``), as a plain
+        # build does: page N of the catalog run must be page N of the merged PDF
         pages_of = {
-            objgen: where.get((catalog_from, i))
+            objgen: i if where.get((catalog_from, i)) == i else None
             for objgen, i in sources.index[catalog_from].items()
         }
         for key, value in cat.Root.items():  # \pdfcatalog, hyperref's /OpenAction, ... (S13)
@@ -254,7 +256,7 @@ def _copy_value(value: Any, merged: pikepdf.Pdf, pages_of: dict[Any, int | None]
     if isinstance(value, Dictionary) and value.is_indirect and value.objgen in pages_of:
         target = pages_of[value.objgen]
         if target is None:
-            raise MergeError("a catalog entry refers to a page that was not taken")
+            raise MergeError("a catalog entry refers to a page the merged PDF has elsewhere")
         return merged.pages[target].obj
     if isinstance(value, pikepdf.Stream):
         return merged.copy_foreign(value)

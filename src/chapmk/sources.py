@@ -1,4 +1,4 @@
-"""What the builder knows about the sources of each unit (PLAN §6.8): token scans (imports,
+"""What the builder knows about the sources of each unit (design §6.8): token scans (imports,
 list reads) and lint hits (global units, §6.8.4), cached per build; the persistent lint cache
 (``canon/lint-cache.json``, only the entries a build used are kept)."""
 

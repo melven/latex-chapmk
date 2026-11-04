@@ -1,4 +1,4 @@
-"""R0.9 scenarios: stale-output paths of the M8 review (docs/review/M8.md, C1-C5).
+"""Edge cases: stale-output paths of the review (docs/review/M8.md, C1-C5).
 
 Each build asserts §3.3 against ``--full`` (``--check``).
 """
@@ -257,6 +257,30 @@ def test_catalog_and_info_of_the_format_part_are_replayed(
     assert checked(src, capsys)["mode"] == "incremental"
     with pikepdf.open(src / "main.pdf") as pdf:
         assert pdf.Root.PageMode == "/UseThumbs" and str(pdf.docinfo["/Keywords"]) == "k1"
+
+
+def test_open_action_when_the_document_starts_with_an_include(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """hyperref's ``/OpenAction`` (``goto page 1``) refers to the first page. With no page
+    before the first ``\\include``, G0 has no pages and its run (the last one) may not have
+    compiled the first unit: the catalog then came from a run whose page 1 is a later chapter
+    (check: OpenAction on page 5 instead of 1). The catalog now comes from the run of the
+    first page."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{report}\n\\usepackage{hyperref}\n\\usepackage{bookmark}\n"
+        "\\begin{document}\n\\include{a}\n\\include{b}\n\\include{c}\n\\end{document}\n"
+    )
+    for name in "abc":
+        (src / f"{name}.tex").write_text(f"\\chapter{{{name}}}Text {name}.\\clearpage Page 2.\n")
+    assert checked(src, capsys)["mode"] == "cold"
+    path = src / "c.tex"
+    path.write_text(path.read_text().replace("Text c.", "Txet c."))
+    rep = checked(src, capsys)
+    assert rep["mode"] == "incremental" and selections(rep) == [["c"]], rep
 
 
 def test_nodes_left_on_the_main_vertical_list_are_replayed(

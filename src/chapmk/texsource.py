@@ -1,6 +1,6 @@
 """Lightweight scanning of LaTeX source text (no TeX execution).
 
-Used by the project analysis (PLAN §6.1) and later by the lint (§6.8.4). The scanner knows
+Used by the project analysis (design §6.1) and later by the lint (§6.8.4). The scanner knows
 only what the driver needs: comments, braces, control words and their arguments. It does
 not expand macros and does not know verbatim environments.
 """

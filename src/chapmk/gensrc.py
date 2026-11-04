@@ -1,4 +1,4 @@
-"""Generated TeX sources that keep the user's line numbers (PLAN §6.2).
+"""Generated TeX sources that keep the user's line numbers (design §6.2).
 
 All functions return text; writing files is the caller's job
 (:func:`chapmk.files.write_if_changed`).

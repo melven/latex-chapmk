@@ -6,8 +6,8 @@ Commands and rules: [CONTRIBUTING.md](../CONTRIBUTING.md#checks).
 |---|---|---|
 | `unit/` | pure Python, no TeX | none |
 | `slow/` | real TeX runs of single components | `slow` |
-| `scenarios/` | edit scenarios (PLAN §8.2): build, edit, build; each build checked with `--check` | `slow` |
-| `acceptance/` | `--full` compared with latexmk (PLAN §3.3) | `slow`, `acceptance` |
+| `scenarios/` | edit scenarios ([design §8.2](../docs/design.md#82-scenario-tests)): build, edit, build; each build checked with `--check` | `slow` |
+| `acceptance/` | `--full` compared with latexmk ([design §3.3](../docs/design.md#33-acceptance-criterion-identical-output)) | `slow`, `acceptance` |
 | `bench/` | benchmarks, manual only | `bench` |
 | `corpus/` | test documents; never built in place (copy them with `copy_corpus`) | |
 

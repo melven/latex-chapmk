@@ -1,4 +1,4 @@
-"""Full-mode build (PLAN §6.14, F9): plain sequential full runs to a fixpoint, like latexmk.
+"""Full-mode build (design §6.14, F9): plain sequential full runs to a fixpoint, like latexmk.
 
 Used for ``--full``, as the fallback of the incremental driver and as the reference of
 ``chapmk check``. Tests cache these references by source hash in ``.test-cache/``: after

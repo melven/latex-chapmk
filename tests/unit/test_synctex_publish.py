@@ -1,3 +1,4 @@
+import gzip
 from pathlib import Path
 
 import pytest
@@ -180,3 +181,37 @@ def test_synctex_merge(tmp_path: Path) -> None:
     synctex_file(b, "/x", 1)
     with pytest.raises(SyncTexError, match="no sheet"):
         merge([(b, 4)], str, out)
+
+
+def test_synctex_merge_renumbers_tags(tmp_path: Path) -> None:
+    """Tags renumbered in the order of first use over the merged pages; inputs, offsets and
+    empty lines inside sheets dropped; tag 0 kept; Count = record lines without closers."""
+    a, b = tmp_path / "a.synctex.gz", tmp_path / "b.synctex.gz"
+    head = ["SyncTeX Version:1", "Output:pdf", "Content:"]
+    write_lines(a, [
+        *head[:1], "Input:1:/r1/chapmk-run.tex", "Input:2:/tex/a.sty", *head[1:],
+        "!0", "{1", "[1,3:0,0:1,1,0", "Input:3:/r1/./ch/a.tex", "", "!7", "h3,2:1,1:1,1,0",
+        "x0,0:1,1", "]", "!0", "}1", "!0", "Postamble:", "Count:4", "!0", "Post scriptum:",
+    ])  # fmt: skip
+    write_lines(b, [
+        *head[:1], "Input:1:/r2/chapmk-run.tex", "Input:2:/r2/./ch/b.tex", *head[1:],
+        "!0", "{1", "!0", "}1", "!0", "{2", "(2,4:0,0:1,1,0", "k1,5:2,2:3", ")", "!0", "}2",
+        "!0", "Postamble:", "Count:2", "!0", "Post scriptum:",
+    ])  # fmt: skip
+    out = tmp_path / "m.synctex.gz"
+    merge([(b, 1), (a, 0)], lambda p: p.replace("/r2/", "/r1/"), out)
+    lines = read_lines(out)
+    assert [x for x in lines if not x.startswith("!")] == [
+        "SyncTeX Version:1",
+        "Input:1:/r1/./ch/b.tex",
+        "Input:2:/r1/chapmk-run.tex",
+        "Input:3:/r1/./ch/a.tex",
+        "Output:pdf",
+        "Content:",
+        "{1", "(1,4:0,0:1,1,0", "k2,5:2,2:3", ")", "}1",
+        "{2", "[2,3:0,0:1,1,0", "h3,2:1,1:1,1,0", "x0,0:1,1", "]", "}2",
+        "Postamble:",
+        "Count:5",
+        "Post scriptum:",
+    ]  # fmt: skip
+    assert serialise(lines) == gzip.decompress(out.read_bytes())  # offsets consistent

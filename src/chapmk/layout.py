@@ -14,7 +14,7 @@ DEFAULT_BUILD_DIR = ".chapmk"
 
 @dataclass(frozen=True)
 class Layout:
-    """Directory structure of one project (PLAN §5, §6.5, §6.6).
+    """Directory structure of one project (design §5, §6.5, §6.6).
 
     ``build_dir`` contains ``src`` (shadow tree), ``fmt`` (format), ``full`` (full-mode runs),
     ``runs`` (incremental runs), ``canon`` (canonical state) and the picture caches ``fig``

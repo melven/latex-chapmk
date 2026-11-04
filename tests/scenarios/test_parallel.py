@@ -1,4 +1,4 @@
-"""M5 scenarios (PLAN §8.2, §6.9.3): parallel recompilation of successors with prediction.
+"""Parallel scenarios (design §8.2, §6.9.3): parallel recompilation of successors with prediction.
 
 Builds use ``-j 4``; each asserts §3.3 against ``--full`` (``--check``).
 """

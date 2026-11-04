@@ -1,4 +1,4 @@
-"""Dirty rules of the fixpoint loop (PLAN §6.8, §6.9.1): which units must be compiled and
+"""Dirty rules of the fixpoint loop (design §6.8, §6.9.1): which units must be compiled and
 whether the glue is valid, at the start of a build and after each committed batch. Pure
 apart from reading source digests: everything else comes from the canonical views, the run
 records and the state."""

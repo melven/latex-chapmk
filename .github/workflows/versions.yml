@@ -1,0 +1,127 @@
+name: versions
+
+# The test suite on other TeX versions than the pinned image of ci.yml: the frozen TeX Live
+# releases since the oldest LaTeX kernel chapmk supports (2023-06-01), the current TeX Live
+# with this week's packages, and the current MiKTeX (Linux image, packages of today).
+# Weekly: the frozen releases and MiKTeX only if chapmk's files changed since the last
+# successful run (their TeX content does not change); the current TeX Live every week (its
+# packages change). By hand or in a PR that changes this file: everything. Each job writes the TeX version it tested (banner,
+# LaTeX kernel, date of the package state) into the run summary.
+on:
+  schedule:
+    - cron: "41 3 * * 1"  # Mondays 03:41 UTC
+  workflow_dispatch:
+  pull_request:  # a PR that changes this workflow tests it
+    paths: [.github/workflows/versions.yml]
+
+concurrency:
+  group: versions
+  cancel-in-progress: false
+
+env:
+  # files whose change makes the frozen versions worth testing again
+  WATCHED: src tests Dockerfile Dockerfile.miktex requirements-dev.txt pyproject.toml
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read  # the last successful run of this workflow
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != schedule ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          last=$(gh run list --workflow versions.yml --branch "$GITHUB_REF_NAME" --status success \
+                   --limit 1 --json headSha --jq '.[0].headSha // ""')
+          if [ -n "$last" ] && git cat-file -e "$last^{commit}" 2>/dev/null \
+             && git diff --quiet "$last" HEAD -- $WATCHED; then
+            echo "unchanged since $last"; echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed since ${last:-the start}"; echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  texlive:
+    needs: changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # frozen releases (rebuilt by upstream for OS updates only) and the current release
+        image: [TL2023-historic, TL2024-historic, TL2025-historic, latest]
+    # the current release runs every week; the frozen ones only after a change
+    if: ${{ !cancelled() }}
+    steps:
+      - name: Skip unchanged frozen release
+        id: skip
+        run: |
+          if [ "${{ matrix.image }}" != latest ] && [ "${{ needs.changes.outputs.changed }}" != true ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "texlive/texlive:${{ matrix.image }}: skipped (no change since the last successful run)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.skip.outputs.skip != 'true'
+      - name: Dev image on texlive/texlive:${{ matrix.image }}
+        if: steps.skip.outputs.skip != 'true'
+        run: docker build -q --build-arg TEXLIVE_IMAGE=texlive/texlive:${{ matrix.image }} -t chapmk-dev . > /dev/null
+      - name: TeX version
+        if: steps.skip.outputs.skip != 'true'
+        id: version
+        run: echo "line=$(docker run --rm -v "$PWD":/work:ro chapmk-dev bash /work/tests/tex-version.sh)" >> "$GITHUB_OUTPUT"
+      - name: Reference cache
+        # per TeX version (tests/conftest.py keys the entries by the installation as well)
+        if: steps.skip.outputs.skip != 'true'
+        uses: actions/cache@v4
+        with:
+          path: .test-cache
+          key: versions-cache-${{ matrix.image }}-${{ github.run_id }}
+          restore-keys: versions-cache-${{ matrix.image }}-
+      - name: All tests (slow, scenario, acceptance)
+        if: steps.skip.outputs.skip != 'true'
+        run: |
+          docker run --rm -v "$PWD":/work -w /work --user root chapmk-dev bash -c '
+            set -e
+            pip install -q -e .
+            pytest -n auto --dist worksteal -q -rfE
+          '
+      - name: Summary
+        if: always() && steps.skip.outputs.skip != 'true'
+        run: |
+          echo "texlive/texlive:${{ matrix.image }}: **${{ job.status }}** — ${{ steps.version.outputs.line }}" >> "$GITHUB_STEP_SUMMARY"
+
+  miktex:
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # the image is about 7.6 GB packed and 11 GB unpacked; a runner has about 14 GB free
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af
+      - name: Current MiKTeX image (built from today's packages, not cached)
+        run: docker build -q -f Dockerfile.miktex -t chapmk-miktex . > /dev/null
+      - name: TeX version
+        id: version
+        run: echo "line=$(docker run --rm -v "$PWD":/work:ro chapmk-miktex bash /work/tests/tex-version.sh)" >> "$GITHUB_OUTPUT"
+      - name: All tests (slow, scenario, acceptance)
+        run: |
+          docker run --rm -v "$PWD":/work -w /work --user root chapmk-miktex bash -c '
+            set -e
+            pip install -q -e .
+            pytest -n auto --dist worksteal -q -rfE
+          '
+      - name: Summary
+        if: always()
+        run: |
+          echo "MiKTeX (Linux): **${{ job.status }}** — ${{ steps.version.outputs.line }}" >> "$GITHUB_STEP_SUMMARY"

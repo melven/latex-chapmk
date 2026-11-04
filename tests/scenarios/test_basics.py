@@ -1,5 +1,4 @@
-"""M3 scenarios (PLAN §8.2): T1, T14, T15, T17 on the thesis corpus; unit grouping on hgb.
-The M3 test of the cold fallback after a layout change is replaced by T2 (M4).
+"""Basic scenarios (design §8.2): T1, T14, T15, T17 on the thesis corpus; unit grouping on hgb.
 
 Each scenario asserts §3.3 equality against --full (``chapmk build --check``) and the set of
 compiled includes from ``--report``.
@@ -20,7 +19,7 @@ def test_t1_typo_compiles_one_unit(thesis: Path, capsys: pytest.CaptureFixture[s
     Right after a run with all units, one glue-only run can follow: a deferred write of the
     glue (``\\appendix`` writes ``\\def\\@chapapp`` into the list files at the next
     shipout) lands after appB's entries instead of before them when appA is not compiled,
-    so the list files change once (PLAN §6.7.1). In the steady state a typo is one run.
+    so the list files change once (design §6.7.1). In the steady state a typo is one run.
     """
     # the cold build ended with a run of all units: its .bcf is a full run's
     bcf = thesis / ".chapmk" / "main" / "canon" / "main.bcf"

@@ -1,4 +1,4 @@
-"""Shadow tree of the source directory (PLAN §6.5, S2).
+"""Shadow tree of the source directory (design §6.5, S2).
 
 TeX runs work in ``<build>/src``, a mirror of the source tree made of symlinks (directories
 are real). Build outputs of manual builds (``<jobname>.*`` except the main file, unit aux

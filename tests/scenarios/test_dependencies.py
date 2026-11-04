@@ -1,4 +1,4 @@
-"""M4 scenarios (PLAN §8.2): T2-T13, T16, T18, T18b, T19, T20 on the thesis corpus.
+"""Scenarios of the dependency model (design §8.2): T2-T13, T16, T18-T20 on the thesis corpus.
 
 Each scenario starts from a built state, edits, builds with ``--check`` (§3.3 against
 ``--full``) and asserts the compiled includes and runs from ``--report``.
@@ -45,7 +45,7 @@ def test_t2_page_count_change_tail_run(thesis: Path, capsys: pytest.CaptureFixtu
     """T2: ch3 gets longer -> ch3, then a tail run ch4..appB (entries changed), then the
     importers of moved labels; no full fallback."""
     edit(ch(thesis, "ch3"), "\\section*{Remarks on ch3}", PARA + "\n\\section*{Remarks on ch3}")
-    rep = checked(thesis, capsys, "-j", "1")  # sequential: the M4 tail run (M5: test_parallel.py)
+    rep = checked(thesis, capsys, "-j", "1")  # sequential: a tail run (parallel: test_parallel.py)
     assert rep["mode"] == "incremental"
     sels = selections(rep)
     assert sels[0] == ["chapters/ch3"]
@@ -130,8 +130,8 @@ def test_t9_new_figure(thesis: Path, capsys: pytest.CaptureFixture[str]) -> None
     """T9: a new figure in ch2 -> ch2, glue (LoF). Entry differences of later units in
     counters their numbered \\chapter resets (figure, subfigure) are ignored.
 
-    PLAN expected later units to stay clean; with hyperref they cannot: the caption steps
-    \\Hy@linkcounter, which names the anchors of later captions and starred sections
+    The original plan expected later units to stay clean; with hyperref they cannot: the
+    caption steps \\Hy@linkcounter, which names the anchors of later captions and starred sections
     (``section*.N``); old pages of ch3 would keep anchor names that ch2 now uses. So ch3..appB
     follow in a tail run, and only because of that register. (A tikzpicture would also step
     pgf's picture id counter, which moves later remember-picture ids.)
@@ -152,7 +152,7 @@ def test_t9_new_figure(thesis: Path, capsys: pytest.CaptureFixture[str]) -> None
 
 
 def test_t10_page_parity_change(thesis: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    """T10: ch1 gets longer (page parity, openright) -> output correct (tail run in M4)."""
+    """T10: ch1 gets longer (page parity, openright) -> output correct (sequential tail run)."""
     edit(ch(thesis, "ch1"), "\\section*{Remarks on ch1}", PARA + "\n\\section*{Remarks on ch1}")
     rep = checked(thesis, capsys)
     assert rep["mode"] == "incremental" and selections(rep)[0] == ["chapters/ch1"]

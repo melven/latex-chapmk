@@ -1,5 +1,5 @@
 %% chapmk-ini.sty -- loaded before \documentclass in format builds and in full-mode and
-%% reference builds (PLAN §6.4.1). Records and hooks only, no logic.
+%% reference builds (design §6.4.1). Records and hooks only, no logic.
 %% The version must equal the driver version (chapmk.__version__).
 \NeedsTeXFormat{LaTeX2e}[2023/06/01]
 \ProvidesPackage{chapmk-ini}[2026/11/03 v0.9.0 chapmk: format and reference-build hooks]
@@ -107,7 +107,15 @@
 \def\chapmk@externalize[#1]{\@ifnextchar\bgroup
   {\chapmk@externalize@{#1}\@gobble}{\chapmk@externalize@{#1}}}
 \def\chapmk@externalize@#1{\chapmk@orig@externalize[#1,mode=convert with system call]}
-\AddToHook{file/tikzlibraryexternal.code.tex/after}{\chapmk@redirect@externalize}
+% once, after the external library is loaded: pgf >= 3.1.12 loads libraries with LaTeX's
+% \InputIfFileExists (file hooks); pgf <= 3.1.11 with `\input file\relax', which runs no
+% file hooks, so also after every \usetikzlibrary (tikz's \use@@tikzlibrary, same in both)
+\def\chapmk@redirect@once{\ifdefined\chapmk@redirected\else\ifdefined\tikzexternalize
+  \gdef\chapmk@redirected{}\chapmk@redirect@externalize\fi\fi}
+\AddToHook{file/tikzlibraryexternal.code.tex/after}{\chapmk@redirect@once}
+\AddToHook{package/tikz/after}{%
+  \let\chapmk@orig@usetikzlibrary\use@@tikzlibrary
+  \def\use@@tikzlibrary#1{\chapmk@orig@usetikzlibrary{#1}\chapmk@redirect@once}}
 % files read inside a picture being exported (\input, graphics): their changes make the
 % figure stale (the driver also checks the files named in the picture code, e.g. tables)
 \def\chapmk@picfile#1{\ifx\chapmk@picexport\@empty\else

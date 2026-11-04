@@ -1,4 +1,4 @@
-"""Canonical state (PLAN §6.6): what the last successful build consists of, persisted as JSON."""
+"""Canonical state (design §6.6): what the last successful build consists of, persisted as JSON."""
 
 from __future__ import annotations
 

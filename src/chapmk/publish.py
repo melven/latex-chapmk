@@ -1,4 +1,4 @@
-"""Atomic replacement of the user-visible outputs (PLAN §6.16 "Output replacement")."""
+"""Atomic replacement of the user-visible outputs (design §6.16 "Output replacement")."""
 
 from __future__ import annotations
 

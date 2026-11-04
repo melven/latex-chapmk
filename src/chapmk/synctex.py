@@ -1,4 +1,4 @@
-"""SyncTeX files (PLAN §6.12, S10): read, write with recomputed offsets, map paths, merge."""
+"""SyncTeX files (design §6.12, S10): read, write with recomputed offsets, map paths, merge."""
 
 from __future__ import annotations
 
@@ -39,7 +39,10 @@ def serialise(lines: Sequence[str]) -> bytes:
 
 def write_lines(path: Path, lines: Sequence[str]) -> None:
     """Write ``lines`` gzip-compressed (deterministic: no file name or time in the header)."""
-    data = serialise(lines)
+    _write_gzip(path, serialise(lines))
+
+
+def _write_gzip(path: Path, data: bytes) -> None:
     with (
         path.open("wb") as raw,
         gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0, compresslevel=1) as f,
@@ -76,9 +79,6 @@ def rewrite_paths(src: Path, dst: Path, mapping: Sequence[tuple[str, str]]) -> N
 # --- merge (§6.12, S10) ------------------------------------------------------------------------
 
 HEADER_KEYS = ("Output", "Magnification", "Unit", "X Offset", "Y Offset")
-_TAGGED = re.compile(r"^([\[(hgkx$vr])(\d+),")
-_SHEET_OPEN = re.compile(r"^\{(\d+)$")
-_SHEET_CLOSE = re.compile(r"^\}(\d+)$")
 
 
 class SyncTexError(FallbackError):
@@ -94,67 +94,116 @@ class ParsedSyncTex:
     sheets: dict[int, list[str]]
 
 
+# Whole-text patterns, each starting with the newline before its line (the text gets one in
+# front): a literal first character lets the regex engine skip ahead, ``^`` with MULTILINE
+# tries every position (about five times slower on these files).
+_INPUT_LINE = re.compile(r"\nInput:([^:\n]*):([^\n]*)")
+_HEADER_LINE = re.compile(r"\n(" + "|".join(re.escape(k) for k in HEADER_KEYS) + r"):([^\n]*)")
+_MARKER = re.compile(r"\n([{}])(\d+)(?![^\n])")
+#: lines a sheet does not keep: offsets (``!``), inputs (recorded separately), empty lines
+_SKIPPED = re.compile(r"\n(?:(?:!|Input:)[^\n]*|(?![^\n]))")
+#: record type and input tag of a record line (split: text, type, tag, text, ...)
+_TAG_SPLIT = re.compile(r"(\n[\[(hgkx$vr])(\d+)(?=,)")
+
+
+@dataclass
+class _Sheets:
+    """One file, read for a merge: inputs, header and the text of the sheets asked for, each
+    record line with the newline in front of it (``"\nline1\nline2"``)."""
+
+    inputs: dict[str, str]
+    header: dict[str, str]
+    sheets: dict[int, str]
+
+
+def _read(path: Path, wanted: set[int] | None) -> _Sheets:
+    """Inputs, header and sheets (``wanted``: their numbers, None: all) of a ``.synctex.gz``
+    file. Whole-text regular expressions instead of a loop over the lines: a run's file has
+    every page of the run, a merge usually needs a part of them."""
+    with gzip.open(path, "rb") as f:
+        text = "\n" + f.read().decode(*ENCODING)
+    inputs = {tag: name for tag, name in _INPUT_LINE.findall(text)}
+    markers = list(_MARKER.finditer(text))
+    ends = [m.start() for m in markers[1:]] + [len(text)]  # each marker's part of the text
+    header = dict(_HEADER_LINE.findall(text, 0, markers[0].start() if markers else len(text)))
+    sheets: dict[int, str] = {}
+    for m, end in zip(markers, ends, strict=True):
+        if m.group(1) == "}":  # header lines after the content count as well, as in a line scan
+            header.update(_HEADER_LINE.findall(text, m.end(), end))
+            continue
+        n = int(m.group(2))
+        if wanted is None or n in wanted:
+            sheets[n] = sheets.get(n, "") + _SKIPPED.sub("", text[m.end() : end])
+    return _Sheets(inputs, header, sheets)
+
+
 def parse(path: Path) -> ParsedSyncTex:
-    inputs: dict[str, str] = {}
-    header: dict[str, str] = {}
-    sheets: dict[int, list[str]] = {}
-    current: list[str] | None = None
-    for line in read_lines(path):
-        if line.startswith("Input:"):
-            _, tag, name = line.split(":", 2)
-            inputs[tag] = name
-        elif (m := _SHEET_OPEN.match(line)) is not None:
-            current = sheets.setdefault(int(m.group(1)), [])
-        elif _SHEET_CLOSE.match(line):
-            current = None
-        elif current is not None:
-            if line and not line.startswith("!"):
-                current.append(line)
-        elif ":" in line and line.split(":", 1)[0] in HEADER_KEYS:
-            key, value = line.split(":", 1)
-            header[key] = value
-    return ParsedSyncTex(inputs, header, sheets)
+    """All inputs, header values and sheets of a ``.synctex.gz`` file."""
+    read = _read(path, None)
+    sheets = {n: body.split("\n")[1:] for n, body in read.sheets.items()}
+    return ParsedSyncTex(read.inputs, read.header, sheets)
 
 
 def merge(pages: Sequence[tuple[Path, int]], map_path: Callable[[str], str], out: Path) -> None:
     """Merged SyncTeX file for ``pages`` = (source ``.synctex.gz``, 0-based page index) in merged
-    order. Input tags are renumbered globally, paths mapped with ``map_path`` (keep ``/./``,
-    S10), sheets renumbered, ``!`` offsets and the postamble recomputed."""
-    parsed: dict[Path, ParsedSyncTex] = {}
-    for src, _ in pages:
-        if src not in parsed:
-            parsed[src] = parse(src)
+    order. Input tags are renumbered globally in the order of their first use, paths mapped
+    with ``map_path`` (keep ``/./``, S10), sheets renumbered, ``!`` offsets and the postamble
+    recomputed. Each file is read once, for the sheets of its pages only."""
+    wanted: dict[Path, set[int]] = {}
+    for src, index in pages:
+        wanted.setdefault(src, set()).add(index + 1)
+    parsed = {src: _read(src, numbers) for src, numbers in wanted.items()}
     headers = {tuple(sorted(p.header.items())) for p in parsed.values()}
     if len(headers) != 1:
         raise SyncTexError(f"inconsistent SyncTeX headers: {sorted(headers)}")
     header = dict(next(iter(headers)))
     tags: dict[str, int] = {}
-    local: dict[tuple[Path, str], int] = {}  # (file, its tag) -> merged tag; maps each input once
-    body: list[str] = []
+    local: dict[tuple[Path, str], str] = {}  # (file, its tag) -> merged tag; maps each input once
+    blocks: list[tuple[int, bytes]] = []  # (merged sheet number, body)
     count = 0
     for n, (src, index) in enumerate(pages, start=1):
         p = parsed[src]
-        sheet = p.sheets.get(index + 1)
-        if sheet is None:
+        body = p.sheets.get(index + 1)
+        if body is None:
             raise SyncTexError(f"{src}: no sheet for page {index + 1}")
-        body += ["!0", f"{{{n}"]
-        for line in sheet:
-            m = _TAGGED.match(line)
-            if m:
-                key = (src, m.group(2))
-                tag = local.get(key)
-                if tag is None:
-                    if m.group(2) not in p.inputs:  # tag 0: no input file (form xobjects)
-                        tag = local[key] = int(m.group(2))
-                    else:
-                        name = map_path(p.inputs[m.group(2)])
-                        tag = local[key] = tags.setdefault(name, len(tags) + 1)
-                line = f"{m.group(1)}{tag}," + line[m.end() :]
-            if not line.startswith(("]", ")")):
-                count += 1
-            body.append(line)
-        body += ["!0", f"}}{n}"]
-    lines = ["SyncTeX Version:1", *(f"Input:{t}:{name}" for name, t in tags.items())]
-    lines += [f"{k}:{header[k]}" for k in HEADER_KEYS if k in header]
-    lines += ["Content:", *body, "!0", "Postamble:", f"Count:{count}", "!0", "Post scriptum:"]
-    write_lines(out, lines)
+        parts = _TAG_SPLIT.split(body)
+        used = parts[2::3]
+        table: dict[str, str] = {}
+        for tag in dict.fromkeys(used):  # first use first
+            merged = local.get((src, tag))
+            if merged is None:
+                if tag not in p.inputs:  # tag 0: no input file (form xobjects)
+                    merged = str(int(tag))
+                else:
+                    name = map_path(p.inputs[tag])
+                    merged = str(tags.setdefault(name, len(tags) + 1))
+                local[(src, tag)] = merged
+            table[tag] = merged
+        if any(old != new for old, new in table.items()):
+            parts[2::3] = [table[tag] for tag in used]
+            body = "".join(parts)
+        count += body.count("\n") - body.count("\n]") - body.count("\n)")
+        blocks.append((n, body.encode(*ENCODING)))
+    head = ["SyncTeX Version:1", *(f"Input:{t}:{name}" for name, t in tags.items())]
+    head += [f"{k}:{header[k]}" for k in HEADER_KEYS if k in header]
+    data = bytearray("\n".join([*head, "Content:"]).encode(*ENCODING) + b"\n")
+    last = 0
+
+    def offset() -> None:  # "!<bytes since the previous ! line>" (S10)
+        nonlocal last
+        pos = len(data)
+        data.extend(f"!{pos - last}\n".encode())
+        last = pos
+
+    for n, raw in blocks:
+        offset()
+        data.extend(f"{{{n}".encode())
+        data.extend(raw)
+        data.extend(b"\n")
+        offset()
+        data.extend(f"}}{n}\n".encode())
+    offset()
+    data.extend(f"Postamble:\nCount:{count}\n".encode())
+    offset()
+    data.extend(b"Post scriptum:\n")
+    _write_gzip(out, bytes(data))
