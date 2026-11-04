@@ -1,0 +1,20 @@
+% S13: a colour set inside a textpos block on the title page (as hgbthesis 2025/02/24's
+% default theme does for a missing advisor). Does the colour reach the next page, and is it
+% the same with chapmk's format as in a plain build?
+\documentclass{book}
+\usepackage{xcolor}
+\usepackage[absolute]{textpos}
+\setlength{\TPHorizModule}{10mm}
+\setlength{\TPVertModule}{10mm}
+\begin{document}
+\begin{titlepage}
+\begin{textblock}{15}(3,25)
+\centering
+\color{red}No advisor(s) specified!\\
+\end{textblock}
+\null
+\end{titlepage}
+Text on the page after the title page.
+\include{ch1}
+\include{ch2}
+\end{document}
