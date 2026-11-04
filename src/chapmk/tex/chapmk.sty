@@ -356,6 +356,8 @@
 \def\chapmk@picseg{\chapmk@seg}
 \def\chapmk@picstate@setup{\let\chapmk@pfx\chapmk@all}
 \def\chapmk@picstate{\chapmk@cvec}
+% S13: the nodes the format part left on the main vertical list (chapmk-ini.sty)
+\ifdefined\chapmk@mvlbox\ifvoid\chapmk@mvlbox\else\unvbox\chapmk@mvlbox\fi\fi
 % the deferral table (§6.3.3)
 \chapmk@deferred
 % S13: the primitives wrapped in the format part (chapmk-ini.sty) after their replay

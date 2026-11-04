@@ -145,4 +145,21 @@
     tex_pdfnames:D,tex_pdftrailer:D\do{\expandafter\chapmk@pdfwrap\expandafter{\chapmk@tmp}}
 \fi
 
+% S13: nodes that the format part leaves on the main vertical list are not dumped (e.g. the
+% unmatched \pdfcolorstack 0 push {0 g 0 G} and the empty \write of xcolor: without them a
+% colour left open across a page break ends on that page). At the end of the format source
+% (gensrc.format_source), \chapmk@capturemvl moves them into a box register, which is
+% dumped: an empty box ends the page, a local output routine keeps the page without that
+% box and its \topskip glue. chapmk.sty puts them back at the split point of every run.
+\ifcsname chapmk@formatbuild\endcsname
+  \newbox\chapmk@mvlbox
+  \def\chapmk@capturemvl{\ifvmode
+    \edef\chapmk@pd{\the\prevdepth}\edef\chapmk@op{\the\outputpenalty}%
+    \begingroup
+      \output{\global\setbox\chapmk@mvlbox\vbox{\unvbox255 \setbox0\lastbox\unskip}}%
+      \hbox{}\penalty-10000
+    \endgroup
+    \deadcycles=0 \global\outputpenalty=\chapmk@op\relax \prevdepth=\chapmk@pd\relax\fi}
+\fi
+
 \endinput
