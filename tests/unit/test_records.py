@@ -61,7 +61,7 @@ def test_read_run_records(tmp_path: Path) -> None:
     write_run(d)
     r = read_run_records(d, a)
     assert r.base == {0: 1, 276: 5}
-    assert r.segments_in_order() == ["G0", "U1", "G1", "G2"]
+    assert list(r.entries) == ["G0", "U1", "G1", "G2"]
     assert r.entry_state("G1") == {0: 7, 276: 6}
     assert r.glue_exits["G2"] == {0: 8, 276: 6}
     assert r.checkpoints["U1"] == {0: 7, 276: 6, 280: -2}

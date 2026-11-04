@@ -82,7 +82,7 @@ def test_records_and_restore(copy_corpus) -> None:  # type: ignore[no-untyped-de
     # all segments in document order, units numbered like the analysis
     n = len(a.includes)
     expected = ["G0"] + [s for k in range(1, n + 1) for s in (f"U{k}", f"G{k}")]
-    assert full.segments_in_order() == expected
+    assert list(full.entries) == expected
     assert set(full.checkpoints) == {f"U{k}" for k in range(1, n + 1)}
     assert set(full.glue_exits) == {f"G{k}" for k in range(n + 1)}
     # page map: every page attributed; units start on their own pages
@@ -110,7 +110,7 @@ def test_records_and_restore(copy_corpus) -> None:  # type: ignore[no-untyped-de
     [r] = run_batch(a, lay, dist, env, [spec], fmt.path, jobs=2)
     assert r.ok, r.first_error
     part = read_run_records(r.directory, a)
-    assert part.segments_in_order() == expected
+    assert list(part.entries) == expected
     for seg in expected:
         assert part.entry_state(seg) == full.entry_state(seg), seg
     # every partial page equals the full-run page with the same label
