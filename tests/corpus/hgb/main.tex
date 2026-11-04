@@ -1,50 +1,19 @@
-%%% File encoding: UTF-8
-%%% äöüÄÖÜß  <-- umlaut check: use a UTF-8 capable editor
-
-%%% Magic comments for compatible IDEs
-% !TeX encoding = utf8
-% !TeX program = pdflatex
-% !TeX spellcheck = en_US
-% Corpus document derived (anonymised) from a user's hgbthesis preamble (design §8.1).
-% Changes against the original: names/titles replaced, \usepackage{bookmark} added,
-% biblatex options via \ExecuteBibliographyOptions (class loads biblatex with biber),
-% glossary stub, logo and ../ graphics path removed; neutral local theme (hgbtheme-example.sty).
 \documentclass[theme=example,language=english]{hgbthesis}
-%%%----------------------------------------------------------
-
-
-
-\graphicspath{{images/}}    % directory with images
-% biblatex is loaded by hgbthesis (hgbbib.sty, backend=biber); a second \usepackage{biblatex}
-% with other options would clash
 \ExecuteBibliographyOptions{giveninits=true}
 \addbibresource{references.bib}
 \usepackage{bookmark}
-
-%%%-------------- Import macros (user defined commands here)
 \input{macros/tags}
 \input{macros/placeholder_empty_section}
-%%%----------------------------------------------------------
 
-%% ensure floats (mainly images here) stay in the section they are defined in
 \usepackage[section]{placeins}
-
-%%%
-% Preamble
-%-----------------------------------------------------------------------------------
 \usepackage{listings}
 
-% XML styling definition (tex.stackexchange.com/questions/10255)
-\definecolor{gray}{rgb}{0.4,0.4,0.4}
-\definecolor{darkblue}{rgb}{0.0,0.0,0.6}
-\definecolor{purple}{rgb}{0.5,0.0,1.0}
+# inspired by: https://tex.stackexchange.com/questions/10255/xml-syntax-highlighting
+\definecolor{gray}{rgb}{0.35,0.35,0.35}
+\definecolor{darkblue}{rgb}{0.0,0.0,0.65}
+\definecolor{purple}{rgb}{0.51,0.0,0.95}
 
-\lstset{
-    basicstyle=\ttfamily,
-    columns=fullflexible,
-    showstringspaces=false,
-    commentstyle=\color{gray}\upshape
-}
+\lstset{basicstyle=\ttfamily,columns=fullflexible,showstringspaces=false,commentstyle=\color{gray}\upshape}
 
 \lstdefinelanguage{XML}
 {
@@ -53,21 +22,18 @@
     moredelim=[s][\bfseries\color{darkblue}]{</}{>},
     moredelim=[l][\bfseries\color{darkblue}]{/>},
     moredelim=[l][\bfseries\color{darkblue}]{>},
-    %    morestring=[s]{>}{<},
     morecomment=[s]{<?}{?>},
     stringstyle=\color{purple}\textbf,
     identifierstyle=\color{darkblue},
     keywordstyle=\color{red},
-    morekeywords={name, label, limits, data, size, unit, file}% list your attributes here
+    morekeywords={name, label, limits, data, size, unit, file}
 }
 \lstdefinelanguage{none}{
     identifierstyle=
 }
 
 
-% print underscores as underscores except as string arguments
 \usepackage[strings]{underscore}
-%end
 \usepackage{color}
 \usepackage{multirow}
 \usepackage{arydshln}
@@ -75,8 +41,6 @@
 \usepackage{amsmath}
 \usepackage{tcolorbox}
 \usepackage{longtable}
-
-% Draw figures with simple geometry
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric, arrows, angles}
 
@@ -84,9 +48,6 @@
 \newcommand{\ExampleSim}{ExampleSim\textsuperscript{\textregistered}}
 
 
-%%%----------------------------------------------------------
-% Title page data
-%%%----------------------------------------------------------
 \title{\ExampleSim\ Documentation}
 \author{Author One \& Author Two \\ and many more}
 \placeofstudy{ Institute of Examples \& Institute of Samples}
