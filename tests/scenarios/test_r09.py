@@ -203,3 +203,56 @@ def test_eqparbox_tag_shared_by_chapters(
     path = src / "c.tex"
     path.write_text(path.read_text().replace("Text c.", "Txet c."))
     assert checked(src, capsys)["mode"] == "incremental"
+
+
+def _format_state_document(src: Path, preamble: str) -> None:
+    src.mkdir()
+    (src / "main.tex").write_text(
+        f"\\documentclass{{book}}\n{preamble}\n\\usepackage{{amsmath}}\n\\begin{{document}}\n"
+        "\\include{a}\n\\include{b}\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}Text $x^2 + \\alpha$.\n")
+    (src / "b.tex").write_text("\\chapter{B}Text b.\n")
+
+
+@pytest.mark.parametrize(
+    ("preamble", "reason"),
+    [
+        ("\\usepackage{cmap}", "writes PDF objects immediately"),
+        ("\\chardef\\mystack=\\pdfcolorstackinit page direct{0 g 0 G}", "creates colour stacks"),
+        ("\\def\\kw{(k)}\\pdfinfo\\expandafter{\\expandafter/Keywords\\kw}", "without a braced"),
+    ],
+)
+def test_state_a_format_loses_gives_a_full_build(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    preamble: str,
+    reason: str,
+) -> None:
+    """S13: immediate PDF objects (cmap's ToUnicode maps), colour stacks and catalog entries
+    that cannot be recorded in the format part: full build with the reason."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    _format_state_document(src, preamble)
+    rep = checked(src, capsys)
+    assert rep["mode"] == "full" and "format build failed" in rep["reason"], rep
+    assert reason in rep["reason"], rep
+
+
+def test_catalog_and_info_of_the_format_part_are_replayed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """S13: \\pdfcatalog and \\pdfinfo in the format part are recorded and replayed by every
+    run (check compares the catalog and the document info)."""
+    import pikepdf
+
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    _format_state_document(src, "\\pdfcatalog{/PageMode /UseThumbs}\\pdfinfo{/Keywords (k1)}")
+    assert checked(src, capsys)["mode"] == "cold"
+    path = src / "b.tex"
+    path.write_text(path.read_text().replace("Text b.", "Txet b."))
+    assert checked(src, capsys)["mode"] == "incremental"
+    with pikepdf.open(src / "main.pdf") as pdf:
+        assert pdf.Root.PageMode == "/UseThumbs" and str(pdf.docinfo["/Keywords"]) == "k1"

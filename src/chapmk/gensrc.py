@@ -20,18 +20,28 @@ def _ending(line: str) -> str:
 
 def format_source(analysis: Analysis) -> str:
     """Format source ``pre.tex``: ``\\RequirePackage{chapmk-ini}`` prepended to line 1,
-    lines ``1..s-1`` verbatim, then the PDF object counters (objects cannot be dumped; checked
-    by :func:`chapmk.fmt.ensure_format`) and ``\\endofdump`` (mylatexformat)."""
+    lines ``1..s-1`` verbatim, then the probes of state a format cannot keep (PDF objects,
+    colour stacks, unrecorded catalog entries; checked by :func:`chapmk.fmt.ensure_format`,
+    S13) and ``\\endofdump`` (mylatexformat)."""
     nl = analysis.newline
     lines = list(analysis.lines[: analysis.split_line - 1])
     if not lines:
         lines = [nl]
-    lines[0] = f"\\RequirePackage{{{INI_PACKAGE}}}{lines[0]}"
+    # \chapmk@formatbuild: chapmk-ini records what a format does not keep (S13)
+    lines[0] = (
+        "\\expandafter\\def\\csname chapmk@formatbuild\\endcsname{}"
+        f"\\RequirePackage{{{INI_PACKAGE}}}{lines[0]}"
+    )
     if not lines[-1].endswith("\n"):
         lines[-1] += nl
     check = (
         "\\ifdefined\\pdflastobj\\typeout{chapmk-pdf-objects:\\the\\pdflastobj,"
         "\\the\\pdflastxform,\\the\\pdflastximage}\\fi"
+        # S13: the next free colour stack (1: none was created) and unrecorded \pdfcatalog ...
+        "\\ifdefined\\pdfcolorstackinit\\typeout{chapmk-pdf-colorstacks:"
+        "\\the\\numexpr\\pdfcolorstackinit direct{}\\relax}\\fi"
+        "\\ifcsname chapmk@pdfunrecorded\\endcsname\\typeout{chapmk-pdf-unrecorded:"
+        "\\csname chapmk@pdfunrecorded\\endcsname}\\fi"
     )
     return "".join(lines) + check + "\\endofdump" + nl
 

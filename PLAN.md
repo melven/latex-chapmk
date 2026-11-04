@@ -204,7 +204,7 @@ pdflatex -ini -jobname=pre -output-directory=.chapmk/fmt "&pdflatex" mylatexform
 
 #### 6.3.3 Deferral (`chapmk-ini.sty`, format mode only)
 
-`\openout` calls during the dump (e.g. `\makenomenclature`) need no handling: mylatexformat replays them at runtime (S1). The deferral table in `chapmk-ini.sty` is kept, empty, as a contingency for state that is opened or frozen by other means.
+`\openout` calls during the dump (e.g. `\makenomenclature`) need no handling: mylatexformat replays them at runtime (S1). pdfTeX does not dump the entries of `\pdfcatalog`, `\pdfinfo`, `\pdfnames` and `\pdftrailer` (S13): in format builds (`\chapmk@formatbuild`, set by the format source) `chapmk-ini.sty` wraps them and their expl3 names, records each call with a braced argument in the deferral table `\chapmk@deferred`, and chapmk.sty replays the table at the split point of every run, then restores the primitives. Other state a dump loses is detected by the format build and makes it fail, so the build falls back to full mode (§6.14, S13): immediate PDF objects (pdfTeX's `dangling objects discarded`, e.g. the `cmap` package), colour stacks (probe `\pdfcolorstackinit` at the end of the format source), unrecorded catalog calls, form xobjects and images. Splitting before `cmap` does not help: the fonts it must reach are already loaded in the format part.
 
 ### 6.4 LaTeX packages
 
@@ -622,7 +622,7 @@ Full mode means plain sequential full runs to a fixpoint inside the build direct
 - an eqparbox tag used in several segments whose width changed while they were last compiled in different runs (C13; the warning suggests one tag per chapter);
 - biblatex refsections (option `refsection=` other than `none`, `\begin{refsection}`, `\newrefsection` in the main file or a unit; C10): detected statically, so no build attempt is wasted; citations in a refsection other than 0 found at runtime also fall back;
 - `\documentclass` not before the split line (e.g. on the `\begin{document}` line);
-- format build failure;
+- format build failure, including state a format cannot keep (S13: immediate PDF objects such as the `cmap` package's, colour stacks, unrecorded `\pdfcatalog`/`\pdfinfo` calls);
 - a merge error (missing destinations, inconsistent SyncTeX header);
 - the fixpoint not reached (§6.9.2);
 - missing, truncated or inconsistent records (e.g. a page without a page-map entry or of an unknown segment);

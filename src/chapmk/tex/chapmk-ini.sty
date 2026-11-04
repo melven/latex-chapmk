@@ -118,7 +118,31 @@
   \def\Gin@setfile#1#2#3{\chapmk@picfile{#3}\chapmk@ini@Gin@setfile{#1}{#2}{#3}}\fi}
 \AddToHook{begindocument/before}{\InputIfFileExists{chapmk-pics.tex}{}{}}
 
-% Deferral table (§6.3.3): empty in v1, because mylatexformat replays \openout calls (S1).
+% Deferral table (§6.3.3), run by chapmk.sty at the split point of every run. \openout calls
+% need no entry: mylatexformat replays them (S1).
 \def\chapmk@deferred{}
+
+% S13: pdfTeX does not dump the entries of \pdfcatalog, \pdfinfo, \pdfnames and \pdftrailer
+% (nor their expl3 names) made in the format part. In format builds they are recorded, in
+% order, as deferral entries that the runs replay; the deferral table ends by restoring the
+% primitives. A call whose argument is not a braced text is not recorded: it is reported
+% (chapmk-pdf-unrecorded) and the format is rejected.
+\ifcsname chapmk@formatbuild\endcsname
+  \def\chapmk@pdfwrap#1{\ifcsname #1\endcsname
+    \expandafter\let\csname chapmk@orig@#1\expandafter\endcsname\csname #1\endcsname
+    \expandafter\protected\expandafter\def\csname #1\endcsname{\chapmk@pdfrec{#1}}%
+    \g@addto@macro\chapmk@pdfunwrapall{\chapmk@pdfunwrap{#1}}\fi}
+  \def\chapmk@pdfunwrapall{}
+  \def\chapmk@pdfunwrap#1{%
+    \expandafter\let\csname #1\expandafter\endcsname\csname chapmk@orig@#1\endcsname}
+  \def\chapmk@pdfrec#1{\@ifnextchar\bgroup{\chapmk@pdfrec@{#1}}{\chapmk@pdfunrec{#1}}}
+  \long\def\chapmk@pdfrec@#1#2{%
+    \g@addto@macro\chapmk@deferred{\chapmk@pdfreplay{#1}{#2}}%
+    \csname chapmk@orig@#1\endcsname{#2}}
+  \long\def\chapmk@pdfreplay#1#2{\csname chapmk@orig@#1\endcsname{#2}}
+  \def\chapmk@pdfunrec#1{\xdef\chapmk@pdfunrecorded{#1}\csname chapmk@orig@#1\endcsname}
+  \@for\chapmk@tmp:=pdfcatalog,pdfinfo,pdfnames,pdftrailer,tex_pdfcatalog:D,tex_pdfinfo:D,%
+    tex_pdfnames:D,tex_pdftrailer:D\do{\expandafter\chapmk@pdfwrap\expandafter{\chapmk@tmp}}
+\fi
 
 \endinput
