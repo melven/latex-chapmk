@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from chapmk.analysis import Analysis
-from chapmk.aux import parse_bookmark, read_lines, segment_slices
+from chapmk.auxfile import parse_bookmark, read_lines, segment_slices
 from chapmk.canon import segments
 from chapmk.errors import FallbackError, TexError
 from chapmk.files import digest, write_atomic

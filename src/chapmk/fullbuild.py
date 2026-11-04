@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from chapmk.analysis import Analysis
-from chapmk.aux import read_lines
+from chapmk.auxfile import read_lines
 from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import TexError
 from chapmk.files import digest, write_atomic

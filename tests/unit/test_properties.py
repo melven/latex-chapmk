@@ -8,7 +8,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from chapmk.analysis import encode_source, read_source
-from chapmk.aux import statements
+from chapmk.auxfile import statements
 from chapmk.canon import splice_list, unit_sections
 from chapmk.texsource import split_lines, text_lines
 from chapmk.tools import citekey_lines, patch_bcf
