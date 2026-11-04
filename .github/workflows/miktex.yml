@@ -1,0 +1,125 @@
+name: miktex
+
+# MiKTeX backend (M9): manual trigger only (Windows minutes count double on private
+# repositories). Linux uses Dockerfile.miktex (complete MiKTeX); Windows installs MiKTeX with
+# Chocolatey (packages installed on the fly, after a sequential warm-up) and runs the whole
+# suite. workflow_dispatch needs this file on the default branch.
+on:
+  workflow_dispatch:
+    inputs:
+      linux:
+        description: "Linux job (builds Dockerfile.miktex, complete MiKTeX: slow)"
+        type: boolean
+        default: false
+      windows:
+        description: "Windows job"
+        type: boolean
+        default: true
+
+env:
+  MIKTEX_REPOSITORY: https://ftp.fau.de/ctan/systems/win32/miktex/tm/packages/
+
+jobs:
+  linux-miktex:
+    if: ${{ inputs.linux }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write  # the MiKTeX image in GHCR
+    steps:
+      - uses: actions/checkout@v4
+      # the image is about 7.6 GB packed and 11 GB unpacked; a runner has about 14 GB free
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af
+          df -h /
+      - name: MiKTeX image (from GHCR, else build and publish)
+        # as the TeX Live image in ci.yml: tagged by the hash of its inputs, built once
+        env:
+          TAG: ${{ hashFiles('Dockerfile.miktex', 'requirements-dev.txt') }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/latex-chapmk-miktex:$TAG"
+          echo "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          if docker pull -q "$image"; then
+            docker tag "$image" chapmk-miktex
+          else
+            docker build -f Dockerfile.miktex -t chapmk-miktex .
+            docker tag chapmk-miktex "$image"
+            docker push -q "$image" || echo "::warning::could not publish $image (no package permission)"
+          fi
+      - name: Smoke test (corpora with latexmk, biber, makeindex, synctex, mylatexformat)
+        run: docker run --rm -v "$PWD":/work:ro chapmk-miktex bash /work/tests/miktex-smoke.sh
+      - name: Lint, type-check, all tests (slow, scenario, acceptance)
+        run: |
+          docker run --rm -v "$PWD":/work -w /work --user root chapmk-miktex bash -c '
+            set -e
+            pip install -e .
+            ruff check . && ruff format --check .
+            mypy --strict src
+            pytest -n auto --dist worksteal
+          '
+
+  windows-miktex:
+    if: ${{ inputs.windows }}
+    runs-on: windows-latest
+    timeout-minutes: 150
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install MiKTeX
+        run: |
+          choco install miktex --no-progress -y
+          $bin = "C:\Program Files\MiKTeX\miktex\bin\x64"
+          Add-Content $env:GITHUB_PATH $bin
+          $env:PATH = "$bin;$env:PATH"
+          mpm --admin --set-repository="$env:MIKTEX_REPOSITORY"
+          miktex --admin packages update-package-database
+          miktex --admin packages update
+          miktex --admin packages install mylatexformat nomencl biblatex latexmk
+          # on-the-fly installation "always" (the normal Windows setup; chapmk refuses "ask")
+          initexmf --admin --set-config-value "[MPM]AutoInstall=1"
+          initexmf --set-config-value "[MPM]AutoInstall=1"
+          initexmf --admin --update-fndb
+      - name: poppler (pdftoppm, pdftotext, pdfinfo for the §3.3 comparison)
+        run: |
+          & "$env:CONDA\Scripts\conda.exe" install -y -q -c conda-forge poppler
+          Add-Content $env:GITHUB_PATH "$env:CONDA\Library\bin"
+      - name: Install Python package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Unit tests (no TeX)
+        run: pytest -m "not slow"
+      - name: Warm-up (install the packages of the corpora once, sequentially)
+        # on-the-fly installation by parallel test runs could block or collide (PLAN §6.16)
+        run: |
+          $work = Join-Path $env:RUNNER_TEMP "warmup"
+          New-Item -ItemType Directory -Force $work | Out-Null
+          foreach ($c in "thesis", "hgb", "pictures") {
+            Copy-Item -Recurse "tests/corpus/$c" (Join-Path $work $c)
+            $dir = Join-Path $work $c
+            Get-ChildItem "$dir/fig/*.tex" -ErrorAction SilentlyContinue | ForEach-Object {
+              pdflatex -interaction=nonstopmode -output-directory="$dir/fig" $_.FullName | Out-Null
+            }
+            New-Item -ItemType Directory -Force (Join-Path $dir "fig_tmp") | Out-Null
+            Push-Location $dir
+            latexmk -pdf -shell-escape -interaction=nonstopmode main.tex | Out-Null
+            "$c : exit $LASTEXITCODE"
+            Pop-Location
+          }
+          Get-Command pdflatex, biber, makeindex, synctex, kpsewhich, latexmk, pdftoppm | Format-Table Name, Source
+      - name: All tests (slow, scenario, acceptance)
+        run: pytest -n auto --dist worksteal -rfE --junitxml=pytest-windows.xml
+      - name: Test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-windows-miktex
+          path: pytest-windows.xml

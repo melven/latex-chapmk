@@ -163,6 +163,15 @@ def prepare_figures(src: Path) -> None:
             tex.with_suffix(ext).unlink(missing_ok=True)
 
 
+def hgb_class_loads_cmap() -> bool:
+    """Whether the installed HagenbergThesis loads ``cmap`` in the format part of the hgb corpus:
+    hgbthesis 2025/02/24 (MiKTeX 26.5) does, the current one (TeX Live 2026) does not. Such a
+    format loses its immediate PDF objects (S13), so the hgb corpus builds in full mode there."""
+    r = subprocess.run(["kpsewhich", "hgb.sty"], capture_output=True, text=True, check=False)
+    path = r.stdout.strip()
+    return bool(path) and "\\RequirePackage{cmap}" in Path(path).read_text(errors="replace")
+
+
 THESIS_EPOCH = "1700000000"
 
 

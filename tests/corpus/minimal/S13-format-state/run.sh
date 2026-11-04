@@ -5,11 +5,14 @@
 #   cmap              \immediate\pdfobj (cmap's ToUnicode CMaps) before the split: FAIL (math text)
 #   colorstack        \pdfcolorstackinit before the split: TeX error "Unknown color stack number 1"
 #   colorstack-driver xcolor with TeX Live 2026's driver (stack 0 only): PASS
+#   colorleak-textpos  a colour set in a textpos block on the title page reaches the next page
+#                     in a plain build, not with the format: FAIL (raster of page 2), undetected;
+#                     without chapmk: colorleak-textpos/compare.sh (TeX Live and MiKTeX alike)
 #   catalog-info      \pdfcatalog, \pdfinfo before the split: PASS, but /PageMode and /Keywords
 #                     are missing in the incremental PDF (printed below; check does not compare them)
 set -u
 here=$(cd "$(dirname "$0")" && pwd)
-for case in cmap colorstack colorstack-driver catalog-info; do
+for case in cmap colorstack colorstack-driver catalog-info colorleak-textpos; do
   tmp=$(mktemp -d)
   cp -r "$here/$case" "$tmp/src"
   echo "== $case"

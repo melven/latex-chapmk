@@ -1,4 +1,13 @@
 % Neutral local theme for the corpus document (stands in for a project-specific theme).
 \ProvidesPackage{hgbtheme-example}
 \hgb@UseTheme{default}% parent theme
-\hgb@SetBrand[28mm]{example-image.pdf}{Beispielinstitut}{Example Institute}
+% logo and institution: \hgb@SetBrand in current HagenbergThesis (TeX Live 2026); older
+% versions (MiKTeX 26.5: hgbthesis 2025/02/24) have only the logo file macro
+\ifdefined\hgb@SetBrand
+  \hgb@SetBrand[28mm]{example-image.pdf}{Beispielinstitut}{Example Institute}
+\else
+  \renewcommand{\hgb@LogoFile}{example-image.pdf}
+  % the old class calls \DocumentMetadata at \begin{document}, which the LaTeX kernel of
+  % 2026 rejects; current versions set the PDF metadata with \hypersetup instead
+  \AddToHook{begindocument/before}{\def\hgb@SetDocumentMetadata{}}
+\fi

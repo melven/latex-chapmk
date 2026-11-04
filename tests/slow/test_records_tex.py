@@ -8,9 +8,11 @@ from pathlib import Path
 
 import pikepdf
 import pytest
+from conftest import hgb_class_loads_cmap
 
 from chapmk.analysis import analyse
 from chapmk.config import Config
+from chapmk.errors import TexError
 from chapmk.fmt import ensure_format
 from chapmk.layout import make_layout
 from chapmk.records import read_run_records
@@ -39,7 +41,7 @@ def converge_full_run(a, lay, dist, env, fmt, passes: int = 3) -> Path:  # type:
     canon.mkdir(parents=True, exist_ok=True)
     for n in range(passes):
         prepare_run_dir(a, lay, RunSpec("full", None), canon_dir=canon)
-        [r] = run_batch(a, lay, dist, env, [RunSpec("full", None)], fmt.name, jobs=1)
+        [r] = run_batch(a, lay, dist, env, [RunSpec("full", None)], fmt.path, jobs=1)
         assert r.ok, r.first_error
         if n == 0:
             subprocess.run(
@@ -107,7 +109,7 @@ def test_records_and_restore(copy_corpus) -> None:  # type: ignore[no-untyped-de
     # partial run: ch3 and appA, the rest excluded and restored from the canonical aux files
     spec = RunSpec("partial", ("chapters/ch3", "chapters/appA"))
     prepare_run_dir(a, lay, spec, canon_dir=canon)
-    [r] = run_batch(a, lay, dist, env, [spec], fmt.name, jobs=2)
+    [r] = run_batch(a, lay, dist, env, [spec], fmt.path, jobs=2)
     assert r.ok, r.first_error
     part = read_run_records(r.directory, a)
     assert list(part.entries) == expected
@@ -120,17 +122,27 @@ def test_records_and_restore(copy_corpus) -> None:  # type: ignore[no-untyped-de
 
 
 def test_parallel_batch_and_error(copy_corpus) -> None:  # type: ignore[no-untyped-def]
-    src = copy_corpus("hgb")
+    """Parallel runs of every include plus a glue-only run; a TeX error in a unit is mapped to
+    its file. hgb (underscore in the format, a sub-chapter include); where the installed
+    hgbthesis loads cmap (MiKTeX), its format is rejected (S13) and thesis is used."""
+    if hgb_class_loads_cmap():
+        hgb = copy_corpus("hgb", dest="hgb")
+        with pytest.raises(TexError) as err:
+            setup(hgb)
+        assert "cmap" in str(err.value.first_error)
+    src = copy_corpus("thesis" if hgb_class_loads_cmap() else "hgb")
     a, lay, dist, env, fmt = setup(src)
+    unit = a.includes[1].arg
     specs = [RunSpec(f"r{i}", (inc.arg,)) for i, inc in enumerate(a.includes)]
     specs.append(RunSpec("glue", ()))
     for spec in specs:
         prepare_run_dir(a, lay, spec)
-    results = run_batch(a, lay, dist, env, specs, fmt.name, jobs=4)
+    results = run_batch(a, lay, dist, env, specs, fmt.path, jobs=4)
     assert [r.spec for r in results] == specs and all(r.ok for r in results)
-    (src / "chapters" / "usage.tex").write_text("\\chapter{Broken}\n\\undefinedmacro\n")
+    (src / f"{unit}.tex").write_text("\\chapter{Broken}\n\\undefinedmacro\n")
     sync_project_shadow(a, lay.shadow_dir, lay.build_dir)
-    bad = RunSpec("bad", ("chapters/usage",))
+    bad = RunSpec("bad", (unit,))
     prepare_run_dir(a, lay, bad)
-    [r] = run_batch(a, lay, dist, env, [bad], fmt.name, jobs=1)
-    assert not r.ok and r.first_error and "usage.tex:2: Undefined control sequence" in r.first_error
+    [r] = run_batch(a, lay, dist, env, [bad], fmt.path, jobs=1)
+    expected = f"{Path(unit).name}.tex:2: Undefined control sequence"
+    assert not r.ok and r.first_error and expected in r.first_error

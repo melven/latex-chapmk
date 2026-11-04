@@ -636,7 +636,7 @@ class Fixpoint:
         pre_self = {seg: pre.unit_self(seg) for seg in all_compiled}
         env = ctx.env(state.epoch)
         t.lap("prepare")  # run directories
-        results = run_batch(a, ctx.layout, ctx.dist, env, specs, self.fmt.name, len(specs))
+        results = run_batch(a, ctx.layout, ctx.dist, env, specs, self.fmt.path, len(specs))
         t.lap("tex")
         for r in results:
             if not r.ok:
@@ -1010,7 +1010,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         if runs:  # a no-op build lints nothing
             write_atomic(canon / LINT_CACHE, json.dumps(dict(loop.lint_cache)))
         if runs or not is_published(ctx.layout):
-            pdf = publish_state(ctx.analysis, ctx.layout, state, ctx.timings)
+            pdf = publish_state(ctx.analysis, ctx.layout, state, ctx.timings, dist=ctx.dist)
             mark_published(ctx.layout)
         else:  # nothing changed: the published files are current (latexmk-like no-op)
             pdf = ctx.layout.output(".pdf")
