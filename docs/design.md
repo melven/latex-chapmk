@@ -6,8 +6,10 @@ which are referenced as S# and C#/D#/E#/U#/R#. The module map with every public 
 in `src/chapmk/CLAUDE.md` (and `src/chapmk/tex/CLAUDE.md` for the LaTeX packages); user
 documentation is in `README.md` and `docs/configuration.md`.
 
-Sections 1–6 and 8 keep the numbers of the former implementation plan (`PLAN.md`), so
-references in the code (`§6.9.3`) stay valid; Appendix C maps the rest.
+Section numbers in the code, tests and module maps (`§6.9.3`) refer to this document. It
+replaces the former implementation plan (`PLAN.md`, in the git history), whose numbers it
+keeps for sections 1–6 and 8, so references in the spike notes and the review still point
+to the right topic; Appendix C maps the rest.
 
 Terms: the *build directory* is `.chapmk/<jobname>/` next to the main file (configurable);
 paths like `canon/` are relative to it. A *unit* is an `\include`d file, a *segment* is a unit
@@ -572,9 +574,12 @@ makeindex for a generic `.idx`, like latexmk.
    `/Count` from the open state.
 5. **Page labels** from the page map (`\c@page` and `\thepage`), styles inferred (arabic,
    roman, Roman, alph, Alph, else a prefix).
-6. **Catalog and info:** all catalog entries of the run that produced `G0` except those
-   rebuilt above, with page references mapped (`/OpenAction`, `\pdfcatalog` entries, S13);
-   document info likewise.
+6. **Catalog and info:** all catalog entries except those rebuilt above, with page
+   references mapped (`/OpenAction`, `\pdfcatalog` entries, S13), and the document info,
+   from the run of the first merged page (`G0` has no pages when the document starts with an
+   `\include`, and its run may not have compiled the first unit). pdfTeX refers to pages by
+   number (`openaction goto page 1`): page N of that run must be page N of the merged PDF,
+   otherwise a merge error (full mode).
 7. **Font descriptors** are normalised to the whole-document rule (§6.17).
 
 The merged PDF is larger than a plain one (font subsets per run); `--full` gives the compact
@@ -582,12 +587,18 @@ file.
 
 ### 6.12 SyncTeX merge
 
-`synctex.py` (S10): the runs' SyncTeX files are parsed; the input tags are unified by path
-(run main → user's main file, shadow tree → source directory, keeping TeX Live's
-`<cwd>/./<relative>` form, which `synctex view` needs for relative names; MiKTeX has no `/./`,
-§6.16); the sheets of the taken pages are renumbered to merged page numbers; the header is
-copied (equal in all runs, else error), the `!` byte offsets and the postamble are recomputed,
-and the file is gzip-compressed. Line numbers need no mapping (§6.2).
+`synctex.py` (S10). Line numbers need no mapping (§6.2), only paths and numbers:
+
+1. Each run's SyncTeX file is read once, and only the sheets of its taken pages are kept
+   (whole-text regular expressions; this step dominates the merge time on large documents).
+2. Input tags are renumbered globally in the order of their first use, each `(run, tag)`
+   mapped once; the paths are mapped: run main → user's main file, shadow tree → source
+   directory, keeping TeX Live's `<cwd>/./<relative>` form, which `synctex view` needs for
+   relative names (MiKTeX has no `/./`, §6.16). Tag 0 (no input file, form xobjects) stays.
+3. The sheets are renumbered to merged page numbers; the header is copied (equal in all runs,
+   else error); the `!` byte offsets and the postamble are recomputed; gzip level 1.
+
+Measured: 319 pages from 5 runs in about 0.35 s.
 
 ### 6.13 Logs and errors
 
