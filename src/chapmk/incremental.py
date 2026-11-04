@@ -104,7 +104,13 @@ from chapmk.records import (
     tex_phases,
 )
 from chapmk.runner import RunSpec, prepare_run_dir, run_batch
-from chapmk.shadow import changed_signatures, external_inputs, source_inputs, stat_signatures
+from chapmk.shadow import (
+    changed_signatures,
+    external_inputs,
+    source_inputs,
+    stat_signatures,
+    sync_project_shadow,
+)
 from chapmk.state import CorruptStateError, State, UnitInputs, load_state
 from chapmk.texdist import TexDistribution
 from chapmk.texsource import text_lines
@@ -656,20 +662,12 @@ class Fixpoint:
                         state.openright[seg] = recs.openright[seg]
             exported = self._pictures(views, compiled_by_run, pre)
             t.lap("commit")
-            lists_complete = commit_lists(
-                a, ctx.layout, state, specs[-1].name, [s.name for s in specs]
-            )
+            lists_complete = commit_lists(a, ctx.layout, state, views)
             t.lap("lists")
-            tools = run_tools(
-                a,
-                ctx.layout,
-                ctx.dist,
-                env,
-                state,
-                specs[-1].name,
-                [s.name for s in specs],
-                full_run=next((s.name for s in specs if s.selection is None), None),
+            full_run = next(
+                (v for v, s in zip(views, specs, strict=True) if s.selection is None), None
             )
+            tools = run_tools(a, ctx.layout, ctx.dist, env, state, views, full_run)
             t.lap("tools")
             post = self._view = read_canon(a, canon, state.list_suffixes)
             derived = tuple(f"{ctx.job}{x}" for x in derived_suffixes(state.list_suffixes))
@@ -921,10 +919,24 @@ def _cold_reason(ctx: Context, state: State | None, stamp: str) -> str | None:
     return None
 
 
+def _sync_shadow(ctx: Context) -> None:
+    """Bring the shadow tree up to date; list files found by earlier builds are build outputs
+    too (excluded)."""
+    try:
+        state = load_state(ctx.layout.canon_dir)
+    except CorruptStateError:
+        state = None  # the build starts cold and says why
+    suffixes = state.list_suffixes if state is not None else ()
+    sync_project_shadow(ctx.analysis, ctx.layout.shadow_dir, ctx.layout.build_dir, suffixes)
+    ctx.timings.lap("shadow")
+
+
 def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
-    """Build the document: full mode, or the fixpoint loop (cold or incremental) (§5)."""
+    """Build the document: full mode, or the fixpoint loop (cold or incremental) (§5). The
+    shadow tree is synchronised first (also for the ``check`` reference that follows)."""
     start = time.monotonic()
     canon = ctx.layout.canon_dir
+    _sync_shadow(ctx)
     if full:
         return _full(ctx, epoch, "--full", start)
     if ctx.analysis.fallback_reasons:

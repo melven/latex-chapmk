@@ -284,11 +284,10 @@ def commit_lists(
     analysis: Analysis,
     layout: Layout,
     state: State,
-    last_run: str,
-    batch_runs: Sequence[str] = (),
+    batch: Sequence[RunView],
 ) -> bool:
     """Canonical list files: the last run's, with the section of each unit committed by
-    another run of the batch (``batch_runs``) from that run (a parallel batch: no run read
+    another run of the ``batch`` from that run (a parallel batch: no run read
     all new contributions). The sections of the other units are right in the last run: it
     wrote them from their canonical aux. Returns False if markers are missing (the list
     files then come from the last run unchanged).
@@ -297,9 +296,11 @@ def commit_lists(
     run wrote it from the unit's canonical aux, must equal its section in the previous
     canonical list file."""
     canon, job = layout.canon_dir, analysis.jobname
+    last = batch[-1]
+    names = {run.name: run for run in batch}
     complete = True
     for suffix in state.list_suffixes:
-        src, dst = layout.runs_dir / last_run / f"{job}{suffix}", canon / f"{job}{suffix}"
+        src, dst = last.file(suffix), canon / f"{job}{suffix}"
         if not src.is_file():
             dst.unlink(missing_ok=True)
             continue
@@ -309,17 +310,15 @@ def commit_lists(
                 base,
                 read_raw(dst),
                 {f"U{k}" for k in range(1, len(analysis.includes) + 1)}
-                - {
-                    seg for seg, art in state.segments.items() if art.run in (*batch_runs, last_run)
-                },
+                - {seg for seg, art in state.segments.items() if art.run in names},
                 dst.name,
             )
         sections: dict[str, list[str]] = {}
         for k in range(1, len(analysis.includes) + 1):
             run = state.segments[f"U{k}"].run
-            if run == last_run or run not in batch_runs:
+            if run == last.name or run not in names:
                 continue
-            other = layout.runs_dir / run / f"{job}{suffix}"
+            other = names[run].file(suffix)
             found = unit_sections(read_raw(other)) if other.is_file() else {}
             if f"U{k}" in found:
                 sections[f"U{k}"] = found[f"U{k}"]
@@ -348,38 +347,35 @@ def run_tools(
     dist: TexDistribution,
     env: Mapping[str, str],
     state: State,
-    template_run: str,
-    batch_runs: Sequence[str] = (),
-    full_run: str | None = None,
+    batch: Sequence[RunView],
+    full_run: RunView | None = None,
 ) -> list[str]:
-    """biber on the patched ``.bcf`` (S5: the template run's ``.bcf`` with the canonical
+    """biber on the patched ``.bcf`` (S5: the last run's ``.bcf`` with the canonical
     citations of all segments) if it changed or there is no ``.bbl``; makeindex if the
     canonical ``.nlo`` changed or there is no ``.nls``. Returns the tool runs.
 
     Datalists are declared where ``\\printbibliography`` runs: the ``.bcf`` gets those of
-    all ``batch_runs`` and, unless a run of the batch compiled all units (``complete``), those
+    all runs of the ``batch`` and, unless a run of the batch compiled all units, those
     of the previous canonical ``.bcf`` (a unit with the bibliography may be excluded).
 
     Self-check (C14): if a run of the batch compiled all units (``full_run``), the patched
     citations and datalists must equal those TeX wrote into that run's ``.bcf``."""
     job, canon = analysis.jobname, layout.canon_dir
     tools: list[str] = []
-    bcf = layout.runs_dir / template_run / f"{job}.bcf"
-    if bcf.is_file():
+    template = batch[-1].bcf
+    if template is not None:
         elements = [(seg, e) for seg in segments(analysis) for e in state.citations.get(seg, [])]
-        patched = patch_bcf(read_raw(bcf), elements)
+        patched = patch_bcf(template, elements)
         target = canon / f"{job}.bcf"
         blocks: dict[str, str] = {}
         if full_run is None and target.is_file():
             blocks.update(datalists(read_raw(target)))
-        for run_name in [*batch_runs, template_run]:
-            run_bcf = layout.runs_dir / run_name / f"{job}.bcf"
-            if run_bcf.is_file():
-                text = read_raw(run_bcf)
-                blocks.update(datalists(text))
+        for run in batch:
+            if run.bcf is not None:
+                blocks.update(datalists(run.bcf))
         patched = with_datalists(patched, blocks)
         if full_run is not None:
-            _check_bcf(patched, layout.runs_dir / full_run / f"{job}.bcf")
+            _check_bcf(patched, full_run.file(".bcf"))
         if write_if_changed(target, patched) or not (canon / f"{job}.bbl").is_file():
             try:
                 run_biber(dist, job, canon, layout.shadow_dir, env)

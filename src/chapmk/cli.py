@@ -23,8 +23,6 @@ from chapmk.incremental import Context, build, load_epoch
 from chapmk.layout import DEFAULT_BUILD_DIR, Layout, build_dir_of, make_layout
 from chapmk.lock import LOCK_FILE, build_lock
 from chapmk.proc import Interrupted, allow_runs, terminate_all
-from chapmk.shadow import sync_project_shadow
-from chapmk.state import CorruptStateError, load_state
 from chapmk.texdist import TexDistribution, detect
 from chapmk.timing import Timings
 
@@ -158,13 +156,6 @@ def _build_locked(
         check_tools()  # before the build, not after it
     timings.lap("analysis")
     epoch = int(os.environ.get("SOURCE_DATE_EPOCH", int(time.time())))
-    try:
-        state = load_state(layout.canon_dir)  # list files found earlier: excluded too
-    except CorruptStateError:
-        state = None  # the builder starts cold and says why
-    suffixes = state.list_suffixes if state is not None else ()
-    sync_project_shadow(analysis, layout.shadow_dir, layout.build_dir, suffixes)
-    timings.lap("shadow")
     report = _say if config.verbose else (lambda _msg: None)
     ctx = Context(analysis, layout, dist, config, os.environ, report, timings)
     result = build(ctx, epoch, full=getattr(args, "full", False))
