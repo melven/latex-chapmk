@@ -97,10 +97,13 @@ def publish_state(
                 level = recs.bookmark_levels.get(bkm.id, 0)
                 outline.append(OutlineEntry(level, bkm.open, bkm.dest, bkm.title))
     first_run = layout.runs_dir / state.segments[glue_id(0)].run
+    # catalog and document info: from the run of the first page (its page 1 is the document's
+    # page 1); G0 has no pages when the document starts with an \include
+    catalog_from = pages[0].pdf if pages else first_run / f"{job}.pdf"
 
     def write_pdf(tmp: Path) -> None:
         try:
-            merge_pdf(pages, outline, first_run / f"{job}.pdf", tmp)
+            merge_pdf(pages, outline, catalog_from, tmp)
         except MergeError as err:
             raise MergeFailedError(f"PDF merge: {err}") from err
         t.lap("merge_pdf")
