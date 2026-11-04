@@ -26,7 +26,7 @@ import json
 import re
 import shutil
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -34,8 +34,6 @@ from typing import Any
 import chapmk
 from chapmk.analysis import Analysis
 from chapmk.auxfile import (
-    AGGREGATE,
-    GLOBAL,
     command_name,
     read_lines,
     run_input_main_aux,
@@ -51,7 +49,8 @@ from chapmk.canon import (
     run_tools,
 )
 from chapmk.config import Config
-from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
+from chapmk.deps import imports, short_hash
+from chapmk.dirty import DirtyRules
 from chapmk.errors import FallbackError, TexError
 from chapmk.facts import UNIT_HEADINGS, UNSUPPORTED_PACKAGES, derived_suffixes
 from chapmk.files import changed_files, digest, read_log, write_atomic
@@ -65,7 +64,7 @@ from chapmk.fmt import (
 )
 from chapmk.fullbuild import full_build
 from chapmk.layout import Layout
-from chapmk.lint import LintHit, glue_hints, lint_files
+from chapmk.lint import glue_hints
 from chapmk.logs import short_list
 from chapmk.outputs import (
     failed_run,
@@ -86,12 +85,8 @@ from chapmk.pictures import (
     store_references,
 )
 from chapmk.predict import (
-    SegmentVectors,
     Vector,
-    modified,
     normalized,
-    partition,
-    predict,
     rewrite_checkpoint,
 )
 from chapmk.records import (
@@ -103,7 +98,8 @@ from chapmk.records import (
     tex_phases,
 )
 from chapmk.runner import RunSpec, prepare_run_dir, run_batch
-from chapmk.segment import is_unit, position, seg_index, unit_id
+from chapmk.schedule import Schedule
+from chapmk.segment import is_unit, position, unit_id
 from chapmk.shadow import (
     changed_signatures,
     external_inputs,
@@ -111,6 +107,7 @@ from chapmk.shadow import (
     stat_signatures,
     sync_project_shadow,
 )
+from chapmk.sources import UnitSources, load_lint_cache, save_lint_cache
 from chapmk.state import CorruptStateError, State, UnitInputs, load_state
 from chapmk.texdist import TexDistribution
 from chapmk.texsource import text_lines
@@ -199,10 +196,6 @@ def _global_files(ctx: Context, run: RunView, attributed: set[str]) -> dict[str,
     return _hashes(ctx, names - attributed)
 
 
-def _changed(ctx: Context, files: dict[str, str]) -> list[str]:
-    return changed_files(ctx.analysis.source_dir, files)
-
-
 def _check_runtime_support(run: RunView, fmt: FormatInfo) -> None:
     """Packages loaded by the format or the run (also those loaded by the class)."""
     loaded = set(run.loaded)
@@ -223,32 +216,6 @@ def _write(path: Path, stmts: list[str]) -> None:
     write_atomic(path, "\n".join(stmts) + "\n")
 
 
-def _eqp_tag(key: str) -> str:
-    """``\\expandafter\\gdef\\csname eqp@this@T\\endcsname`` -> ``T``."""
-    m = re.search(r"eqp@[a-z]+@(.*?)\\endcsname", key)
-    return m.group(1) if m else key
-
-
-class _UsedCache(dict[str, list[list[Any]]]):
-    """A cache that looks up ``old`` entries and holds only the entries used or added (saved
-    after the build, so it does not grow with every edit)."""
-
-    def __init__(self, old: dict[str, list[list[Any]]]) -> None:
-        super().__init__()
-        self.old = old
-
-    def __contains__(self, key: object) -> bool:
-        return dict.__contains__(self, key) or key in self.old
-
-    def __getitem__(self, key: str) -> list[list[Any]]:
-        if not dict.__contains__(self, key):
-            self[key] = self.old[key]
-        return dict.__getitem__(self, key)
-
-
-LINT_CACHE = "lint-cache.json"
-
-
 # --- the fixpoint loop -------------------------------------------------------------------------
 
 
@@ -259,78 +226,21 @@ class Fixpoint:
         self.ctx, self.state, self.fmt = ctx, state, fmt
         self.a = ctx.analysis
         self.units = self.a.unit_segments
-        index = {inc.arg: k for k, inc in enumerate(self.a.includes, start=1)}
-        self.group: dict[int, list[int]] = {}
-        for unit in self.a.units:
-            ks = [index[inc.arg] for inc in unit.includes]
-            for k in ks:
-                self.group[k] = ks
-        self._scans: dict[str, TokenScan] = {}
-        self._lint: dict[str, list[LintHit]] = {}
-        # lint results by file content (persistent: linting all units is the largest Python
-        # cost of a typo build otherwise); only entries used by this build are saved
-        try:
-            old = json.loads((ctx.layout.canon_dir / LINT_CACHE).read_bytes())
-        except (OSError, ValueError):
-            old = {}
-        self.lint_cache = _UsedCache(old if isinstance(old, dict) else {})
         self.warnings: list[str] = []
-        self.register_names: dict[int, str] = {}  # for messages, from the logs
+        self.sources = UnitSources(self.a, state, ctx.config, load_lint_cache(ctx.layout.canon_dir))
+        self.rules = DirtyRules(self.a, state, self.sources.scan, self._warn)
+        self.schedule = Schedule(
+            self.a, state, self.sources.is_global, ctx.config.effective_jobs, ctx.say
+        )
+        # one dict for the messages of both (filled from the logs after the first batch)
+        self.register_names = self.rules.register_names = self.schedule.register_names
         self._view: CanonView | None = None  # canonical view after the last batch (unchanged since)
-        self.last_entries: dict[str, Vector] = {}  # observed in the latest run
-        self.mispredicted: dict[str, int] = {}  # consecutive mispredictions per unit
-        self.state_before: dict[str, SegmentVectors] = {}
-        self.odd: frozenset[str] = frozenset()  # units starting on an odd page (prediction)
-        self.self_changes: dict[str, list[str]] = {}  # macros of changed self data (messages)
         self.views: dict[str, RunView] = {}  # runs of this build, parsed once (D5)
 
-    # sources -------------------------------------------------------------------------------
-
-    def _texts(self, seg: str) -> list[str]:
-        texts = []
-        for name in self.state.segment_files.get(seg, {}):
-            text = read_text(self.a.source_dir / name)
-            if text is not None:
-                texts.append(text)
-        return texts
-
-    def scan(self, seg: str) -> TokenScan:
-        """Token scan of a unit's attributed sources (``"glue"``: main file and glue files)."""
-        if seg not in self._scans:
-            if seg == "glue":
-                texts = [read_text(self.a.main) or ""]
-                for g in self.a.glue_segments:
-                    texts += self._texts(g)
-            else:
-                texts = self._texts(seg)
-            self._scans[seg] = TokenScan(texts)
-        return self._scans[seg]
-
-    def lint(self, seg: str) -> list[LintHit]:
-        """A1 lint hits in the TeX sources attributed to a unit (§6.8.4)."""
-        if seg not in self._lint:
-            cfg = self.ctx.config
-            self._lint[seg] = lint_files(
-                self.a.source_dir,
-                self.state.segment_files.get(seg, {}),
-                cfg.lint_allow,
-                cfg.lint_verbatim,
-                cfg.lint_shortverb,
-                self.lint_cache,
-            )
-        return self._lint[seg]
-
-    def is_global(self, seg: str) -> bool:
-        return bool(self.lint(seg))
-
-    def glue_inputs(self, view: CanonView) -> dict[str, str]:
-        """Hashes of the glue's inputs (§6.8.2): derived files, imported values, aux data."""
-        values = imports(self.scan("glue"), view.values)
-        return {
-            "lists": view.lists,
-            "labels": short_hash(json.dumps(sorted(values.items()))),
-            "aux": short_hash("\n".join(view.glue_data())),
-        }
+    def _warn(self, msg: str) -> None:
+        if msg not in self.warnings:
+            self.warnings.append(msg)
+            self.ctx.say(f"warning: {msg}")
 
     def pictures_file(self, view: CanonView) -> str:
         """Driver parameters of the picture cache (§6.17) for runs from ``view``: directory and
@@ -347,218 +257,6 @@ class Fixpoint:
         )
         return driver_file(fig, ctx.layout.shadow_dir, stamp, {})
 
-    def _glue_sources_changed(self) -> list[str]:
-        return [
-            name
-            for g in self.a.glue_segments
-            for name in _changed(self.ctx, self.state.segment_files.get(g, {}))
-        ]
-
-    # dirty sets ----------------------------------------------------------------------------
-
-    def initial(self) -> tuple[dict[str, list[str]], str | None]:
-        """Dirty units and glue at the start of an incremental build."""
-        dirty = {seg: list(reasons) for seg, reasons in self.state.pending.items()}
-        for seg in self.units:
-            if seg not in self.state.units:
-                dirty.setdefault(seg, []).append("never compiled")
-                continue
-            changed = _changed(self.ctx, self.state.segment_files.get(seg, {}))
-            if changed:
-                dirty.setdefault(seg, []).append(f"sources changed ({short_list(changed)})")
-        glue = self.state.glue_pending
-        changed = self._glue_sources_changed()
-        if changed:
-            glue = f"glue sources changed ({short_list(changed)})"
-        return dirty, glue
-
-    def after_run(
-        self, recs: RunRecords, compiled: set[str], pre: CanonView, post: CanonView
-    ) -> tuple[dict[str, list[str]], str | None]:
-        """Dirty units and glue after committing a run (§6.9.1)."""
-        dirty: dict[str, list[str]] = {}
-        moved: list[int] = []  # indices of the units whose entry state changed
-
-        def add(seg: str, reason: str) -> None:
-            dirty.setdefault(seg, []).append(reason)
-
-        g_pre, g_post = pre.of_class(GLOBAL), post.of_class(GLOBAL)
-        if g_pre != g_post:
-            names = sorted({command_name(s) for s in set(g_pre) ^ set(g_post)})
-            msg = f"unclassified aux data changed ({short_list(names)})"
-            self._warn(f"{msg}: all units are recompiled; please report these macros")
-            for seg in self.units:
-                add(seg, msg)
-        if set(pre.of_class(AGGREGATE)) != set(post.of_class(AGGREGATE)):
-            for seg in self.units:
-                add(seg, "aggregate aux data changed (e.g. KOMA autodot)")
-        eqp_pre, eqp_post = pre.eqp(), post.eqp()
-        tags = sorted({_eqp_tag(k) for k, v in eqp_post.items() if eqp_pre.get(k) != v})
-        self._check_shared_tags(tags)
-        if tags:
-            # the units that use a changed tag (Q records); unknown owners: all compiled units
-            owners = {
-                seg for seg in self.units if set(tags) & set(self.state.eqp_tags.get(seg, ()))
-            }
-            known = {t for seg_tags in self.state.eqp_tags.values() for t in seg_tags}
-            if not set(tags) <= known:
-                owners |= compiled
-            for seg in sorted(owners, key=position):
-                add(seg, f"eqparbox widths changed ({short_list(tags)})")
-        for seg in self.units:
-            info = self.state.units.get(seg)
-            if info is None:
-                add(seg, "never compiled")
-                continue
-            if seg in compiled and not info.self_stable:
-                names = self.self_changes.get(seg, [])
-                add(seg, f"self data unstable ({short_list(names) if names else 'rerun'})")
-            if seg not in compiled and seg in recs.entries:
-                entry = recs.entry_state(seg)
-                counter = self.a.include_of(seg).resets
-                reset = recs.reset_registers(counter) if counter else set()
-                regs = sorted(
-                    r
-                    for r in entry.keys() | info.entry.keys()
-                    if r not in reset and entry.get(r) != info.entry.get(r)
-                )
-                if regs:
-                    shown = [self.register_names.get(r, f"\\count{r}") for r in regs]
-                    add(seg, f"entry state changed ({short_list(shown)})")
-                    moved.append(seg_index(seg) - 1)
-            keys = changed_imports(info.imports, self.scan(seg), post.values)
-            if keys:
-                add(seg, f"imports changed ({short_list(keys)})")
-            if info.lists is not None and info.lists != post.lists_key(info.list_reads):
-                add(seg, "list files changed")
-            changed = _changed(self.ctx, self.state.segment_files.get(seg, {}))
-            if changed:
-                add(seg, f"sources changed ({short_list(changed)})")
-        # tail run (§6.9.2, without prediction): recompiling a unit whose entry changed may
-        # change its exit, so all later units are compiled with it, in one run
-        if moved:
-            first = self.a.includes[moved[0]].arg
-            for seg in self.units[moved[0] + 1 :]:
-                add(seg, f"after {first}, whose entry state changed (tail run)")
-        glue = None
-        now = self.glue_inputs(post)
-        if now != self.state.glue_inputs:
-            parts = [k for k, v in now.items() if self.state.glue_inputs.get(k) != v]
-            glue = f"glue inputs changed ({', '.join(parts)})"
-        changed = self._glue_sources_changed()
-        if changed:
-            glue = f"glue sources changed ({short_list(changed)})"
-        return dirty, glue
-
-    def _check_shared_tags(self, changed: Sequence[str]) -> None:
-        """C13: eqparbox sets all boxes of a tag to the widest one, computed from the boxes
-        of one run. A tag used in several segments whose width changed while these were
-        last compiled in different runs can differ from a full build: full mode."""
-        for tag in changed:
-            owners = [
-                seg
-                for seg in self.a.segments
-                if tag in self.state.eqp_tags.get(seg, ()) and seg in self.state.segments
-            ]
-            if len({self.state.segments[seg].run for seg in owners}) > 1:
-                names = [self.a.include_of(s).arg if is_unit(s) else s for s in owners]
-                raise FallbackError(
-                    f"eqparbox tag {tag!r} is used in {', '.join(names)}: its width (the widest "
-                    "box) changed, and a partial run sees only its own boxes (use the tag in one "
-                    "chapter only, or one tag per chapter, to build incrementally)"
-                )
-
-    def _warn(self, msg: str) -> None:
-        if msg not in self.warnings:
-            self.warnings.append(msg)
-            self.ctx.say(f"warning: {msg}")
-
-    # runs ----------------------------------------------------------------------------------
-
-    def plan(self, dirty: Mapping[str, list[str]]) -> tuple[list[int] | None, dict[str, list[str]]]:
-        """Include indices to compile (None = all) and the reasons per unit segment.
-
-        Whole compilation units are compiled. A *global* unit (lint, §6.8.4) changes state
-        that checkpoints do not restore, so it is part of every run; when it is dirty itself,
-        all later units are compiled with it (they see its new state only in the same run).
-        """
-        reasons = {seg: list(r) for seg, r in dirty.items()}
-        ks: set[int] = set()
-        for seg in dirty:
-            ks.update(self.group[seg_index(seg)])
-        n = len(self.units)
-        own = [k for k in sorted(ks) if self.is_global(unit_id(k))]
-        if own:
-            arg = self.a.includes[own[0] - 1].arg
-            for k in range(own[0] + 1, n + 1):
-                if k not in ks:
-                    reasons[unit_id(k)] = [f"follows the global unit {arg} (lint)"]
-                    ks.add(k)
-        for k in range(1, n + 1):
-            if k not in ks and self.is_global(unit_id(k)):
-                reasons[unit_id(k)] = ["global unit (lint): compiled in every run for its state"]
-                ks.update(self.group[k])
-        return (None if len(ks) == n else sorted(ks)), reasons
-
-    def groups(self, selection: list[int] | None) -> list[list[int] | None]:
-        """Runs of one iteration: contiguous groups of the selected compilation units,
-        balanced by page count, at most ``jobs`` (§6.9.2). One run (the tail run) if
-        ``jobs`` is 1, a global unit exists (it would be compiled in every run), a unit has
-        no vectors yet, or a unit of the zone was mispredicted twice in a row (§6.9.3 item 6).
-        """
-        ks = list(range(1, len(self.units) + 1)) if selection is None else selection
-        jobs = self.ctx.config.effective_jobs
-        atoms: list[list[int]] = []
-        for k in ks:
-            if atoms and self.group[k] is self.group[atoms[-1][0]]:
-                atoms[-1].append(k)
-            else:
-                atoms.append([k])
-        single = (
-            jobs <= 1
-            or len(atoms) <= 1
-            or any(self.is_global(u) for u in self.units)
-            or any(s not in self.state.vectors for s in self.a.segments[2 * ks[0] - 1 :])
-            or any(self.mispredicted.get(unit_id(k), 0) >= 2 for k in ks)
-        )
-        if single:
-            return [selection]
-        weights = [
-            float(sum(max(1, len(self.state.segments[unit_id(k)].pages)) for k in atom))
-            for atom in atoms
-        ]
-        return [[k for i in part for k in atoms[i]] for part in partition(weights, jobs)]
-
-    def _predictions(
-        self, groups: list[list[int]]
-    ) -> tuple[
-        dict[str, tuple[Vector, Vector]], dict[int, dict[str, tuple[Vector, frozenset[int]]]]
-    ]:
-        """Predicted (entry, exit) per segment from the first unit of the batch on, and per
-        run index the checkpoints to write into its excluded units: predicted exit and the
-        registers the unit modifies (only those are restored)."""
-        first = unit_id(groups[0][0])
-        observed = self.last_entries.get(first)
-        entry = observed if observed is not None else self.state.vectors[first].entry
-        layout = self._canon_records(self.ctx.layout.canon_dir).layout
-        default = bool(layout.get("twoside") and layout.get("openright"))
-        # per unit as recorded at its start (a local open=any counts), else the document's
-        odd = frozenset(
-            unit_id(k)
-            for k, inc in enumerate(self.a.includes, start=1)
-            if inc.heading in UNIT_HEADINGS and self.state.openright.get(unit_id(k), default)
-        )
-        self.odd = odd
-        pred = predict(self.a.segments, self.state.vectors, first, entry, odd)
-        rewrites: dict[int, dict[str, tuple[Vector, frozenset[int]]]] = {}
-        for j, group in enumerate(groups):
-            out: dict[str, tuple[Vector, frozenset[int]]] = {}
-            for k in range(groups[0][0], group[0]):
-                seg = unit_id(k)
-                out[seg] = (pred[seg][1], modified(self.state.vectors[seg]))
-            rewrites[j] = out
-        return pred, rewrites
-
     def batch(
         self,
         groups: list[list[int] | None],
@@ -574,13 +272,16 @@ class Fixpoint:
         pred: dict[str, tuple[Vector, Vector]] = {}
         rewrites: dict[int, dict[str, tuple[Vector, frozenset[int]]]] = {}
         if parallel:
-            pred, rewrites = self._predictions([g for g in groups if g is not None])
-            self.state_before = dict(state.vectors)  # verification uses the vectors predicted from
+            layout = self._canon_records(canon).layout
+            pred, rewrites = self.schedule.predictions([g for g in groups if g is not None], layout)
+            self.schedule.state_before = dict(
+                state.vectors
+            )  # verification uses the vectors predicted from
         t = ctx.timings
         t.lap("plan")  # dirty-set planning, groups, predictions
         registers = {n: reg for n, (reg, _) in self._canon_records(canon).counters.items()}
         pre = self._view if self._view is not None else read_canon(a, canon, state.list_suffixes)
-        pre_glue = self.glue_inputs(pre)
+        pre_glue = self.rules.glue_inputs(pre)
         t.lap("canon")
         pictures_text = self.pictures_file(pre)
         t.lap("pictures")
@@ -592,7 +293,7 @@ class Fixpoint:
             args = None if group is None else tuple(a.includes[k - 1].arg for k in ks)
             compiled = {unit_id(k) for k in ks}
             for seg in sorted(compiled, key=position):
-                for hit in self.lint(seg):
+                for hit in self.sources.lint(seg):
                     self._warn(hit.message())
             what = "all units" if args is None else ", ".join(args) if args else "glue only"
             ctx.say(f"run {name}: {what}")
@@ -645,8 +346,8 @@ class Fixpoint:
                     True,
                 )
         if not self.register_names:
-            self.register_names = register_names(
-                [self.fmt.directory / f"{self.fmt.name}.log", results[0].log]
+            self.register_names.update(
+                register_names([self.fmt.directory / f"{self.fmt.name}.log", results[0].log])
             )
             for reg, name in all_recs[0].mark_classes.items():
                 self.register_names[reg] = f"marks {name}"
@@ -671,7 +372,7 @@ class Fixpoint:
             derived = tuple(f"{ctx.job}{x}" for x in derived_suffixes(state.list_suffixes))
             for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
                 for seg in compiled:
-                    scan = self.scan(seg)
+                    scan = self.sources.scan(seg)
                     # the list files it typesets (by command) and reads (F records)
                     reads = scan.list_reads()
                     if reads is not None:
@@ -688,13 +389,15 @@ class Fixpoint:
                         list_reads=None if reads is None else sorted(reads),
                     )
                     changed = set(pre_self[seg]) ^ set(post.unit_self(seg))
-                    self.self_changes[seg] = sorted({command_name(s) for s in changed})
+                    self.rules.self_changes[seg] = sorted({command_name(s) for s in changed})
             state.glue_inputs = pre_glue
             last = all_recs[-1]
-            self.last_entries = {seg: normalized(last.entry_state(seg)) for seg in last.entries}
-            dirty_after, glue_after = self.after_run(last, all_compiled, pre, post)
+            self.schedule.last_entries = {
+                seg: normalized(last.entry_state(seg)) for seg in last.entries
+            }
+            dirty_after, glue_after = self.rules.after_run(last, all_compiled, pre, post)
             if parallel:
-                dirty_after, glue_after = self._verify(
+                dirty_after, glue_after = self.schedule.verify(
                     groups, all_recs, pred, dirty_after, glue_after
                 )
             if not lists_complete:
@@ -728,61 +431,6 @@ class Fixpoint:
             )
         return reports
 
-    def _verify(
-        self,
-        groups: list[list[int] | None],
-        all_recs: list[RunRecords],
-        pred: dict[str, tuple[Vector, Vector]],
-        dirty: dict[str, list[str]],
-        glue: str | None,
-    ) -> tuple[dict[str, list[str]], str | None]:
-        """§6.9.3 item 5: the exits of units whose predicted checkpoint later runs used must
-        equal the prediction. At the first mismatch the glue is invalid (its pages come from
-        the last run) and the later units whose start entry changes under the corrected
-        prediction are dirty again, with all units after them."""
-        dirty = {seg: list(r) for seg, r in dirty.items()}
-        real = [g for g in groups if g is not None]
-        for j, (group, recs) in enumerate(zip(real[:-1], all_recs[:-1], strict=True)):
-            for k in group:
-                seg = unit_id(k)
-                actual = normalized(recs.checkpoints.get(seg, {}))
-                entry = recs.entry_state(seg)
-                keep = modified(self.state_before[seg])
-                # registers the unit modifies match the predicted exit; all others must still
-                # pass through (exit = entry)
-                regs = sorted(
-                    r
-                    for r in actual.keys() | pred[seg][1].keys() | entry.keys()
-                    if (
-                        actual.get(r, 0) != pred[seg][1].get(r, 0)
-                        if r in keep
-                        else actual.get(r, 0) != entry.get(r, 0)
-                    )
-                )
-                if not regs:
-                    self.mispredicted.pop(seg, None)
-                    continue
-                self.mispredicted[seg] = self.mispredicted.get(seg, 0) + 1
-                names = [self.register_names.get(r, f"\\count{r}") for r in regs]
-                arg = self.a.includes[k - 1].arg
-                reason = f"misprediction: exit of {arg} ({short_list(names)})"
-                self.ctx.say(reason)
-                # predict again from the actual exit: later runs were compiled with a wrong
-                # entry only if the corrected chain changes their start entries (a later
-                # absolute assignment, e.g. \\mainmatter for the page, absorbs the error);
-                # the glue pages (last run) are redone in any case
-                order = self.a.segments
-                nxt = order[order.index(seg) + 1]
-                pred2 = predict(order, self.state_before, nxt, actual, self.odd)
-                for later_group in real[j + 1 :]:
-                    start = unit_id(later_group[0])
-                    if pred2[start][0] != pred[start][0]:
-                        for later in range(later_group[0], len(self.units) + 1):
-                            dirty.setdefault(unit_id(later), []).append(reason)
-                        break
-                return dirty, reason
-        return dirty, glue
-
     def _pictures(
         self, views: list[RunView], compiled_by_run: list[set[str]], pre: CanonView
     ) -> dict[str, int]:
@@ -815,9 +463,7 @@ class Fixpoint:
         new_files = _segment_files(ctx, run.records)
         for seg in [*compiled, *self.a.glue_segments]:
             state.segment_files[seg] = new_files.get(seg, {})
-            self._scans.pop(seg, None)
-            self._lint.pop(seg, None)
-        self._scans.pop("glue", None)
+        self.sources.forget([*compiled, *self.a.glue_segments])
         attributed = {n for files in state.segment_files.values() for n in files}
         state.global_files = {
             n: h
@@ -844,13 +490,13 @@ class Fixpoint:
         for iteration in range(MAX_ITERATIONS):
             if not dirty and glue is None:
                 return runs
-            selection, reasons = self.plan(dirty)
+            selection, reasons = self.schedule.plan(dirty)
             for seg, why in sorted(reasons.items(), key=lambda x: position(x[0])):
                 arg = self.a.include_of(seg).arg
                 self.ctx.say(f"dirty {arg}: {'; '.join(why)}")
             if glue is not None:
                 self.ctx.say(f"glue: {glue}")
-            runs += self.batch(self.groups(selection), reasons, glue, iteration)
+            runs += self.batch(self.schedule.groups(selection), reasons, glue, iteration)
             dirty, glue = self.state.pending, self.state.glue_pending
         if not dirty and glue is None:
             return runs
@@ -911,7 +557,7 @@ def _cold_reason(ctx: Context, state: State | None, stamp: str) -> str | None:
         return "main file changed (preamble or body)"
     if state.includes != [inc.arg for inc in ctx.analysis.includes]:
         return "list of includes changed"
-    changed = _changed(ctx, state.global_files)
+    changed = changed_files(ctx.analysis.source_dir, state.global_files)
     if changed:
         return f"global inputs changed ({short_list(changed)})"
     return None
@@ -983,7 +629,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
             dirty: dict[str, list[str]] = {seg: ["cold build"] for seg in loop.units}
             glue: str | None = "cold build"
         else:
-            dirty, glue = loop.initial()
+            dirty, glue = loop.rules.initial()
         ctx.timings.lap("format")
         runs = loop.converge(dirty, glue)
         slow_glue: dict[str, float] = {}
@@ -1001,7 +647,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         for hint in hints:
             ctx.say(f"hint: {hint}")
         if runs:  # a no-op build lints nothing
-            write_atomic(canon / LINT_CACHE, json.dumps(dict(loop.lint_cache)))
+            save_lint_cache(canon, loop.sources.lint_cache)
         if runs or not is_published(ctx.layout):
             pdf = publish_state(
                 ctx.analysis, ctx.layout, state, ctx.timings, dist=ctx.dist, views=loop.views
