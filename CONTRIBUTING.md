@@ -39,8 +39,9 @@ full-mode code.
   - `tests/acceptance`;
   - `tests/scenarios`: edit scenarios; each build is compared with `--full` via `--check`;
   - `tests/corpus`: test documents, never built in place.
-- Reference builds are cached in `.test-cache/` by a hash of the sources. After a TeX update
-  or an intended change of the `--full` output: `rm -rf .test-cache`.
+- Reference builds are cached in `.test-cache/` by a hash of the sources, the TeX
+  installation and the full-mode code (`tests/conftest.py`); `rm -rf .test-cache` frees the
+  space of unused entries.
 - Tests must be xdist-safe: only `tmp_path` and no global state.
 - Never weaken, skip or `xfail` a scenario or acceptance test to make it pass.
 
