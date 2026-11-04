@@ -576,7 +576,7 @@ Input: for each segment in document order, its committed artifact `(run PDF, pag
    - Each outline item gets `/Dest (dest)` (named) with `/Parent`, `/First`, `/Last`, `/Next`, `/Prev` and `/Count` (open state and level-gap handling as `bookmark` does it).
    - The catalog `/PageMode` comes from the reference run.
 5. **Page labels:** from the page map's `(value, \thepage text)` per page, infer the style: arabic → `/D`, roman → `/r`, Roman → `/R`, alph → `/a`, Alph → `/A`, otherwise a prefix-only label `/P`. Compress into a `/PageLabels` number tree. Compare against the reference in tests.
-6. **Catalog and Info:** copy `/Info`, `/OpenAction` (remapped), `/PageMode`, `/PageLayout` and `/ViewerPreferences` from the run that produced `G0`. Do not copy `/Pages`, `/Names`, `/Outlines` or `/PageLabels` (built above).
+6. **Catalog and Info:** copy `/Info`, `/OpenAction` (remapped), `/PageMode`, `/PageLayout` and `/ViewerPreferences` from the run of the first merged page (`G0` has no pages when the document starts with an `\include`; its run may then not have compiled the first unit). pdfTeX refers to pages by number (`openaction goto page 1`): page N of that run must be page N of the merged PDF, otherwise merge error (full mode). Do not copy `/Pages`, `/Names`, `/Outlines` or `/PageLabels` (built above).
 7. **Output:** write to a temporary file and rename atomically to `main.pdf`.
 
 Expected side effect: a larger file, because font subsets are duplicated per run. This is acceptable; `--full` produces the compact version.
