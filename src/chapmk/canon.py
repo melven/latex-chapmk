@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -29,11 +30,11 @@ from chapmk.auxfile import (
 from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import SelfCheckError, ToolError
 from chapmk.facts import DEFAULT_LIST_SUFFIXES, derived_suffixes
-from chapmk.files import copy_atomic, digest, read_raw, write_if_changed
+from chapmk.files import copy_atomic, digest, read_raw, write_atomic, write_if_changed
 from chapmk.layout import Layout
 from chapmk.predict import SegmentVectors, normalized
 from chapmk.records import RunView, read_nomenclature
-from chapmk.state import SegmentArtifact, State
+from chapmk.state import SegmentArtifact, State, save_state
 from chapmk.texdist import TexDistribution
 from chapmk.texsource import split_lines
 from chapmk.tools import (
@@ -47,6 +48,23 @@ from chapmk.tools import (
     run_makeindex,
     with_datalists,
 )
+
+#: present in ``canon/`` while a batch commits (C7): from the first write of a canonical file
+#: until the state is saved; a build that finds it starts cold
+JOURNAL_FILE = ".in-progress"
+
+
+@contextmanager
+def committing(canon: Path, state: State, runs: Sequence[str]) -> Iterator[None]:
+    """The commit of a batch (C7, D2: the one place that persists the canonical state): the
+    journal is written before the block changes ``canon/`` and ``state``; when the block
+    ends normally, the state is saved and the journal removed. An exception (a tool error, a
+    failed self-check, an interrupt) leaves the journal: the next build starts cold."""
+    canon.mkdir(parents=True, exist_ok=True)
+    write_atomic(canon / JOURNAL_FILE, " ".join(runs))
+    yield
+    save_state(state, canon)
+    (canon / JOURNAL_FILE).unlink()
 
 
 def segments(analysis: Analysis) -> list[str]:

@@ -40,7 +40,16 @@ from chapmk.auxfile import (
     run_input_main_aux,
     statements,
 )
-from chapmk.canon import CanonView, commit_lists, commit_run, read_canon, run_tools, segments
+from chapmk.canon import (
+    JOURNAL_FILE,
+    CanonView,
+    commit_lists,
+    commit_run,
+    committing,
+    read_canon,
+    run_tools,
+    segments,
+)
 from chapmk.config import Config
 from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
 from chapmk.errors import FallbackError, TexError
@@ -95,15 +104,13 @@ from chapmk.records import (
 )
 from chapmk.runner import RunSpec, prepare_run_dir, run_batch
 from chapmk.shadow import changed_signatures, external_inputs, source_inputs, stat_signatures
-from chapmk.state import CorruptStateError, State, UnitInputs, load_state, save_state
+from chapmk.state import CorruptStateError, State, UnitInputs, load_state
 from chapmk.texdist import TexDistribution
 from chapmk.texsource import text_lines
 from chapmk.timing import Timings
 
 MAX_ITERATIONS = 8
 FULL_ONLY_FILE = "full-only.json"
-#: present in ``canon/`` while a batch commits (C7)
-JOURNAL_FILE = ".in-progress"
 
 
 @dataclass
@@ -639,69 +646,69 @@ class Fixpoint:
             for reg, name in all_recs[0].mark_classes.items():
                 self.register_names[reg] = f"marks {name}"
         t.lap("records")
-        # journal (C7): canon files and state change from here until save_state; an
-        # interrupted commit leaves the marker, and the next build is cold
-        write_atomic(canon / JOURNAL_FILE, " ".join(s.name for s in specs))
-        for view, recs, compiled in zip(views, all_recs, compiled_by_run, strict=True):
-            commit_run(a, ctx.layout, state, view, compiled)
-            self._attribute(view, compiled)
-            for seg in compiled:
-                if seg in recs.openright:
-                    state.openright[seg] = recs.openright[seg]
-        exported = self._pictures(views, compiled_by_run, pre)
-        t.lap("commit")
-        lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name, [s.name for s in specs])
-        t.lap("lists")
-        tools = run_tools(
-            a,
-            ctx.layout,
-            ctx.dist,
-            env,
-            state,
-            specs[-1].name,
-            [s.name for s in specs],
-            full_run=next((s.name for s in specs if s.selection is None), None),
-        )
-        t.lap("tools")
-        post = self._view = read_canon(a, canon, state.list_suffixes)
-        derived = tuple(f"{ctx.job}{x}" for x in derived_suffixes(state.list_suffixes))
-        for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
-            for seg in compiled:
-                scan = self.scan(seg)
-                # the list files it typesets (by command) and reads (F records)
-                reads = scan.list_reads()
-                if reads is not None:
-                    reads |= {
-                        f[f.rindex(ctx.job) + len(ctx.job) :]
-                        for s, f in recs.files
-                        if s == seg and f.endswith(derived)
-                    }
-                state.units[seg] = UnitInputs(
-                    entry=recs.entry_state(seg),
-                    imports=imports(scan, pre.values),
-                    lists=pre.lists_key(reads) if reads is None or reads else None,
-                    self_stable=pre_self[seg] == post.unit_self(seg),
-                    list_reads=None if reads is None else sorted(reads),
+        with committing(canon, state, [s.name for s in specs]):  # journal (C7)
+            for view, recs, compiled in zip(views, all_recs, compiled_by_run, strict=True):
+                commit_run(a, ctx.layout, state, view, compiled)
+                self._attribute(view, compiled)
+                for seg in compiled:
+                    if seg in recs.openright:
+                        state.openright[seg] = recs.openright[seg]
+            exported = self._pictures(views, compiled_by_run, pre)
+            t.lap("commit")
+            lists_complete = commit_lists(
+                a, ctx.layout, state, specs[-1].name, [s.name for s in specs]
+            )
+            t.lap("lists")
+            tools = run_tools(
+                a,
+                ctx.layout,
+                ctx.dist,
+                env,
+                state,
+                specs[-1].name,
+                [s.name for s in specs],
+                full_run=next((s.name for s in specs if s.selection is None), None),
+            )
+            t.lap("tools")
+            post = self._view = read_canon(a, canon, state.list_suffixes)
+            derived = tuple(f"{ctx.job}{x}" for x in derived_suffixes(state.list_suffixes))
+            for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
+                for seg in compiled:
+                    scan = self.scan(seg)
+                    # the list files it typesets (by command) and reads (F records)
+                    reads = scan.list_reads()
+                    if reads is not None:
+                        reads |= {
+                            f[f.rindex(ctx.job) + len(ctx.job) :]
+                            for s, f in recs.files
+                            if s == seg and f.endswith(derived)
+                        }
+                    state.units[seg] = UnitInputs(
+                        entry=recs.entry_state(seg),
+                        imports=imports(scan, pre.values),
+                        lists=pre.lists_key(reads) if reads is None or reads else None,
+                        self_stable=pre_self[seg] == post.unit_self(seg),
+                        list_reads=None if reads is None else sorted(reads),
+                    )
+                    changed = set(pre_self[seg]) ^ set(post.unit_self(seg))
+                    self.self_changes[seg] = sorted({command_name(s) for s in changed})
+            state.glue_inputs = pre_glue
+            last = all_recs[-1]
+            self.last_entries = {seg: normalized(last.entry_state(seg)) for seg in last.entries}
+            dirty_after, glue_after = self.after_run(last, all_compiled, pre, post)
+            if parallel:
+                dirty_after, glue_after = self._verify(
+                    groups, all_recs, pred, dirty_after, glue_after
                 )
-                changed = set(pre_self[seg]) ^ set(post.unit_self(seg))
-                self.self_changes[seg] = sorted({command_name(s) for s in changed})
-        state.glue_inputs = pre_glue
-        last = all_recs[-1]
-        self.last_entries = {seg: normalized(last.entry_state(seg)) for seg in last.entries}
-        dirty_after, glue_after = self.after_run(last, all_compiled, pre, post)
-        if parallel:
-            dirty_after, glue_after = self._verify(groups, all_recs, pred, dirty_after, glue_after)
-        if not lists_complete:
-            glue_after = glue_after or "list files without unit markers (rewritten by the glue)"
-        for seg, n in sorted(exported.items()):
-            # the run typeset these pictures inline; embedded, the result equals externalize
-            if seg.startswith("U"):
-                dirty_after.setdefault(seg, []).append(f"pictures exported ({n})")
-            else:
-                glue_after = glue_after or f"pictures exported ({n} in the glue)"
-        state.pending, state.glue_pending = dirty_after, glue_after
-        save_state(state, canon)
-        (canon / JOURNAL_FILE).unlink()
+            if not lists_complete:
+                glue_after = glue_after or "list files without unit markers (rewritten by the glue)"
+            for seg, n in sorted(exported.items()):
+                # the run typeset these pictures inline; embedded, the result equals externalize
+                if seg.startswith("U"):
+                    dirty_after.setdefault(seg, []).append(f"pictures exported ({n})")
+                else:
+                    glue_after = glue_after or f"pictures exported ({n} in the glue)"
+            state.pending, state.glue_pending = dirty_after, glue_after
         t.lap("dirty")
         reports = []
         for j, (spec, result) in enumerate(zip(specs, results, strict=True)):
