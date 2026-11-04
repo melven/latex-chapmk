@@ -812,6 +812,12 @@ rules, scheduling, prediction, `.bcf` patch, page labels, SyncTeX serialisation,
 tests (hypothesis) for the text and file round trips, and acceptance tests comparing `--full`
 with latexmk on the corpus.
 
+Slow tests check assumptions about TeX and package internals directly
+(`tests/slow/test_tex_compat.py`, e.g. how pgf loads its libraries). A weekly workflow
+(`.github/workflows/versions.yml`) runs the suite on the frozen TeX Live releases since 2023
+(the oldest supported LaTeX kernel is 2023-06-01), the current TeX Live and the current
+MiKTeX, and writes the tested versions into its summary.
+
 ### 8.4 Benchmarks
 
 `tests/bench/` (manual): T1, T2, T4, T16 against latexmk with `-j 1` and `-j N`, with the time
