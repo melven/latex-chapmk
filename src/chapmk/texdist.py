@@ -13,7 +13,7 @@ import re
 import shutil
 from collections.abc import Callable, Mapping
 from functools import cached_property
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Protocol
 
 from chapmk.errors import ToolError
@@ -26,6 +26,9 @@ TEX_DIR = Path(__file__).resolve().parent / "tex"
 REQUIRED_TOOLS = ("pdflatex", "biber", "makeindex", "kpsewhich")
 #: TeX files chapmk needs beyond a LaTeX installation (the format build, §6.3)
 REQUIRED_FILES = ("mylatexformat.ltx",)
+
+
+_WINDOWS = os.name == "nt"
 
 
 def tex_path(path: Path) -> str:
@@ -259,6 +262,8 @@ class MiKTeX(TeXLive):
         return Path(os.path.relpath(run_main, cwd)).as_posix()
 
     def synctex_input(self, cwd: Path, relative: str) -> str:
+        if _WINDOWS:  # native: backslashes, also in the relative part
+            return str(PureWindowsPath(cwd, relative))
         return f"{tex_path(cwd)}/{relative}"
 
     def synctex_query(self, cwd: Path, relative: str) -> str:

@@ -18,7 +18,7 @@ from chapmk.records import RunView
 from chapmk.runner import RUN_MAIN, map_run_paths
 from chapmk.segment import glue_id
 from chapmk.state import State
-from chapmk.synctex import SyncTexError
+from chapmk.synctex import SyncTexError, map_prefix
 from chapmk.synctex import merge as merge_synctex
 from chapmk.texdist import TexDistribution
 from chapmk.timing import Timings
@@ -107,15 +107,12 @@ def publish_state(
 
     main_name = dist.synctex_input(analysis.source_dir, analysis.main.name)
 
-    prefixes = [(old + "/", new) for old, new in layout.path_map()]
+    prefixes = layout.path_map()
 
     def map_path(path: str) -> str:
         if Path(path).name == RUN_MAIN:
             return main_name
-        for old, new in prefixes:
-            if path.startswith(old):
-                return new + path[len(old) - 1 :]
-        return path
+        return map_prefix(path, prefixes)
 
     def write_synctex(tmp: Path) -> None:
         try:

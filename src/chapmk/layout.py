@@ -61,8 +61,11 @@ class Layout:
 
     def path_map(self) -> list[tuple[str, str]]:
         """Prefix substitutions from build paths to user paths (logs, SyncTeX): the shadow
-        tree maps to the source directory (S2, S10)."""
-        return [(str(self.shadow_dir), str(self.source_dir))]
+        tree maps to the source directory (S2, S10); on Windows in the native form and in the
+        form with forward slashes (paths passed to TeX)."""
+        native = (str(self.shadow_dir), str(self.source_dir))
+        posix = (self.shadow_dir.as_posix(), self.source_dir.as_posix())
+        return [native] if posix == native else [native, posix]
 
 
 def build_dir_of(config: Config) -> Path:

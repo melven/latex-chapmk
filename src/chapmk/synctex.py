@@ -47,6 +47,15 @@ def write_lines(path: Path, lines: Sequence[str]) -> None:
         f.write(data)
 
 
+def map_prefix(path: str, mapping: Sequence[tuple[str, str]]) -> str:
+    """``path`` with the first matching prefix substituted: ``old`` itself or ``old``
+    followed by a separator (``/``, or ``\\`` as MiKTeX on Windows records paths)."""
+    for old, new in mapping:
+        if path.startswith(old) and (len(path) == len(old) or path[len(old)] in "/\\"):
+            return new + path[len(old) :]
+    return path
+
+
 def map_input_paths(lines: Sequence[str], mapping: Sequence[tuple[str, str]]) -> list[str]:
     """Apply prefix substitutions to ``Input:<tag>:<path>`` records. The ``/./`` in
     ``<cwd>/./<relative>`` is kept: ``synctex view`` needs it (S10)."""
@@ -54,11 +63,7 @@ def map_input_paths(lines: Sequence[str], mapping: Sequence[tuple[str, str]]) ->
     for line in lines:
         if line.startswith("Input:"):
             _, tag, path = line.split(":", 2)
-            for old, new in mapping:
-                if path == old or path.startswith(old + "/"):
-                    path = new + path[len(old) :]
-                    break
-            line = f"Input:{tag}:{path}"
+            line = f"Input:{tag}:{map_prefix(path, mapping)}"
         out.append(line)
     return out
 
