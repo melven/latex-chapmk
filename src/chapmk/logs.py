@@ -36,7 +36,8 @@ def first_error(log: str, output: str = "") -> str | None:
     ``! message`` line, whichever comes first in the log. If the log has only a generic stop
     (``! Emergency stop.``), the first specific error of the terminal ``output`` is taken:
     an error before the log was opened, e.g. a file on the command line that does not exist
-    (``! I can't find file `mylatexformat.ltx'.``), is only written there."""
+    (``! I can't find file `mylatexformat.ltx'.``), is only written there. Without any error
+    line, the last line of ``output`` (e.g. a message of the distribution: TeX did not run)."""
     errors = _errors(log)
     specific = [e for e in errors if not e.startswith(_GENERIC_ERRORS)]
     if specific:
@@ -44,7 +45,10 @@ def first_error(log: str, output: str = "") -> str | None:
     from_output = [e for e in _errors(output) if not e.startswith(_GENERIC_ERRORS)]
     if from_output:
         return from_output[0]
-    return errors[0] if errors else None
+    if errors:
+        return errors[0]
+    tail = [line.strip() for line in text_lines(output) if line.strip()]
+    return tail[-1] if tail else None
 
 
 def run_error(log: Path, output: str, mapping: Sequence[tuple[str, str]]) -> str | None:

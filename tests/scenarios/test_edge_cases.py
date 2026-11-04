@@ -4,6 +4,7 @@ Each build asserts §3.3 against ``--full`` (``--check``).
 """
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -90,7 +91,7 @@ def test_distribution_update_and_upgrade(
     dist, src = tmp_path / "texmf", tmp_path / "src"
     dist.mkdir()
     src.mkdir()
-    monkeypatch.setenv("TEXINPUTS", f"{dist}//:")
+    monkeypatch.setenv("TEXINPUTS", f"{dist}//{os.pathsep}")
     (dist / "distearly.sty").write_text("\\newcommand\\distearly{EARLY-1}\n")
     (dist / "distlate.sty").write_text("\\newcommand\\distlate{LATE-1}\n")
     (src / "main.tex").write_text(

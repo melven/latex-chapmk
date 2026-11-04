@@ -6,6 +6,7 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
+from chapmk import texdist
 from chapmk.analysis import analyse
 from chapmk.config import Config
 from chapmk.errors import ToolError
@@ -111,8 +112,13 @@ def test_miktex_command_lines(tmp_path: Path) -> None:
     assert mk.biber("t", tmp_path) == TeXLive().biber("t", tmp_path)
     assert mk.environment(1, {}) == TeXLive().environment(1, {})
     src = Path("/doc")
-    assert mk.synctex_input(src, "main.tex") == "/doc/main.tex"
-    assert mk.synctex_query(src, "ch/a.tex") == "/doc/ch/a.tex"
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(texdist, "_WINDOWS", False)
+        assert mk.synctex_input(src, "main.tex") == "/doc/main.tex"
+        assert mk.synctex_query(src, "ch/a.tex") == "/doc/ch/a.tex"
+        # MiKTeX on Windows records native paths, backslashes also in the relative part
+        mp.setattr(texdist, "_WINDOWS", True)
+        assert mk.synctex_query(Path("C:/doc"), "ch/a.tex") == "C:\\doc\\ch\\a.tex"
     # the run main: relative to the shadow tree (MiKTeX would expand a TEXINPUTS name to an
     # absolute path, whose "_" breaks with the underscore package), bare name for TeX Live
     build = Path("/my_thesis/.chapmk/main")
@@ -120,7 +126,7 @@ def test_miktex_command_lines(tmp_path: Path) -> None:
     assert mk.run_input(build / "src", main) == "../runs/r1/chapmk-run.tex"
     tl = TeXLive()
     assert tl.run_input(build / "src", main) == "chapmk-run.tex"
-    assert tl.synctex_input(src, "main.tex") == "/doc/./main.tex"
+    assert tl.synctex_input(src, "main.tex") == f"{tex_path(src)}/./main.tex"
     assert tl.synctex_query(src, "ch/a.tex") == "ch/a.tex"
 
 
@@ -168,7 +174,9 @@ def test_layout_defaults_and_overrides(tmp_path: Path) -> None:
     assert (lay.build_dir, lay.out_dir, lay.jobname) == (src / ".chapmk" / "thesis", src, "thesis")
     assert lay.shadow_dir == src / ".chapmk" / "thesis" / "src"
     assert lay.output(".pdf") == src / "thesis.pdf"
-    assert lay.path_map() == [(str(src / ".chapmk" / "thesis" / "src"), str(src))]
+    shadow = src / ".chapmk" / "thesis" / "src"
+    pairs = [(str(shadow), str(src)), (shadow.as_posix(), src.as_posix())]
+    assert lay.path_map() == pairs[: 2 if os.sep == "\\" else 1]  # Windows: both forms
     lay2 = make_layout(Config(main=cfg.main, build_dir=tmp_path / "b", out_dir=tmp_path / "o"), a)
     assert (lay2.build_dir, lay2.out_dir) == (tmp_path / "b", tmp_path / "o")
 

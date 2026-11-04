@@ -54,6 +54,11 @@ def test_map_input_paths_keeps_dot_form() -> None:
     assert map_input_paths(["Input:1:/build/srcX/a"], [("/build/src", "/x")]) == [
         "Input:1:/build/srcX/a"
     ]
+    # MiKTeX on Windows: native paths below the shadow tree
+    shadow = [("C:\\b\\src", "C:\\t")]
+    assert map_input_paths(["Input:4:C:\\b\\src\\ch\\a.tex"], shadow) == [
+        "Input:4:C:\\t\\ch\\a.tex"
+    ]
 
 
 def test_write_read_round_trip(tmp_path: Path) -> None:

@@ -87,6 +87,21 @@ jobs:
           initexmf --admin --set-config-value "[MPM]AutoInstall=1"
           initexmf --set-config-value "[MPM]AutoInstall=1"
           initexmf --admin --update-fndb
+      - name: gnuplot-lua-tikz.sty (thesis corpus; part of gnuplot, not of MiKTeX)
+        # as in Dockerfile.miktex: a separate MiKTeX root with the style file gnuplot writes
+        run: |
+          choco install gnuplot --no-progress -y
+          $gp = Get-ChildItem "C:\Program Files\gnuplot*\bin\gnuplot.exe" | Select-Object -First 1
+          $root = Join-Path $env:RUNNER_TEMP "texmf-gnuplot"
+          $dir = Join-Path $root "tex\latex\gnuplot-lua-tikz"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Push-Location $dir
+          & $gp.FullName -e "set term tikz createstyle"
+          Pop-Location
+          Get-ChildItem $dir
+          initexmf --admin --register-root="$root"
+          initexmf --admin --update-fndb
+          kpsewhich gnuplot-lua-tikz.sty
       - name: poppler (pdftoppm, pdftotext, pdfinfo for the §3.3 comparison)
         run: |
           & "$env:CONDA\Scripts\conda.exe" install -y -q -c conda-forge poppler
@@ -94,7 +109,7 @@ jobs:
       - name: Install Python package
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev]" pytest-timeout
       - name: Unit tests (no TeX)
         run: pytest -m "not slow"
       - name: Warm-up (install the packages of the corpora once, sequentially)
@@ -116,10 +131,21 @@ jobs:
           }
           Get-Command pdflatex, biber, makeindex, synctex, kpsewhich, latexmk, pdftoppm | Format-Table Name, Source
       - name: All tests (slow, scenario, acceptance)
-        run: pytest -n auto --dist worksteal -rfE --junitxml=pytest-windows.xml
+        # a test that hangs fails after 20 min with the stacks of all threads (instead of the
+        # whole job running into its timeout without a name)
+        run: pytest -n auto --dist worksteal -rfE --junitxml=pytest-windows.xml --basetemp="$env:RUNNER_TEMP\pt" --timeout=1200 --timeout-method=thread
       - name: Test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pytest-windows-miktex
           path: pytest-windows.xml
+      - name: TeX logs of the tests (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tex-logs-windows-miktex
+          path: |
+            ${{ runner.temp }}/pt/**/*.log
+            ${{ runner.temp }}/pt/**/*.blg
+          if-no-files-found: ignore
