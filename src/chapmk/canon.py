@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -29,11 +30,11 @@ from chapmk.auxfile import (
 from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import SelfCheckError, ToolError
 from chapmk.facts import DEFAULT_LIST_SUFFIXES, derived_suffixes
-from chapmk.files import copy_atomic, digest, read_raw, write_if_changed
+from chapmk.files import copy_atomic, digest, read_raw, write_atomic, write_if_changed
 from chapmk.layout import Layout
 from chapmk.predict import SegmentVectors, normalized
-from chapmk.records import RunRecords, read_nomenclature
-from chapmk.state import SegmentArtifact, State
+from chapmk.records import RunView, read_nomenclature
+from chapmk.state import SegmentArtifact, State, save_state
 from chapmk.texdist import TexDistribution
 from chapmk.texsource import split_lines
 from chapmk.tools import (
@@ -47,6 +48,23 @@ from chapmk.tools import (
     run_makeindex,
     with_datalists,
 )
+
+#: present in ``canon/`` while a batch commits (C7): from the first write of a canonical file
+#: until the state is saved; a build that finds it starts cold
+JOURNAL_FILE = ".in-progress"
+
+
+@contextmanager
+def committing(canon: Path, state: State, runs: Sequence[str]) -> Iterator[None]:
+    """The commit of a batch (C7, D2: the one place that persists the canonical state): the
+    journal is written before the block changes ``canon/`` and ``state``; when the block
+    ends normally, the state is saved and the journal removed. An exception (a tool error, a
+    failed self-check, an interrupt) leaves the journal: the next build starts cold."""
+    canon.mkdir(parents=True, exist_ok=True)
+    write_atomic(canon / JOURNAL_FILE, " ".join(runs))
+    yield
+    save_state(state, canon)
+    (canon / JOURNAL_FILE).unlink()
 
 
 def segments(analysis: Analysis) -> list[str]:
@@ -143,11 +161,10 @@ def commit_run(
     analysis: Analysis,
     layout: Layout,
     state: State,
-    run_name: str,
-    recs: RunRecords,
+    run: RunView,
     compiled: set[str],
 ) -> None:
-    """Commit run ``run_name`` (which compiled the unit segments ``compiled`` and all glue)
+    """Commit ``run`` (which compiled the unit segments ``compiled`` and all glue)
     into ``canon/`` and ``state``. Runs of a parallel batch are committed in document order;
     :func:`run_tools` follows once.
 
@@ -157,7 +174,7 @@ def commit_run(
     them from all aux files it read, §6.7.1).
     """
     canon, job = layout.canon_dir, analysis.jobname
-    run_dir = layout.runs_dir / run_name
+    run_name, run_dir, recs = run.name, run.directory, run.records
     canon.mkdir(parents=True, exist_ok=True)
     order = segments(analysis)
     taken = [seg for seg in order if seg.startswith("G") or seg in compiled]
@@ -183,7 +200,7 @@ def commit_run(
     if recs.eqp_uses:  # Q records (chapmk.sty since M6)
         for seg in taken:
             state.eqp_tags[seg] = sorted(recs.eqp_uses.get(seg, ()))
-    run_main = statements(read_lines(run_dir / f"{job}.aux"))
+    run_main = run.main_statements
     aggregates = list(dict.fromkeys(s for s in run_main if classify(s) == AGGREGATE))
     for seg in taken:
         state.aggregates[seg] = aggregates
@@ -198,9 +215,8 @@ def commit_run(
         pages,
     )
     write_if_changed(old_path, "\n".join(canonical) + "\n")
-    bcf = run_dir / f"{job}.bcf"
-    if bcf.is_file():
-        by_seg = citations_by_segment(run_main, read_raw(bcf))
+    if run.bcf is not None:
+        by_seg = citations_by_segment(run_main, run.bcf)
         for seg in taken:
             state.citations[seg] = by_seg.get(seg, [])
     nlo = canon / f"{job}.nlo"

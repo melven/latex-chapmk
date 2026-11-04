@@ -4,17 +4,18 @@ file, concatenated log, and the log of a failed run."""
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from chapmk.analysis import Analysis
-from chapmk.auxfile import parse_bookmark, read_lines, segment_slices
+from chapmk.auxfile import parse_bookmark
 from chapmk.canon import segments
 from chapmk.errors import FallbackError, TexError
 from chapmk.files import digest, read_log, write_atomic
 from chapmk.layout import Layout
 from chapmk.publish import publish, publish_all, text_writer
-from chapmk.records import RunRecords, read_run_records
+from chapmk.records import RunView
 from chapmk.runner import RUN_MAIN, map_run_paths
 from chapmk.state import State
 from chapmk.synctex import SyncTexError
@@ -50,22 +51,21 @@ def publish_state(
     timings: Timings | None = None,
     *,
     dist: TexDistribution,
+    views: Mapping[str, RunView] | None = None,
 ) -> Path:
     """Merge the canonical segments into the published PDF, SyncTeX file and log. The run
     main maps to the user's main file in the form the distribution records for an input in
-    the working directory (as a full build of the main file would: S10, S11)."""
+    the working directory (as a full build of the main file would: S10, S11). ``views``: runs
+    the builder parsed already."""
     from chapmk.merge_pdf import MergeError, OutlineEntry, PageSource, merge_pdf  # pikepdf
 
     t = timings or Timings()
     job = analysis.jobname
-    runs: dict[str, RunRecords] = {}
-    slices: dict[str, dict[str, list[str]]] = {}
+    runs: dict[str, RunView] = dict(views or {})
 
-    def records(run: str) -> RunRecords:
+    def view(run: str) -> RunView:
         if run not in runs:
-            run_dir = layout.runs_dir / run
-            runs[run] = read_run_records(run_dir, analysis)
-            slices[run] = segment_slices(read_lines(run_dir / f"{job}.aux"))
+            runs[run] = RunView(layout.runs_dir / run, analysis)
         return runs[run]
 
     pages: list[PageSource] = []
@@ -73,8 +73,8 @@ def publish_state(
     syn: list[tuple[Path, int]] = []
     for seg in segments(analysis):
         art = state.segments[seg]
-        recs = records(art.run)
-        run_dir = layout.runs_dir / art.run
+        run = view(art.run)
+        recs, run_dir = run.records, run.directory
         by_index = {p.index: p for p in recs.pages}
         # pages after an extra picture page (§6.17) are not indexed by the run's own labels
         first_gap = next((n for n, p in enumerate(recs.pages) if p.index != n), len(recs.pages))
@@ -91,7 +91,7 @@ def publish_state(
                 )
             )
             syn.append((run_dir / f"{job}.synctex.gz", i))
-        for line in slices[art.run].get(seg, []):
+        for line in run.slices.get(seg, []):
             bkm = parse_bookmark(line)
             if bkm is not None:
                 level = recs.bookmark_levels.get(bkm.id, 0)
@@ -130,11 +130,11 @@ def publish_state(
         [(write_synctex, layout.output(".synctex.gz")), (write_pdf, layout.output(".pdf"))]
     )
     texts = []
-    for run in sorted(state.run_names(), key=lambda r: int(r[1:])):
-        log = layout.runs_dir / run / f"{job}.log"
+    for name in sorted(state.run_names(), key=lambda r: int(r[1:])):
+        run = view(name)
         texts.append(
-            f"%%% chapmk: log of run {run}\n"
-            + map_run_paths(analysis, layout, log.parent, read_log(log))
+            f"%%% chapmk: log of run {name}\n"
+            + map_run_paths(analysis, layout, run.directory, run.log)
         )
     publish(text_writer("\n".join(texts)), layout.output(".log"))
     t.lap("log")
