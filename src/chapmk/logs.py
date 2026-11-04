@@ -19,20 +19,40 @@ def map_paths(text: str, mapping: Sequence[tuple[str, str]]) -> str:
     return text
 
 
-def first_error(log: str) -> str | None:
-    """First error of a TeX log: a ``file:line: message`` line (``-file-line-error``) or a
-    ``! message`` line, whichever comes first."""
-    for line in text_lines(log):
-        if line.startswith("! ") or _FILE_LINE_ERROR.match(line):
-            return line.rstrip()
-    return None
+#: lines that only say that TeX stopped; the cause is an earlier error
+_GENERIC_ERRORS = ("! Emergency stop.", "!  ==> Fatal error occurred")
+
+
+def _errors(text: str) -> list[str]:
+    return [
+        line.rstrip()
+        for line in text_lines(text)
+        if line.startswith("! ") or _FILE_LINE_ERROR.match(line)
+    ]
+
+
+def first_error(log: str, output: str = "") -> str | None:
+    """First error of a TeX run: a ``file:line: message`` line (``-file-line-error``) or a
+    ``! message`` line, whichever comes first in the log. If the log has only a generic stop
+    (``! Emergency stop.``), the first specific error of the terminal ``output`` is taken:
+    an error before the log was opened, e.g. a file on the command line that does not exist
+    (``! I can't find file `mylatexformat.ltx'.``), is only written there."""
+    errors = _errors(log)
+    specific = [e for e in errors if not e.startswith(_GENERIC_ERRORS)]
+    if specific:
+        return specific[0]
+    from_output = [e for e in _errors(output) if not e.startswith(_GENERIC_ERRORS)]
+    if from_output:
+        return from_output[0]
+    return errors[0] if errors else None
 
 
 def run_error(log: Path, output: str, mapping: Sequence[tuple[str, str]]) -> str | None:
     """First error of a failed TeX run, path-mapped: from its log file, or from the program
-    output if the run wrote no log."""
+    output if the run wrote no log; behind a generic stop in the log, the specific error of
+    the program output (:func:`first_error`)."""
     text = read_log(log) if log.is_file() else output
-    return first_error(map_paths(text, mapping))
+    return first_error(map_paths(text, mapping), map_paths(output, mapping))
 
 
 def short_list(items: Sequence[str], limit: int = 3) -> str:

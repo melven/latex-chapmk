@@ -24,6 +24,8 @@ from chapmk.texsource import text_lines
 TEX_DIR = Path(__file__).resolve().parent / "tex"
 
 REQUIRED_TOOLS = ("pdflatex", "biber", "makeindex", "kpsewhich")
+#: TeX files chapmk needs beyond a LaTeX installation (the format build, §6.3)
+REQUIRED_FILES = ("mylatexformat.ltx",)
 
 
 def tex_path(path: Path) -> str:
@@ -81,14 +83,32 @@ class TeXLive:
 
     name = "TeX Live"
 
-    def __init__(self, which: Callable[[str], str | None] = shutil.which) -> None:
+    def __init__(
+        self,
+        which: Callable[[str], str | None] = shutil.which,
+        find_file: Callable[[str], str] | None = None,
+    ) -> None:
         self._which = which
+        self._find_file = find_file or _kpsewhich
 
     def check_tools(self) -> None:
-        """Raise :class:`ToolError` listing every required program that is not on PATH."""
+        """Raise :class:`ToolError` listing every required program that is not on PATH, or
+        every required TeX file (:data:`REQUIRED_FILES`) that is not installed."""
         missing = [tool for tool in REQUIRED_TOOLS if self._which(tool) is None]
         if missing:
             raise ToolError("required programs not found on PATH: " + ", ".join(missing))
+        self._check_files()
+
+    def _check_files(self) -> None:
+        missing = [name for name in REQUIRED_FILES if not self._find_file(name)]
+        if missing:
+            raise ToolError(
+                f"required TeX files not found: {', '.join(missing)}; "
+                + self._install_hint([Path(m).stem for m in missing])
+            )
+
+    def _install_hint(self, packages: list[str]) -> str:
+        return f"install them with 'tlmgr install {' '.join(packages)}'"
 
     @cached_property
     def version(self) -> str:
@@ -189,13 +209,15 @@ class MiKTeX(TeXLive):
         self,
         which: Callable[[str], str | None] = shutil.which,
         config_value: Callable[[str], str] | None = None,
+        find_file: Callable[[str], str] | None = None,
     ) -> None:
-        super().__init__(which)
+        super().__init__(which, find_file)
         self._config_value = config_value or _initexmf_value
 
     def check_tools(self) -> None:
-        """Required programs, and on-the-fly installation set to never (0) or always (1):
-        "ask" would prompt or block parallel runs."""
+        """Required programs, on-the-fly installation set to never (0) or always (1): "ask"
+        would prompt or block parallel runs; with "never", the required TeX files must be
+        installed (with "always" MiKTeX installs them when the format build reads them)."""
         missing = [t for t in (*REQUIRED_TOOLS, "initexmf") if self._which(t) is None]
         if missing:
             raise ToolError("required programs not found on PATH: " + ", ".join(missing))
@@ -208,6 +230,17 @@ class MiKTeX(TeXLive):
                 "'initexmf --set-config-value [MPM]AutoInstall=1' "
                 "(MiKTeX Console: Settings, 'Always install missing packages on-the-fly')"
             )
+        if value == "0":
+            self._check_files()
+
+    def _install_hint(self, packages: list[str]) -> str:
+        names = " ".join(packages)
+        return (
+            f"install the MiKTeX package{'s' if len(packages) > 1 else ''} {names} "
+            f"(MiKTeX Console: Packages, or 'miktex packages install {names}'), or let MiKTeX "
+            "install missing packages on the fly ('initexmf --set-config-value "
+            "[MPM]AutoInstall=1')"
+        )
 
     def _format_options(self, fmt: Path | None) -> list[str]:
         return [] if fmt is None else [f"--undump={tex_path(fmt)}"]
@@ -230,6 +263,13 @@ class MiKTeX(TeXLive):
 
     def synctex_query(self, cwd: Path, relative: str) -> str:
         return self.synctex_input(cwd, relative)
+
+
+def _kpsewhich(name: str) -> str:
+    """Path of a TeX file found by ``kpsewhich`` (empty if not installed)."""
+    result = run(["kpsewhich", name], cwd=Path.cwd(), env=dict(os.environ))
+    lines = [line for line in text_lines(result.output) if line.strip()]
+    return lines[-1].strip() if result.ok and lines else ""
 
 
 def _initexmf_value(name: str) -> str:
