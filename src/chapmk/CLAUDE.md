@@ -1,6 +1,6 @@
 # src/chapmk: module map for agents
 
-Read this before adding code. Reuse the listed functions instead of writing new ones.
+Section numbers (§) refer to [`docs/design.md`](../../docs/design.md). Read this before adding code. Reuse the listed functions instead of writing new ones.
 **Keep this file in sync**: every new or removed module or public function and every changed
 responsibility is updated here in the same commit.
 
@@ -28,7 +28,7 @@ texsource, config, errors, timing, lock, files, facts, segment  basics
 
 ## Modules
 
-| Module | Purpose (PLAN §) | Public API |
+| Module | Purpose (design §) | Public API |
 |---|---|---|
 | `timing.py` | Wall-time breakdown per build phase (`--report`: `timings`) | `Timings` (`lap(phase)`, `as_dict()`) |
 | `errors.py` | Exceptions; `str(err)` is the user message; `exit_code` 2 (1 for `TexError`, 3 for `InternalError`) | `ChapmkError`, `FallbackError(msg, persistent=)` (D3: base of `RecordError`, `ToolInputError`, `MergeError`, `SyncTexError`, `MergeFailedError`, `SelfCheckError` (C14 runtime self-checks); handled only by `incremental.build` → full mode), `InternalError`, `ConfigError`, `AnalysisError`, `ToolError`, `TexError(msg, log, first_error)` |

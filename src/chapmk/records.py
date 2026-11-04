@@ -1,4 +1,4 @@
-"""Parsing of the records written by chapmk.sty (PLAN §6.4.2, Appendix B)."""
+"""Parsing of the records written by chapmk.sty (design §6.4.2, Appendix B)."""
 
 from __future__ import annotations
 

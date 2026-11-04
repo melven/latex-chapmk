@@ -1,4 +1,4 @@
-"""M7 scenarios (PLAN §6.17): picture cache behind the user's TikZ externalize.
+"""Picture-cache scenarios (design §6.17): picture cache behind the user's TikZ externalize.
 
 The ``pictures`` corpus calls ``\\tikzexternalize`` (with the reference document's todo-note
 wrapper). Each build asserts §3.3 against ``--full`` (``--check``); ``--full`` itself is

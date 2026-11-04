@@ -1,4 +1,4 @@
-"""Benchmarks (PLAN §8.4): wall times of T16 (cold), T1, T2, T4 for latexmk, ``chapmk -j 1``
+"""Benchmarks (design §8.4): wall times of T16 (cold), T1, T2, T4 for latexmk, ``chapmk -j 1``
 and ``chapmk -j N`` on a generated large thesis, plus the time per build phase.
 
 Run inside the dev container (no xdist, idle cores), e.g.::

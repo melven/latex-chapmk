@@ -1,4 +1,4 @@
-"""Prediction for parallel recompilation of successors (PLAN §6.9.3).
+"""Prediction for parallel recompilation of successors (design §6.9.3).
 
 Vectors map ``\\count`` register numbers to values; a missing register is 0 (the encoding of
 the entry and checkpoint records).

@@ -41,7 +41,7 @@ class ConfigError(ChapmkError):
 
 
 class AnalysisError(ChapmkError):
-    """The document violates an assumption the driver cannot work around (PLAN §2)."""
+    """The document violates an assumption the driver cannot work around (design §2)."""
 
 
 class ToolError(ChapmkError):

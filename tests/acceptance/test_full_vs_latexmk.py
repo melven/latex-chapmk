@@ -1,4 +1,4 @@
-"""M1/M7 acceptance: ``chapmk build --full`` equals plain latexmk (PLAN §3.3, §9 M1).
+"""Acceptance: ``chapmk build --full`` equals plain latexmk (design §3.3, §8.3).
 
 Both builds use the same environment (N4); latexmk gets a rule for nomencl. latexmk runs the
 unmodified document with shell escape, so the user's TikZ externalize (thesis corpus, draft

@@ -1,4 +1,4 @@
-"""biber and makeindex (PLAN §6.10): ``.bcf`` patch, nomenclature, and the one runner of
+"""biber and makeindex (design §6.10): ``.bcf`` patch, nomenclature, and the one runner of
 both tools for the full and the incremental builder (D6) with their errors (E7)."""
 
 from __future__ import annotations

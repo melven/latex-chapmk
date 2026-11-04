@@ -1,5 +1,5 @@
-"""Benchmark (manual, ``-m bench``): T2 on the thesis corpus sequentially (``-j 1``, the M4 tail
-run) and with prediction (``-j 4``, M5). Run without xdist: the timings need idle cores."""
+"""Benchmark (manual, ``-m bench``): T2 on the thesis corpus sequentially (``-j 1``, a tail
+run) and with prediction (``-j 4``). Run without xdist: the timings need idle cores."""
 
 import shutil
 import time

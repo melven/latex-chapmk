@@ -7,7 +7,7 @@
 # miktex.org/download/ubuntu redirects to the same path on a random mirror). The MiKTeX
 # packages come from the same mirror. The image holds the complete MiKTeX (like the full
 # scheme of the TeX Live image) and on-the-fly installation is off, so tests never use the
-# network and a missing package is an error (PLAN.md §6.16). On-the-fly installation is also
+# network and a missing package is an error (design §6.16). On-the-fly installation is also
 # unreliable in containers: it silently skipped some packages (xkeyval, biblatex).
 #
 # Behind a proxy: --build-arg HTTPS_PROXY=... (--network host for a local proxy); if it

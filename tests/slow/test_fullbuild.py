@@ -31,7 +31,7 @@ def test_full_build_with_biber_and_nomencl(copy_corpus, tmp_path: Path, capsys) 
 
 
 def test_full_build_runs_makeindex_for_an_index(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
-    """M4: full mode runs makeindex on ``<job>.idx`` like latexmk (imakeidx's own call fails
+    """Full mode runs makeindex on ``<job>.idx`` like latexmk (imakeidx's own call fails
     with -output-directory, found on the pgf manual)."""
     src = tmp_path / "s"
     src.mkdir()

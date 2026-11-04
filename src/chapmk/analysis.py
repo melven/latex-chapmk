@@ -1,4 +1,4 @@
-"""Static project analysis (PLAN §6.1): preamble, format split point, units, fingerprints.
+"""Static project analysis (design §6.1): preamble, format split point, units, fingerprints.
 
 Works on the source text only, no TeX runs. Results are deterministic for given sources and
 configuration. Reasons that force full-build mode (§6.14) are collected, not raised.
@@ -26,7 +26,7 @@ from chapmk.texsource import (
     strip_comments,
 )
 
-#: Preamble patterns that end the format part (PLAN §6.3.2). Config adds ``format.split_before``.
+#: Preamble patterns that end the format part (design §6.3.2). Config adds ``format.split_before``.
 DENY_SPLIT: tuple[str, ...] = (
     r"\\tikzexternalize\b",
     r"\\makeindex\b",
@@ -231,7 +231,7 @@ def _backend_reason(backend: str) -> str:
 
 
 def _fallback_reasons(text: str) -> list[str]:
-    """Unsupported features in comment-free source text (PLAN §1, §6.14)."""
+    """Unsupported features in comment-free source text (design §1, §6.14)."""
     reasons: list[str] = []
     for macro in find_macros(text, {"usepackage", "RequirePackage"}):
         for package in split_list(macro.argument or ""):
@@ -307,7 +307,7 @@ def _group_units(includes: list[Include], warnings: list[str]) -> list[Compilati
 
 
 def analyse(config: Config) -> Analysis:
-    """Analyse the project of ``config.main`` (PLAN §6.1)."""
+    """Analyse the project of ``config.main`` (design §6.1)."""
     if config.main is None:
         raise AnalysisError("no main file")
     main = config.main

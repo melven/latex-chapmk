@@ -1,4 +1,4 @@
-"""Picture cache helpers (PLAN §6.17): records, driver file, garbage collection."""
+"""Picture cache helpers (design §6.17): records, driver file, garbage collection."""
 
 from pathlib import Path
 

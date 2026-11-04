@@ -1,4 +1,4 @@
-"""Configuration: ``chapmk.toml`` merged with command-line overrides (PLAN §6.15)."""
+"""Configuration: ``chapmk.toml`` merged with command-line overrides (design §6.15)."""
 
 from __future__ import annotations
 

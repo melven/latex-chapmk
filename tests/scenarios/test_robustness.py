@@ -1,4 +1,4 @@
-"""R0.9 robustness scenarios (docs/review/M8.md, C6-C9): interrupted builds, signals, errors.
+"""Robustness scenarios (docs/review/M8.md, C6-C9): interrupted builds, signals, errors.
 
 Each build asserts §3.3 against ``--full`` (``--check``).
 """

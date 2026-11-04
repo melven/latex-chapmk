@@ -133,4 +133,4 @@ jobs:
       - id: deploy
         uses: actions/deploy-pages@v4
 
-  # Still to add: macos-texlive, windows-texlive (MiKTeX: miktex.yml; PLAN.md §6.16).
+  # Still to add: macos-texlive, windows-texlive (MiKTeX: miktex.yml; design §6.16).

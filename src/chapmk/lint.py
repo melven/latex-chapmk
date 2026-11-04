@@ -1,4 +1,4 @@
-"""Lint for assumption A1 (PLAN §6.8.4): state changes in unit bodies that leak to later units.
+"""Lint for assumption A1 (design §6.8.4): state changes in unit bodies that leak to later units.
 
 A unit with a hit is *global*: whenever it is recompiled, all later units are dirty.
 """

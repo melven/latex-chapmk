@@ -1,4 +1,4 @@
-"""Picture cache (PLAN §6.17, S12): the user's TikZ externalize, redirected by chapmk-ini.sty.
+"""Picture cache (design §6.17, S12): the user's TikZ externalize, redirected by chapmk-ini.sty.
 
 TeX looks a figure up by its key in the picture directory. A missing figure is typeset inline
 and a copy of its box is shipped as an extra page of the run's PDF; the driver splits these

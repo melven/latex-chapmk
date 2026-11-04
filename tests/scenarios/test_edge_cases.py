@@ -1,4 +1,4 @@
-"""R0.9 scenarios: stale-output paths of the M8 review (docs/review/M8.md, C1-C5).
+"""Edge cases: stale-output paths of the review (docs/review/M8.md, C1-C5).
 
 Each build asserts §3.3 against ``--full`` (``--check``).
 """

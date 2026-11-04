@@ -55,7 +55,8 @@ rerun it and commit both.
 
 ## Code
 
-- Read `src/chapmk/CLAUDE.md` (module map, public APIs, layering) and
+- Read [`docs/design.md`](docs/design.md) (how chapmk works; `§` numbers in the code refer to
+  it), `src/chapmk/CLAUDE.md` (module map, public APIs, layering) and
   `src/chapmk/tex/CLAUDE.md` before adding code. Reuse what is listed there, and update the
   maps in the same commit as an API change.
 - Python ≥ 3.11, type hints everywhere, `pathlib`, `subprocess` without shell strings.
