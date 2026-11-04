@@ -14,8 +14,9 @@ full build (`chapmk check` verifies this).
 pip install latex-chapmk          # or: pip install git+https://github.com/melven/latex-chapmk
 ```
 
-Needs Python ≥ 3.11 and TeX Live with `pdflatex`, `biber` and `makeindex`. `chapmk check`
-also needs `pdfinfo`, `pdftoppm`, `pdftotext` (poppler-utils) and `synctex` (TeX Live).
+Needs Python ≥ 3.11 and TeX Live or MiKTeX with `pdflatex`, `biber`, `makeindex` and the
+package `mylatexformat`. `chapmk check` also needs `pdfinfo`, `pdftoppm`, `pdftotext`
+(poppler-utils) and `synctex` (part of TeX Live and MiKTeX).
 The LaTeX packages chapmk uses are part of the Python package; nothing is installed into TeX.
 
 ## Usage
@@ -46,6 +47,19 @@ Forward and inverse search work with the published `main.synctex.gz`; the log ha
 source paths. If the editor stops a running build (e.g. on the next save), chapmk stops its
 TeX processes; a second build of the same document waits for the first.
 
+## Windows
+
+- **MiKTeX:** install the package `mylatexformat`, or let MiKTeX install missing packages on
+  the fly ("Always" in MiKTeX Console). The setting "Ask" is refused: it would stop
+  unattended and parallel runs.
+- **Antivirus:** Windows Defender scans every file chapmk reads or writes in `.chapmk\`.
+  Rebuilding one chapter of a thesis after a typo took 12.7 s on a normal drive and 4.8 s on
+  a [Dev Drive](https://learn.microsoft.com/windows/dev-drive/) (Windows 11), where Defender
+  scans asynchronously; TeX itself took 3.5 s and 2.2 s of that. Keep the project on a Dev
+  Drive, or exclude its `.chapmk` directory from scanning where your organisation allows it.
+  `--build-dir` can put only the build directory on another drive; the project directory is
+  then mirrored with symbolic links, or with copies where links are not allowed.
+
 ## How it works
 
 The preamble is precompiled into a format. Each `\include` starting with a chapter-level
@@ -69,8 +83,8 @@ merged; any case it cannot handle falls back to a plain full build.
 
 ## Limitations
 
-- pdfLaTeX and TeX Live only (MiKTeX, Windows and macOS are not tested yet); biblatex with
-  biber only; hyperref needs the `bookmark` package.
+- pdfLaTeX only. TeX Live is tested in CI on Linux; MiKTeX in a Linux image; Windows only by
+  hand so far; macOS not yet. biblatex with biber only; hyperref needs the `bookmark` package.
 - Full builds (like latexmk, with a warning): `glossaries`, `imakeidx`/`makeidx`, `minted`,
   `cleveref`, BibTeX, biblatex refsections, primitive `\mark`, an `eqparbox` tag used in
   several chapters whose width changes, and cases chapmk cannot verify.

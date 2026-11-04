@@ -708,7 +708,7 @@ All TeX invocations go through a **distribution adapter** (`texdist.py`) with tw
 - **Output replacement:** `os.replace` onto `main.pdf` fails on Windows while a viewer locks the file (e.g. Adobe Reader). Retry with backoff for 2 s, then write `main.chapmk.pdf` and warn. SumatraPDF does not lock. The PDF and the SyncTeX file are both merged into temporary files first and then renamed back to back, SyncTeX first (C16): a viewer sees the old or the new pair. (pdfTeX itself writes the PDF while it runs; its SyncTeX file appears at the end.)
 - **Processes:** use `subprocess` only, no `fork`; the process pool must be spawn-safe.
 - **Watch mode (future):** `watchdog` (cross-platform).
-- **Performance on Windows:** process start-up and antivirus scanning of many small files are slower. Document the recommendation to exclude the build directory from on-access scanning.
+- **Performance on Windows:** process start-up and antivirus scanning of many small files are slower. Measured (MiKTeX, the user's thesis, a typo in one chapter, one run): 12.7 s on a normal NTFS drive with Windows Defender (TeX 3.5 s; SyncTeX merge 4.7 s, PDF merge 2.0 s, figure check 1.3 s), 4.8 s on a Dev Drive, where Defender scans asynchronously (TeX 2.2 s, SyncTeX merge 1.1 s, PDF merge 0.6 s, figure check 0.05 s); Linux about 3.5 s. The README recommends a Dev Drive, or excluding the build directory from on-access scanning where policy allows it (often not, in managed installations).
 
 **CI matrix:** Linux/TeX Live, macOS/TeX Live, Windows/TeX Live, Windows/MiKTeX. Scenario tests run on all four. Raster comparison needs poppler, installed via conda on Windows.
 
