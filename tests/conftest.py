@@ -11,6 +11,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from hypothesis import settings
+
+# property tests: no deadline (timings vary under xdist), no example database (it would be a
+# shared directory in the working tree)
+settings.register_profile("chapmk", deadline=None, database=None)
+settings.load_profile("chapmk")
 
 REPO = Path(__file__).resolve().parent.parent
 CORPUS = REPO / "tests" / "corpus"
