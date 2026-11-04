@@ -20,6 +20,9 @@ from chapmk.errors import ChapmkError
 
 LOCK_FILE = "lock"
 POLL_SECONDS = 0.2
+#: Windows locks are mandatory (a locked byte cannot be read by others): the lock covers one
+#: byte far beyond the holder's PID at the start of the file
+_WIN_LOCK_OFFSET = 1 << 30
 
 
 class LockedError(ChapmkError):
@@ -30,7 +33,7 @@ def _try_lock(f: IO[bytes]) -> bool:
     if sys.platform == "win32":
         import msvcrt
 
-        f.seek(0)  # the lock covers the first byte
+        f.seek(_WIN_LOCK_OFFSET)
         try:
             msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
         except OSError:
@@ -49,7 +52,7 @@ def _unlock(f: IO[bytes]) -> None:
     if sys.platform == "win32":
         import msvcrt
 
-        f.seek(0)
+        f.seek(_WIN_LOCK_OFFSET)
         msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
     else:
         import fcntl
