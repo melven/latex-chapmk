@@ -163,10 +163,6 @@ class TokenScan:
                     return None
         return out
 
-    def reads_lists(self) -> bool:
-        """Whether the texts typeset a derived list (ToC, bibliography, nomenclature, ...)."""
-        return any(_LIST_READERS.search(text) for text in self.texts)
-
 
 def imports(scan: TokenScan, values: Mapping[str, str]) -> dict[str, str]:
     """Referenced keys among ``values`` with their value hashes (stored at compile time)."""
