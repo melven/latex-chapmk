@@ -14,6 +14,10 @@ def test_first_error() -> None:
         "! LaTeX Error: File `x.sty' not found."
     )
     assert first_error("all fine\n(see the transcript file)\n") is None
+    # no error line anywhere: the last line of the program output
+    assert first_error("", "pdflatex: x\nmiktex: package installation failed\n\n") == (
+        "miktex: package installation failed"
+    )
 
 
 def test_first_error_behind_a_generic_stop() -> None:
