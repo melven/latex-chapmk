@@ -256,3 +256,30 @@ def test_catalog_and_info_of_the_format_part_are_replayed(
     assert checked(src, capsys)["mode"] == "incremental"
     with pikepdf.open(src / "main.pdf") as pdf:
         assert pdf.Root.PageMode == "/UseThumbs" and str(pdf.docinfo["/Keywords"]) == "k1"
+
+
+def test_nodes_left_on_the_main_vertical_list_are_replayed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """S13: xcolor leaves an unmatched \\pdfcolorstack push on the main vertical list of the
+    format part, which a format does not dump. A colour left open in a textpos block of the
+    title page (hgbthesis 2025/02/24) then reaches the next page in a plain build only. The
+    format build keeps those nodes in a box that every run puts back: check passes, cold and
+    incremental (it failed on page 2 before)."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage{xcolor}\n\\usepackage[absolute]{textpos}\n"
+        "\\setlength{\\TPHorizModule}{10mm}\n\\setlength{\\TPVertModule}{10mm}\n"
+        "\\begin{document}\n\\begin{titlepage}\n\\begin{textblock}{15}(3,25)\n"
+        "\\centering\n\\color{red}No advisor(s) specified!\\\\\n\\end{textblock}\n\\null\n"
+        "\\end{titlepage}\nText on the page after the title page.\n"
+        "\\include{a}\n\\include{b}\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}Text a.\n")
+    (src / "b.tex").write_text("\\chapter{B}Text b.\n")
+    assert checked(src, capsys)["mode"] == "cold"
+    path = src / "b.tex"
+    path.write_text(path.read_text().replace("Text b.", "Txet b."))
+    assert checked(src, capsys)["mode"] == "incremental"
