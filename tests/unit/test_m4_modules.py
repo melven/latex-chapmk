@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from chapmk.aux import (
+from chapmk.auxfile import (
     ABSPAGE,
     AGGREGATE,
     BIBDATA,

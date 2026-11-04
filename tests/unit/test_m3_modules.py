@@ -1,10 +1,10 @@
-"""Unit tests for state.py, aux.py, merge_pdf label helpers and the SyncTeX merge."""
+"""Unit tests for state.py, auxfile.py, merge_pdf label helpers and the SyncTeX merge."""
 
 from pathlib import Path
 
 import pytest
 
-from chapmk.aux import (
+from chapmk.auxfile import (
     bookmark_levels,
     parse_bookmark,
     segment_slices,

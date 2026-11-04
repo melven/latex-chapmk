@@ -32,7 +32,14 @@ from typing import Any
 
 import chapmk
 from chapmk.analysis import Analysis
-from chapmk.aux import AGGREGATE, GLOBAL, command_name, read_lines, run_input_main_aux, statements
+from chapmk.auxfile import (
+    AGGREGATE,
+    GLOBAL,
+    command_name,
+    read_lines,
+    run_input_main_aux,
+    statements,
+)
 from chapmk.canon import CanonView, commit_lists, commit_run, read_canon, run_tools, segments
 from chapmk.config import Config
 from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash

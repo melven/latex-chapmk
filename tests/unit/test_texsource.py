@@ -100,7 +100,7 @@ def test_text_lines_only_newlines() -> None:
 def test_aux_statement_with_line_separator(tmp_path) -> None:  # type: ignore[no-untyped-def]
     """C12: an aux statement whose argument contains U+2028 (a copy-pasted title) is one line
     and one statement, written back unchanged."""
-    from chapmk.aux import read_lines, statements
+    from chapmk.auxfile import read_lines, statements
 
     line = "\\@writefile{toc}{\\contentsline {section}{\\numberline {1}A\u2028B}{1}{}}"
     aux = tmp_path / "a.aux"

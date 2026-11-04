@@ -7,7 +7,7 @@ import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from chapmk.aux import segment_slices
+from chapmk.auxfile import segment_slices
 from chapmk.errors import FallbackError, ToolError
 from chapmk.proc import run
 from chapmk.records import NLO_MARKER

@@ -745,7 +745,7 @@ src/chapmk/
   publish.py  logs.py          # outputs (§6.16), logs (§6.13)
   synctex.py                   # SyncTeX file handling (§6.12; the merge follows in M3)
   check.py                     # §3.3 comparison
-  runner.py  state.py  aux.py  deps.py  scheduler.py  tools.py  merge_pdf.py   # M2-M5
+  runner.py  state.py  auxfile.py  deps.py  scheduler.py  tools.py  merge_pdf.py   # M2-M5
   tex/chapmk-ini.sty  tex/chapmk.sty  tex/CLAUDE.md
 tests/
   unit/  slow/  acceptance/  scenarios/  bench/

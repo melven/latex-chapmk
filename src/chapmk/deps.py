@@ -13,7 +13,7 @@ import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from chapmk.aux import normalize_statement, statements
+from chapmk.auxfile import normalize_statement, statements
 from chapmk.facts import LIST_COMMANDS
 from chapmk.texsource import text_lines
 
