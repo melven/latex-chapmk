@@ -174,7 +174,9 @@ def test_layout_defaults_and_overrides(tmp_path: Path) -> None:
     assert (lay.build_dir, lay.out_dir, lay.jobname) == (src / ".chapmk" / "thesis", src, "thesis")
     assert lay.shadow_dir == src / ".chapmk" / "thesis" / "src"
     assert lay.output(".pdf") == src / "thesis.pdf"
-    assert lay.path_map() == [(str(src / ".chapmk" / "thesis" / "src"), str(src))]
+    shadow = src / ".chapmk" / "thesis" / "src"
+    pairs = [(str(shadow), str(src)), (shadow.as_posix(), src.as_posix())]
+    assert lay.path_map() == pairs[: 2 if os.sep == "\\" else 1]  # Windows: both forms
     lay2 = make_layout(Config(main=cfg.main, build_dir=tmp_path / "b", out_dir=tmp_path / "o"), a)
     assert (lay2.build_dir, lay2.out_dir) == (tmp_path / "b", tmp_path / "o")
 
