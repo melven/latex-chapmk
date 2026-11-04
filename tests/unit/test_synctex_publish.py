@@ -3,7 +3,15 @@ from pathlib import Path
 import pytest
 
 from chapmk.publish import copy_bytes, publish
-from chapmk.synctex import map_input_paths, read_lines, serialise, write_lines
+from chapmk.synctex import (
+    SyncTexError,
+    map_input_paths,
+    merge,
+    parse,
+    read_lines,
+    serialise,
+    write_lines,
+)
 
 SAMPLE = [
     "SyncTeX Version:1",
@@ -129,3 +137,41 @@ def test_publish_all_writes_everything_before_renaming(tmp_path: Path) -> None:
         and renamed == ["main.synctex.gz", "main.pdf"]
     )
     assert (pdf.read_text(), syn.read_text()) == ("new pdf", "new syn")
+
+
+def synctex_file(path: Path, main: str, sheets: int) -> None:
+    lines = [
+        "SyncTeX Version:1",
+        f"Input:1:{main}",
+        "Input:2:/tex/a.sty",
+        "Output:pdf",
+        "Magnification:1000",
+        "Unit:1",
+        "X Offset:0",
+        "Y Offset:0",
+        "Content:",
+    ]
+    for n in range(1, sheets + 1):
+        lines += ["!0", f"{{{n}", f"[1,{n}:0,0:10,10,0", "x2,5:1,1", "]", "!0", f"}}{n}"]
+    lines += ["!0", "Postamble:", "Count:1", "!0", "Post scriptum:"]
+    write_lines(path, lines)
+
+
+def test_synctex_merge(tmp_path: Path) -> None:
+    a, b = tmp_path / "a.synctex.gz", tmp_path / "b.synctex.gz"
+    synctex_file(a, "/build/runs/r1/chapmk-run.tex", 3)
+    synctex_file(b, "/build/runs/r2/chapmk-run.tex", 2)
+    out = tmp_path / "m.synctex.gz"
+    merge(
+        [(a, 0), (b, 1), (a, 2)],
+        lambda p: "/src/./main.tex" if p.endswith("chapmk-run.tex") else p,
+        out,
+    )
+    m = parse(out)
+    assert m.inputs == {"1": "/src/./main.tex", "2": "/tex/a.sty"}
+    assert sorted(m.sheets) == [1, 2, 3]
+    assert m.sheets[2][0] == "[1,2:0,0:10,10,0" and m.sheets[3][1] == "x2,5:1,1"
+    assert m.header["Magnification"] == "1000"
+    synctex_file(b, "/x", 1)
+    with pytest.raises(SyncTexError, match="no sheet"):
+        merge([(b, 4)], str, out)

@@ -45,7 +45,7 @@ def test_t2_page_count_change_tail_run(thesis: Path, capsys: pytest.CaptureFixtu
     """T2: ch3 gets longer -> ch3, then a tail run ch4..appB (entries changed), then the
     importers of moved labels; no full fallback."""
     edit(ch(thesis, "ch3"), "\\section*{Remarks on ch3}", PARA + "\n\\section*{Remarks on ch3}")
-    rep = checked(thesis, capsys, "-j", "1")  # sequential: the M4 tail run (M5: test_m5)
+    rep = checked(thesis, capsys, "-j", "1")  # sequential: the M4 tail run (M5: test_parallel.py)
     assert rep["mode"] == "incremental"
     sels = selections(rep)
     assert sels[0] == ["chapters/ch3"]

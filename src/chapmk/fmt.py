@@ -26,11 +26,16 @@ STAMP_FILE = "stamp.json"
 
 @dataclass(frozen=True)
 class FormatInfo:
-    """A usable format: directory (for ``TEXFORMATS``), name (for ``-fmt``), whether rebuilt."""
+    """A usable format: directory (for ``TEXFORMATS``), name, whether rebuilt."""
 
     directory: Path
     name: str
     rebuilt: bool
+
+    @property
+    def path(self) -> Path:
+        """The format file (passed to :meth:`TexDistribution.pdflatex`)."""
+        return self.directory / f"{self.name}.fmt"
 
 
 def format_stamp(analysis: Analysis, dist_version: str) -> str:

@@ -6,6 +6,7 @@ import pytest
 
 from chapmk.cli import main
 from chapmk.synctex import read_lines
+from chapmk.texdist import detect
 
 pytestmark = pytest.mark.slow
 
@@ -21,7 +22,8 @@ def test_full_build_with_biber_and_nomencl(copy_corpus, tmp_path: Path, capsys) 
     assert (full / "main.bbl").is_file() and (full / "main.nls").is_file()
     assert "stable" in err and "pass 1: changed" in err
     inputs = [line for line in read_lines(out / "main.synctex.gz") if line.startswith("Input:")]
-    assert any(line.endswith(f"{src}/./main.tex") for line in inputs), inputs[:3]
+    main_input = detect().synctex_input(src, "main.tex")  # TeX Live: <src>/./main.tex
+    assert any(line.endswith(main_input) for line in inputs), inputs[:3]
     assert not any(".chapmk/src" in line for line in inputs)
     assert ".chapmk/src" not in (out / "main.log").read_text()
     # nothing was written into the source directory except the build dir

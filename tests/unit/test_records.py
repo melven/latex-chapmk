@@ -123,3 +123,37 @@ def test_prepare_run_dir(tmp_path: Path) -> None:
     (d / "stale").write_text("x")
     prepare_run_dir(a, lay, RunSpec("r1", None))
     assert not (d / "stale").exists() and (d / "ch").is_dir()
+
+
+def test_counter_records_and_reset_closure() -> None:
+    from chapmk.records import RunRecords, parse_counters
+
+    c = parse_counters(
+        "chapter=279:section/figure/;section=280:subsection/;subsection=281:;"
+        "figure=284:subfigure/;subfigure=490:;page=0:;"
+    )
+    assert c["chapter"] == (279, ("section", "figure")) and c["page"] == (0, ())
+    recs = RunRecords(counters=c)
+    assert recs.reset_registers("chapter") == {280, 281, 284, 490}
+    assert recs.reset_registers("page") == set() and recs.reset_registers("nope") == set()
+
+
+def test_register_names(tmp_path: Path) -> None:
+    from chapmk.records import register_names
+
+    log = tmp_path / "x.log"
+    log.write_text(
+        "\\c@figure=\\count284\n"
+        "(/usr/share/texmf/tex/latex/hyperref/hyperref.sty Package: hyperref (see notes)\n"
+        "\\Hy@linkcounter=\\count514\n"
+        "(/usr/share/texmf/tex/latex/hyperref/nameref.sty\n\\c@section@level=\\count515\n)\n"
+        "\\Hy@x=\\count516\n"
+        ")\nother line\n\\c@later=\\count517\n"
+    )
+    assert register_names([log, tmp_path / "missing.log"]) == {
+        284: "\\c@figure",
+        514: "\\Hy@linkcounter [hyperref]",
+        515: "\\c@section@level [nameref]",
+        516: "\\Hy@x [hyperref]",
+        517: "\\c@later",
+    }

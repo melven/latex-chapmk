@@ -6,6 +6,7 @@ import pytest
 
 from chapmk.check import Report, compare_pdfs, compare_synctex
 from chapmk.cli import main
+from chapmk.texdist import detect
 
 pytestmark = pytest.mark.slow
 
@@ -33,7 +34,7 @@ def test_identical_and_different(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     a = build(src, "Same text.", "a")
     b = build(src, "Same text.", "b")
     rep = compare_pdfs(a, b)
-    compare_synctex(a, b, ["d.tex"], src, report=rep)
+    compare_synctex(a, b, [detect().synctex_query(src, "d.tex")], src, report=rep)
     assert rep.ok, rep.summary()
     assert rep.counts["links"] == 1 and rep.counts["outline items"] == 2
     assert rep.counts["synctex view"] >= 3
@@ -41,6 +42,10 @@ def test_identical_and_different(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     rep2 = compare_pdfs(a, c)
     assert {d.item for d in rep2.differences} >= {"raster pages", "text pages"}
     assert "FAIL" in rep2.summary()
+    # a source without records in the reference compares nothing: a difference, not a pass
+    (src / "other.tex").write_text("not\nin\nthe\ndocument\n")
+    rep3 = compare_synctex(a, b, [detect().synctex_query(src, "other.tex")], src)
+    assert not rep3.ok and "no records" in rep3.summary()
 
 
 def test_report_compare() -> None:
