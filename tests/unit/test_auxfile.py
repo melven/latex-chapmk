@@ -1,8 +1,8 @@
-"""Unit tests for aux.py: statements, classes, keys, slices, bookmarks, canonical main aux."""
+"""Unit tests for auxfile.py: statements, classes, keys, slices, bookmarks, canonical main aux."""
 
 import pytest
 
-from chapmk.aux import (
+from chapmk.auxfile import (
     ABSPAGE,
     AGGREGATE,
     BIBDATA,

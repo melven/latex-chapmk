@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from chapmk.analysis import Analysis
-from chapmk.aux import (
+from chapmk.auxfile import (
     AGGREGATE,
     BACKREF,
     EQP,
