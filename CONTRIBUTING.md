@@ -33,6 +33,12 @@ GHCR (tagged by the hash of `Dockerfile` and `requirements-dev.txt`; built and p
 missing), and restores the reference cache of an earlier run with the same image and
 full-mode code.
 
+The weekly workflow `versions.yml` runs the suite on the frozen TeX Live releases since 2023
+(oldest supported LaTeX kernel: 2023-06-01), on the current TeX Live and on the current MiKTeX
+(Linux image built from that day's packages). The frozen releases and MiKTeX run only if
+`src`, `tests` or the images changed since its last successful run. Each job writes the
+tested version (banner, LaTeX kernel, date of the package state) into the run summary.
+
 - Test layout:
   - `tests/unit` (no TeX);
   - `tests/slow` (real TeX runs);

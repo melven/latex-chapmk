@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import sys
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -105,7 +106,13 @@ def _link(src: Path, dst: Path) -> None:
 
 def _is_current(src: Path, dst: Path) -> bool:
     if dst.is_symlink():
-        return dst.readlink() == src
+        if sys.platform != "win32":
+            return dst.readlink() == src
+        # Windows: readlink may return another form of the path (``\\?\`` prefix, case)
+        try:
+            return dst.samefile(src)
+        except OSError:  # broken link
+            return False
     if not dst.is_file():
         return False
     try:

@@ -32,6 +32,7 @@ from chapmk.deps import TokenScan, changed_imports, imports
 from chapmk.files import digest, read_log, write_atomic
 from chapmk.shadow import changed_signatures
 from chapmk.texdist import tex_path
+from chapmk.texsource import text_lines
 
 #: driver parameters, read by chapmk-ini.sty at ``\begin{document}`` (run or output directory)
 PICS_FILE = "chapmk-pics.tex"
@@ -69,7 +70,7 @@ def read_pictures(log: Path) -> list[PictureRecord]:
 def parse_pictures(text: str) -> list[PictureRecord]:
     """Picture records of a log's text, in order."""
     sources: dict[str, str] = {}
-    lines = text.split("\n")
+    lines = text_lines(text)  # MiKTeX on Windows: CRLF
     for i, line in enumerate(lines):
         if line.startswith(_SOURCE) and len(line) > len(_SOURCE) + 33:
             body = [line[len(_SOURCE) + 33 :]]

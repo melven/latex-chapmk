@@ -80,7 +80,7 @@
 %% ---------------------------------------------------------------- running-head marks
 % The kernel's mark classes (\NewMarkClass; \markboth, \markright, \InsertMark) keep the
 % marks of the last output page in g__mark_<region>_<top|first|last>_<class>_tl, as
-% \__mark_value:nn{<id>}{<text>}. They belong to the state vector as pseudo registers
+% \__mark_value:nn{<id>}{<text>} (kernel >= 2025-06-01) or as the text itself (older). They belong to the state vector as pseudo registers
 % \chapmk@markbase + <marks register of the class>: 0 if the last mark of the "page" region
 % is empty, else a 28-bit digest of its text (ids are run-local). A unit records the texts
 % of its page and column regions at its end (\chapmk@mk in the unit aux); an excluded unit
@@ -90,9 +90,17 @@
 \cs_new:Npn \chapmk@markmap #1 { \seq_map_function:NN \g__mark_classes_seq #1 }
 \ExplSyntaxOff
 \def\chapmk@mid#1{\the\numexpr\chapmk@markbase+\csname c__mark_class_#1_mark\endcsname\relax}
-\def\chapmk@mtext#1#2#3{\detokenize{#3}}
-\def\chapmk@mtextof#1{%
-  \expandafter\expandafter\expandafter\chapmk@mtext\csname g__mark_page_last_#1_tl\endcsname}
+\ifcsname __mark_value:nn\endcsname
+  \def\chapmk@mtext#1#2#3{\detokenize{#3}}
+  \def\chapmk@mtextof#1{%
+    \expandafter\expandafter\expandafter\chapmk@mtext\csname g__mark_page_last_#1_tl\endcsname}
+  % a stored mark from its text (restore)
+  \def\chapmk@mvalue#1{\expandafter\noexpand\csname __mark_value:nn\endcsname{0}{\unexpanded{#1}}}
+\else
+  \def\chapmk@mtextof#1{%
+    \detokenize\expandafter\expandafter\expandafter{\csname g__mark_page_last_#1_tl\endcsname}}
+  \def\chapmk@mvalue#1{\unexpanded{#1}}
+\fi
 \def\chapmk@seven#1#2#3#4#5#6#7#8\@nil{#1#2#3#4#5#6#7}
 % the digest is taken of the text as an aux file gives it back (written and re-read: e.g.
 % the robust "\MakeUppercase " becomes \MakeUppercase), so a restored mark has the digest of
@@ -126,8 +134,15 @@
 % unit end: "\chapmk@mk{<id>}{<class>}{<region_slot>}{<text>}" for the page and column regions
 \def\chapmk@mkrec#1{\@for\chapmk@slot:=page_top,page_first,page_last,column_top,%
   column_first,column_last\do{\chapmk@mkrec@{#1}}}
-\def\chapmk@mkrec@#1{\expandafter\expandafter\expandafter\chapmk@mkrec@@
-  \csname g__mark_\chapmk@slot _#1_tl\endcsname{#1}}
+\ifcsname __mark_value:nn\endcsname
+  \def\chapmk@mkrec@#1{\expandafter\expandafter\expandafter\chapmk@mkrec@@
+    \csname g__mark_\chapmk@slot _#1_tl\endcsname{#1}}
+\else  % the stored mark is the text: pass it as the third argument
+  \def\chapmk@mkrec@#1{%
+    \expandafter\let\expandafter\chapmk@tmpm\csname g__mark_\chapmk@slot _#1_tl\endcsname
+    \expandafter\chapmk@mkrec@@\expandafter\relax\expandafter{\expandafter}\expandafter
+      {\chapmk@tmpm}{#1}}
+\fi
 \def\chapmk@mkrec@@#1#2#3#4{\immediate\write\@partaux{\string\chapmk@mk
   {\chapmk@mid{#4}}{#4}{\chapmk@slot}{\unexpanded{#3}}}}
 % read from the unit aux before its \@setckpt (collected per unit, see \@setckpt below)
@@ -136,8 +151,7 @@
   \noexpand\chapmk@mset{#1}{#2}{#3}{\unexpanded{#4}}}}
 % restore (excluded unit): only the pseudo registers listed in the checkpoint
 \long\def\chapmk@mset#1#2#3#4{\ifcsname chapmk@mon@#1\endcsname
-  \expandafter\xdef\csname g__mark_#3_#2_tl\endcsname{%
-    \expandafter\noexpand\csname __mark_value:nn\endcsname{0}{\unexpanded{#4}}}\fi}
+  \expandafter\xdef\csname g__mark_#3_#2_tl\endcsname{\chapmk@mvalue{#4}}\fi}
 % primitive marks (\mark, \marks outside the kernel's classes) cannot be restored: record
 % their use ("K primitive"; the driver falls back to full mode)
 \def\chapmk@mclass#1{\expandafter\let\csname chapmk@mreg@\number
