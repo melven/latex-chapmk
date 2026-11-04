@@ -12,7 +12,7 @@ from chapmk.facts import DEFAULT_LIST_SUFFIXES
 from chapmk.files import write_atomic
 from chapmk.predict import SegmentVectors
 
-STATE_VERSION = 4
+STATE_VERSION = 5
 STATE_FILE = "state.json"
 
 
@@ -27,13 +27,15 @@ class SegmentArtifact:
 @dataclass
 class UnitInputs:
     """What a unit was compiled with (§6.8.1), stored at commit: the observed entry vector,
-    the values of its imported keys at compile start, the hash of the derived list files at
-    compile start if the unit typesets a list, and whether its self data was stable."""
+    the values of its imported keys at compile start, the key of the derived list files it
+    reads at compile start (None: it reads none) with their suffixes (``list_reads``; None:
+    all), and whether its self data was stable."""
 
     entry: dict[int, int]
     imports: dict[str, str]
     lists: str | None
     self_stable: bool
+    list_reads: list[str] | None = None
 
 
 @dataclass
@@ -47,8 +49,9 @@ class State:
 
     M4 (§6.6, §6.9): ``units`` holds the compile-time inputs per unit segment, ``citations``
     the ``.bcf`` citekey elements per segment and ``aggregates`` the end-of-document aggregate
-    statements per segment (from the run that committed the segment). ``glue_inputs`` is the
-    hash of the glue inputs the committed glue was compiled with. ``pending`` holds the dirty
+    statements per segment (from the run that committed the segment). ``glue_inputs`` holds
+    the hashes of the glue inputs (``lists``, ``labels``, ``aux``) the committed glue was
+    compiled with. ``pending`` holds the dirty
     units with reasons and ``glue_pending`` why the glue is invalid, if the last build did not
     reach the fixpoint (e.g. a TeX error). ``vectors`` holds entry, exit and absolute set of
     each segment from its committing run (prediction, §6.9.3); ``eqp_tags`` the eqparbox tags
@@ -69,7 +72,7 @@ class State:
     units: dict[str, UnitInputs] = field(default_factory=dict)
     citations: dict[str, list[str]] = field(default_factory=dict)
     aggregates: dict[str, list[str]] = field(default_factory=dict)
-    glue_inputs: str = ""
+    glue_inputs: dict[str, str] = field(default_factory=dict)
     pending: dict[str, list[str]] = field(default_factory=dict)
     glue_pending: str | None = None
     vectors: dict[str, SegmentVectors] = field(default_factory=dict)
@@ -143,12 +146,13 @@ def load_state(canon_dir: Path) -> State | None:
                     imports=dict(u["imports"]),
                     lists=u["lists"],
                     self_stable=bool(u["self_stable"]),
+                    list_reads=None if u["list_reads"] is None else list(u["list_reads"]),
                 )
                 for k, u in data["units"].items()
             },
             citations={k: list(v) for k, v in data["citations"].items()},
             aggregates={k: list(v) for k, v in data["aggregates"].items()},
-            glue_inputs=str(data["glue_inputs"]),
+            glue_inputs={str(k): str(v) for k, v in data["glue_inputs"].items()},
             pending={k: list(v) for k, v in data["pending"].items()},
             glue_pending=data["glue_pending"],
             vectors={

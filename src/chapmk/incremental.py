@@ -40,12 +40,21 @@ from chapmk.auxfile import (
     run_input_main_aux,
     statements,
 )
-from chapmk.canon import CanonView, commit_lists, commit_run, read_canon, run_tools, segments
+from chapmk.canon import (
+    JOURNAL_FILE,
+    CanonView,
+    commit_lists,
+    commit_run,
+    committing,
+    read_canon,
+    run_tools,
+    segments,
+)
 from chapmk.config import Config
 from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
 from chapmk.errors import FallbackError, TexError
 from chapmk.facts import UNIT_HEADINGS, UNSUPPORTED_PACKAGES, derived_suffixes
-from chapmk.files import digest, write_atomic
+from chapmk.files import changed_files, digest, read_log, write_atomic
 from chapmk.fmt import (
     FormatInfo,
     ensure_format,
@@ -70,7 +79,7 @@ from chapmk.pictures import (
     collect_garbage,
     driver_file,
     export_figures,
-    read_pictures,
+    parse_pictures,
     record_inputs,
     remove_figures,
     stale_figures,
@@ -87,23 +96,21 @@ from chapmk.predict import (
 )
 from chapmk.records import (
     RunRecords,
+    RunView,
     glue_times,
     read_main_records,
-    read_run_records,
     register_names,
     tex_phases,
 )
 from chapmk.runner import RunSpec, prepare_run_dir, run_batch
-from chapmk.shadow import changed_signatures, external_inputs, read_inputs, stat_signatures
-from chapmk.state import CorruptStateError, State, UnitInputs, load_state, save_state
+from chapmk.shadow import changed_signatures, external_inputs, source_inputs, stat_signatures
+from chapmk.state import CorruptStateError, State, UnitInputs, load_state
 from chapmk.texdist import TexDistribution
 from chapmk.texsource import text_lines
 from chapmk.timing import Timings
 
 MAX_ITERATIONS = 8
 FULL_ONLY_FILE = "full-only.json"
-#: present in ``canon/`` while a batch commits (C7)
-JOURNAL_FILE = ".in-progress"
 
 
 @dataclass
@@ -174,39 +181,28 @@ def _segment_files(ctx: Context, recs: RunRecords) -> dict[str, dict[str, str]]:
     return {seg: _hashes(ctx, names) for seg, names in files.items()}
 
 
-def _global_files(ctx: Context, run_dir: Path, attributed: set[str]) -> dict[str, str]:
+def _global_files(ctx: Context, run: RunView, attributed: set[str]) -> dict[str, str]:
     """Source files read by the run but attributed to no segment, plus biblatex data sources."""
-    names: set[str] = set()
-    for path in read_inputs(
-        run_dir / f"{ctx.job}.fls", ctx.layout.shadow_dir, ctx.layout.shadow_dir
-    ):
-        rel = path.relative_to(Path(ctx.layout.shadow_dir).absolute()).as_posix()
-        if (ctx.analysis.source_dir / rel).is_file() and rel not in attributed:
-            names.add(rel)
-    bcf = run_dir / f"{ctx.job}.bcf"
-    if bcf.is_file():
-        for m in re.finditer(r"<bcf:datasource[^>]*>([^<]+)</bcf:datasource>", bcf.read_text()):
+    names = source_inputs(run.file(".fls"), ctx.layout.shadow_dir, ctx.analysis.source_dir)
+    names -= attributed
+    if run.bcf is not None:
+        for m in re.finditer(r"<bcf:datasource[^>]*>([^<]+)</bcf:datasource>", run.bcf):
             if (ctx.analysis.source_dir / m.group(1)).is_file():
                 names.add(Path(m.group(1)).as_posix())
     return _hashes(ctx, names - attributed)
 
 
 def _changed(ctx: Context, files: dict[str, str]) -> list[str]:
-    out = []
-    for name, stored in files.items():
-        path = ctx.analysis.source_dir / name
-        if not path.is_file() or digest(path) != stored:
-            out.append(name)
-    return out
+    return changed_files(ctx.analysis.source_dir, files)
 
 
-def _check_runtime_support(ctx: Context, run_dir: Path, fmt: FormatInfo) -> None:
+def _check_runtime_support(run: RunView, fmt: FormatInfo) -> None:
     """Packages loaded by the format or the run (also those loaded by the class)."""
-    loaded: set[str] = set()
-    for fls in (fmt.directory / f"{fmt.name}.fls", run_dir / f"{ctx.job}.fls"):
-        if fls.is_file():
-            lines = text_lines(fls.read_text(errors="replace"))
-            loaded |= {Path(line[6:]).name for line in lines if line.startswith("INPUT ")}
+    loaded = set(run.loaded)
+    fls = fmt.directory / f"{fmt.name}.fls"
+    if fls.is_file():
+        lines = text_lines(read_log(fls))
+        loaded |= {Path(line[6:]).name for line in lines if line.startswith("INPUT ")}
     for pkg in sorted(UNSUPPORTED_PACKAGES):
         if f"{pkg}.sty" in loaded:
             raise FallbackError(f"package {pkg!r} is not supported (loaded at runtime)", True)
@@ -224,15 +220,6 @@ def _eqp_tag(key: str) -> str:
     """``\\expandafter\\gdef\\csname eqp@this@T\\endcsname`` -> ``T``."""
     m = re.search(r"eqp@[a-z]+@(.*?)\\endcsname", key)
     return m.group(1) if m else key
-
-
-def _lists_now(stored: str, view: CanonView) -> str:
-    """The current value of a unit's stored list dependency (``.bbl,.toc=<hash>``, or the
-    hash of all list files)."""
-    if "=" not in stored:
-        return view.lists
-    names = stored.split("=", 1)[0]
-    return view.lists_key(names.split(",") if names else [])
 
 
 class _UsedCache(dict[str, list[list[Any]]]):
@@ -276,7 +263,7 @@ class Fixpoint:
         # lint results by file content (persistent: linting all units is the largest Python
         # cost of a typo build otherwise); only entries used by this build are saved
         try:
-            old = json.loads((ctx.layout.canon_dir / LINT_CACHE).read_text())
+            old = json.loads((ctx.layout.canon_dir / LINT_CACHE).read_bytes())
         except (OSError, ValueError):
             old = {}
         self.lint_cache = _UsedCache(old if isinstance(old, dict) else {})
@@ -288,6 +275,7 @@ class Fixpoint:
         self.state_before: dict[str, SegmentVectors] = {}
         self.odd: frozenset[str] = frozenset()  # units starting on an odd page (prediction)
         self.self_changes: dict[str, list[str]] = {}  # macros of changed self data (messages)
+        self.views: dict[str, RunView] = {}  # runs of this build, parsed once (D5)
 
     # sources -------------------------------------------------------------------------------
 
@@ -329,15 +317,14 @@ class Fixpoint:
     def is_global(self, seg: str) -> bool:
         return bool(self.lint(seg))
 
-    def glue_inputs(self, view: CanonView) -> str:
-        """The glue's inputs (§6.8.2) as ``lists=..;labels=..;aux=..``."""
+    def glue_inputs(self, view: CanonView) -> dict[str, str]:
+        """Hashes of the glue's inputs (§6.8.2): derived files, imported values, aux data."""
         values = imports(self.scan("glue"), view.values)
-        parts = {
+        return {
             "lists": view.lists,
             "labels": short_hash(json.dumps(sorted(values.items()))),
             "aux": short_hash("\n".join(view.glue_data())),
         }
-        return ";".join(f"{k}={v}" for k, v in parts.items())
 
     def pictures_file(self, view: CanonView) -> str:
         """Driver parameters of the picture cache (§6.17) for runs from ``view``: directory and
@@ -385,6 +372,7 @@ class Fixpoint:
     ) -> tuple[dict[str, list[str]], str | None]:
         """Dirty units and glue after committing a run (§6.9.1)."""
         dirty: dict[str, list[str]] = {}
+        moved: list[int] = []  # indices of the units whose entry state changed
 
         def add(seg: str, reason: str) -> None:
             dirty.setdefault(seg, []).append(reason)
@@ -432,21 +420,17 @@ class Fixpoint:
                 if regs:
                     shown = [self.register_names.get(r, f"\\count{r}") for r in regs]
                     add(seg, f"entry state changed ({short_list(shown)})")
+                    moved.append(int(seg[1:]) - 1)
             keys = changed_imports(info.imports, self.scan(seg), post.values)
             if keys:
                 add(seg, f"imports changed ({short_list(keys)})")
-            if info.lists is not None and info.lists != _lists_now(info.lists, post):
+            if info.lists is not None and info.lists != post.lists_key(info.list_reads):
                 add(seg, "list files changed")
             changed = _changed(self.ctx, self.state.segment_files.get(seg, {}))
             if changed:
                 add(seg, f"sources changed ({short_list(changed)})")
         # tail run (§6.9.2, no prediction in M4): recompiling a unit whose entry changed may
         # change its exit, so all later units are compiled with it, in one run
-        moved = [
-            i
-            for i, seg in enumerate(self.units)
-            if any(r.startswith("entry state changed") for r in dirty.get(seg, []))
-        ]
         if moved:
             first = self.a.includes[moved[0]].arg
             for seg in self.units[moved[0] + 1 :]:
@@ -454,8 +438,7 @@ class Fixpoint:
         glue = None
         now = self.glue_inputs(post)
         if now != self.state.glue_inputs:
-            old = dict(p.split("=", 1) for p in self.state.glue_inputs.split(";") if "=" in p)
-            parts = [k for k, v in (p.split("=", 1) for p in now.split(";")) if old.get(k) != v]
+            parts = [k for k, v in now.items() if self.state.glue_inputs.get(k) != v]
             glue = f"glue inputs changed ({', '.join(parts)})"
         changed = self._glue_sources_changed()
         if changed:
@@ -554,21 +537,11 @@ class Fixpoint:
         entry = observed if observed is not None else self.state.vectors[first].entry
         layout = self._canon_records(self.ctx.layout.canon_dir).layout
         default = bool(layout.get("twoside") and layout.get("openright"))
-        chapter_level = {
-            "part",
-            "part*",
-            "chapter",
-            "chapter*",
-            "addchap",
-            "addchap*",
-            "addpart",
-            "addpart*",
-        }
         # per unit as recorded at its start (a local open=any counts), else the document's
         odd = frozenset(
             f"U{k}"
             for k, inc in enumerate(self.a.includes, start=1)
-            if inc.heading in chapter_level and self.state.openright.get(f"U{k}", default)
+            if inc.heading in UNIT_HEADINGS and self.state.openright.get(f"U{k}", default)
         )
         self.odd = odd
         pred = predict(segments(self.a), self.state.vectors, first, entry, odd)
@@ -649,12 +622,14 @@ class Fixpoint:
             if not r.ok:
                 err = TexError("pdflatex failed", first_error=r.first_error)
                 raise failed_run(a, ctx.layout, r.directory, err)
-        all_recs = [read_run_records(r.directory, ctx.analysis) for r in results]
+        views = [RunView(r.directory, a) for r in results]
+        self.views.update((v.name, v) for v in views)
+        all_recs = [v.records for v in views]
         for recs in all_recs:  # list files with other extensions: stored and spliced from now on
             for suffix in sorted(recs.list_suffixes - set(state.list_suffixes)):
                 state.list_suffixes.append(suffix)
-        for r in results:
-            _check_runtime_support(ctx, r.directory, self.fmt)
+        for view in views:
+            _check_runtime_support(view, self.fmt)
         for recs in all_recs:
             if recs.primitive_marks:
                 regs = ", ".join(f"\\marks{n}" for n in sorted(recs.primitive_marks))
@@ -671,68 +646,69 @@ class Fixpoint:
             for reg, name in all_recs[0].mark_classes.items():
                 self.register_names[reg] = f"marks {name}"
         t.lap("records")
-        # journal (C7): canon files and state change from here until save_state; an
-        # interrupted commit leaves the marker, and the next build is cold
-        write_atomic(canon / JOURNAL_FILE, " ".join(s.name for s in specs))
-        for spec, recs, compiled in zip(specs, all_recs, compiled_by_run, strict=True):
-            commit_run(a, ctx.layout, state, spec.name, recs, compiled)
-            self._attribute(recs, compiled, ctx.layout.runs_dir / spec.name)
-            for seg in compiled:
-                if seg in recs.openright:
-                    state.openright[seg] = recs.openright[seg]
-        exported = self._pictures(specs, compiled_by_run, pre)
-        t.lap("commit")
-        lists_complete = commit_lists(a, ctx.layout, state, specs[-1].name, [s.name for s in specs])
-        t.lap("lists")
-        tools = run_tools(
-            a,
-            ctx.layout,
-            ctx.dist,
-            env,
-            state,
-            specs[-1].name,
-            [s.name for s in specs],
-            full_run=next((s.name for s in specs if s.selection is None), None),
-        )
-        t.lap("tools")
-        post = self._view = read_canon(a, canon, state.list_suffixes)
-        derived = tuple(f"{ctx.job}{x}" for x in derived_suffixes(state.list_suffixes))
-        for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
-            for seg in compiled:
-                scan = self.scan(seg)
-                # the list files it typesets (by command) and reads (F records)
-                reads = scan.list_reads()
-                if reads is not None:
-                    reads |= {
-                        f[f.rindex(ctx.job) + len(ctx.job) :]
-                        for s, f in recs.files
-                        if s == seg and f.endswith(derived)
-                    }
-                state.units[seg] = UnitInputs(
-                    entry=recs.entry_state(seg),
-                    imports=imports(scan, pre.values),
-                    lists=pre.lists_key(reads) if reads is None or reads else None,
-                    self_stable=pre_self[seg] == post.unit_self(seg),
+        with committing(canon, state, [s.name for s in specs]):  # journal (C7)
+            for view, recs, compiled in zip(views, all_recs, compiled_by_run, strict=True):
+                commit_run(a, ctx.layout, state, view, compiled)
+                self._attribute(view, compiled)
+                for seg in compiled:
+                    if seg in recs.openright:
+                        state.openright[seg] = recs.openright[seg]
+            exported = self._pictures(views, compiled_by_run, pre)
+            t.lap("commit")
+            lists_complete = commit_lists(
+                a, ctx.layout, state, specs[-1].name, [s.name for s in specs]
+            )
+            t.lap("lists")
+            tools = run_tools(
+                a,
+                ctx.layout,
+                ctx.dist,
+                env,
+                state,
+                specs[-1].name,
+                [s.name for s in specs],
+                full_run=next((s.name for s in specs if s.selection is None), None),
+            )
+            t.lap("tools")
+            post = self._view = read_canon(a, canon, state.list_suffixes)
+            derived = tuple(f"{ctx.job}{x}" for x in derived_suffixes(state.list_suffixes))
+            for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
+                for seg in compiled:
+                    scan = self.scan(seg)
+                    # the list files it typesets (by command) and reads (F records)
+                    reads = scan.list_reads()
+                    if reads is not None:
+                        reads |= {
+                            f[f.rindex(ctx.job) + len(ctx.job) :]
+                            for s, f in recs.files
+                            if s == seg and f.endswith(derived)
+                        }
+                    state.units[seg] = UnitInputs(
+                        entry=recs.entry_state(seg),
+                        imports=imports(scan, pre.values),
+                        lists=pre.lists_key(reads) if reads is None or reads else None,
+                        self_stable=pre_self[seg] == post.unit_self(seg),
+                        list_reads=None if reads is None else sorted(reads),
+                    )
+                    changed = set(pre_self[seg]) ^ set(post.unit_self(seg))
+                    self.self_changes[seg] = sorted({command_name(s) for s in changed})
+            state.glue_inputs = pre_glue
+            last = all_recs[-1]
+            self.last_entries = {seg: normalized(last.entry_state(seg)) for seg in last.entries}
+            dirty_after, glue_after = self.after_run(last, all_compiled, pre, post)
+            if parallel:
+                dirty_after, glue_after = self._verify(
+                    groups, all_recs, pred, dirty_after, glue_after
                 )
-                changed = set(pre_self[seg]) ^ set(post.unit_self(seg))
-                self.self_changes[seg] = sorted({command_name(s) for s in changed})
-        state.glue_inputs = pre_glue
-        last = all_recs[-1]
-        self.last_entries = {seg: normalized(last.entry_state(seg)) for seg in last.entries}
-        dirty_after, glue_after = self.after_run(last, all_compiled, pre, post)
-        if parallel:
-            dirty_after, glue_after = self._verify(groups, all_recs, pred, dirty_after, glue_after)
-        if not lists_complete:
-            glue_after = glue_after or "list files without unit markers (rewritten by the glue)"
-        for seg, n in sorted(exported.items()):
-            # the run typeset these pictures inline; embedded, the result equals externalize
-            if seg.startswith("U"):
-                dirty_after.setdefault(seg, []).append(f"pictures exported ({n})")
-            else:
-                glue_after = glue_after or f"pictures exported ({n} in the glue)"
-        state.pending, state.glue_pending = dirty_after, glue_after
-        save_state(state, canon)
-        (canon / JOURNAL_FILE).unlink()
+            if not lists_complete:
+                glue_after = glue_after or "list files without unit markers (rewritten by the glue)"
+            for seg, n in sorted(exported.items()):
+                # the run typeset these pictures inline; embedded, the result equals externalize
+                if seg.startswith("U"):
+                    dirty_after.setdefault(seg, []).append(f"pictures exported ({n})")
+                else:
+                    glue_after = glue_after or f"pictures exported ({n} in the glue)"
+            state.pending, state.glue_pending = dirty_after, glue_after
         t.lap("dirty")
         reports = []
         for j, (spec, result) in enumerate(zip(specs, results, strict=True)):
@@ -811,7 +787,7 @@ class Fixpoint:
         return dirty, glue
 
     def _pictures(
-        self, specs: list[RunSpec], compiled_by_run: list[set[str]], pre: CanonView
+        self, views: list[RunView], compiled_by_run: list[set[str]], pre: CanonView
     ) -> dict[str, int]:
         """Export the figures of pictures typeset inline (§6.17) with the values of the keys
         their code references (``pre``: the runs' input), and record the figure keys per
@@ -823,10 +799,9 @@ class Fixpoint:
         exported: dict[str, int] = {}
         if fig is None:
             return exported
-        for spec, compiled in zip(specs, compiled_by_run, strict=True):
-            run_dir = ctx.layout.runs_dir / spec.name
-            pics = read_pictures(run_dir / f"{ctx.job}.log")
-            export_figures(run_dir / f"{ctx.job}.pdf", pics, fig)
+        for view, compiled in zip(views, compiled_by_run, strict=True):
+            pics = parse_pictures(view.log)
+            export_figures(view.file(".pdf"), pics, fig)
             for seg in [*compiled, *glue]:
                 state.pictures[seg] = sorted({p.key for p in pics if p.segment == seg})
             for p in pics:
@@ -837,10 +812,10 @@ class Fixpoint:
             record_inputs(fig, state.dist_files)
         return exported
 
-    def _attribute(self, recs: RunRecords, compiled: set[str], run_dir: Path) -> None:
+    def _attribute(self, run: RunView, compiled: set[str]) -> None:
         """Source files of the compiled units and the glue (F records), global inputs."""
         ctx, state = self.ctx, self.state
-        new_files = _segment_files(ctx, recs)
+        new_files = _segment_files(ctx, run.records)
         for seg in [*compiled, *(g for g in segments(self.a) if g.startswith("G"))]:
             state.segment_files[seg] = new_files.get(seg, {})
             self._scans.pop(seg, None)
@@ -851,12 +826,12 @@ class Fixpoint:
             n: h
             for n, h in {
                 **state.global_files,
-                **_global_files(ctx, run_dir, attributed),
+                **_global_files(ctx, run, attributed),
                 **format_inputs(ctx.layout),  # read by the format build, not by the runs
             }.items()
             if n not in attributed
         }
-        fls = run_dir / f"{ctx.job}.fls"
+        fls = run.file(".fls")
         state.dist_files.update(format_dist_inputs(ctx.layout))
         state.dist_files.update(
             stat_signatures(external_inputs(fls, ctx.layout.shadow_dir, internal_dirs(ctx.layout)))
@@ -957,7 +932,7 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
     # keyed by the version too: an upgrade may support what forced full mode
     stamp_data = {"fingerprints": asdict(ctx.analysis.fingerprints), "chapmk": chapmk.__version__}
     try:
-        data = json.loads(marker.read_text()) if marker.is_file() else {}
+        data = json.loads(marker.read_bytes()) if marker.is_file() else {}
     except (OSError, ValueError):
         data = {}  # unreadable: ignored (attempt the incremental build)
     if (
@@ -1017,7 +992,9 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         if runs:  # a no-op build lints nothing
             write_atomic(canon / LINT_CACHE, json.dumps(dict(loop.lint_cache)))
         if runs or not is_published(ctx.layout):
-            pdf = publish_state(ctx.analysis, ctx.layout, state, ctx.timings, dist=ctx.dist)
+            pdf = publish_state(
+                ctx.analysis, ctx.layout, state, ctx.timings, dist=ctx.dist, views=loop.views
+            )
             mark_published(ctx.layout)
         else:  # nothing changed: the published files are current (latexmk-like no-op)
             pdf = ctx.layout.output(".pdf")

@@ -151,7 +151,8 @@ def _build_locked(
 ) -> int:
     dist = detect()
     dist.check_tools()
-    if args.command == "check" or getattr(args, "check", False):
+    checking = args.command == "check" or getattr(args, "check", False)
+    if checking:
         from chapmk.check import check_tools
 
         check_tools()  # before the build, not after it
@@ -167,20 +168,18 @@ def _build_locked(
     report = _say if config.verbose else (lambda _msg: None)
     ctx = Context(analysis, layout, dist, config, os.environ, report, timings)
     result = build(ctx, epoch, full=getattr(args, "full", False))
-    if not config.verbose:
+    if not config.verbose:  # verbose: the builder reported all of this already
         for warning in result.warnings:
             _say(f"warning: {warning}")
         for hint in result.hints:
             _say(f"hint: {hint}")
-    if config.verbose:
-        pass  # the builder reported mode and reasons already
-    elif result.mode == "cold" and result.reason:
-        _say(f"cold build: {result.reason}")
+        if result.mode == "cold" and result.reason:
+            _say(f"cold build: {result.reason}")
     compiled = f", compiled: {', '.join(result.compiled)}" if result.mode == "incremental" else ""
     _say(f"wrote {result.pdf} ({result.mode}{compiled}, {result.seconds:.1f} s)")
     if getattr(args, "report", None):
         (cwd / args.report).write_text(result.to_json(), encoding="utf-8")
-    if args.command == "check" or getattr(args, "check", False):
+    if checking:
         return _check(ctx, analysis, layout, dist, epoch)
     return 0
 

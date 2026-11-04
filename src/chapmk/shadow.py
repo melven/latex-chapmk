@@ -16,6 +16,7 @@ from pathlib import Path, PurePosixPath
 
 from chapmk.analysis import Analysis
 from chapmk.facts import DEFAULT_LIST_SUFFIXES, TOOL_SUFFIXES
+from chapmk.files import read_raw
 from chapmk.layout import DEFAULT_BUILD_DIR
 
 ALWAYS_SKIPPED_DIRS = frozenset({".git", ".hg", ".svn"})
@@ -194,7 +195,7 @@ def read_inputs(fls: Path, cwd: Path, within: Path) -> set[Path]:
     root = Path(within).absolute()
     resolved_root = root.resolve()
     found: set[Path] = set()
-    for line in fls.read_text(errors="surrogateescape").split("\n"):
+    for line in read_raw(fls).split("\n"):
         if line.startswith("INPUT "):
             p = Path(line[6:].rstrip("\r"))
             p = Path(os.path.normpath(p if p.is_absolute() else Path(cwd).absolute() / p))
@@ -209,6 +210,17 @@ def read_inputs(fls: Path, cwd: Path, within: Path) -> set[Path]:
     return found
 
 
+def source_inputs(fls: Path, shadow_dir: Path, source_dir: Path) -> set[str]:
+    """Source files a run read through the shadow tree: the :func:`read_inputs` below
+    ``shadow_dir`` that exist in ``source_dir``, as relative posix names."""
+    root = Path(shadow_dir).absolute()
+    return {
+        name
+        for path in read_inputs(fls, shadow_dir, shadow_dir)
+        if (source_dir / (name := path.relative_to(root).as_posix())).is_file()
+    }
+
+
 def external_inputs(fls: Path, cwd: Path, internal: Iterable[Path]) -> set[Path]:
     """Files read by a run (``INPUT`` lines) outside the ``internal`` directories (shadow
     tree, build and source directory): the TeX distribution, ``TEXMFHOME``, ``TEXINPUTS``.
@@ -218,7 +230,7 @@ def external_inputs(fls: Path, cwd: Path, internal: Iterable[Path]) -> set[Path]
     roots = [Path(d).absolute() for d in internal]
     roots += [r.resolve() for r in roots]
     found: set[Path] = set()
-    for line in fls.read_text(errors="surrogateescape").split("\n"):
+    for line in read_raw(fls).split("\n"):
         if line.startswith("INPUT "):
             p = Path(line[6:].rstrip("\r"))
             p = Path(os.path.normpath(p if p.is_absolute() else Path(cwd).absolute() / p))

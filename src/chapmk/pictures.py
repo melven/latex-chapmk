@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from chapmk.deps import TokenScan, changed_imports, imports
-from chapmk.files import digest, write_atomic
+from chapmk.files import digest, read_log, write_atomic
 from chapmk.shadow import changed_signatures
 from chapmk.texdist import tex_path
 
@@ -63,9 +63,11 @@ class PictureRecord:
 
 def read_pictures(log: Path) -> list[PictureRecord]:
     """Picture records of a run's log, in order."""
-    if not log.is_file():
-        return []
-    text = log.read_text(errors="replace")
+    return parse_pictures(read_log(log)) if log.is_file() else []
+
+
+def parse_pictures(text: str) -> list[PictureRecord]:
+    """Picture records of a log's text, in order."""
     sources: dict[str, str] = {}
     lines = text.split("\n")
     for i, line in enumerate(lines):
@@ -195,7 +197,7 @@ def record_inputs(fig_dir: Path, signatures: Mapping[str, str]) -> None:
     """Add the distribution files read by an exporting run (stat signatures) to the cache."""
     path = fig_dir / INPUTS_FILE
     try:
-        old = json.loads(path.read_text())
+        old = json.loads(path.read_bytes())
     except (OSError, ValueError):
         old = {}
     data = {**(old if isinstance(old, dict) else {}), **signatures}
@@ -212,7 +214,7 @@ def check_inputs(fig_dir: Path) -> bool:
     if not path.is_file():
         return False
     try:
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_bytes())
         valid = isinstance(data, dict) and not changed_signatures(data)
     except (OSError, ValueError):
         valid = False

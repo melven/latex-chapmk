@@ -22,7 +22,8 @@ def format_source(analysis: Analysis) -> str:
     """Format source ``pre.tex``: ``\\RequirePackage{chapmk-ini}`` prepended to line 1,
     lines ``1..s-1`` verbatim, then the probes of state a format cannot keep (PDF objects,
     colour stacks, unrecorded catalog entries; checked by :func:`chapmk.fmt.ensure_format`,
-    S13) and ``\\endofdump`` (mylatexformat)."""
+    S13), the capture of the nodes left on the main vertical list (replayed by chapmk.sty)
+    and ``\\endofdump`` (mylatexformat)."""
     nl = analysis.newline
     lines = list(analysis.lines[: analysis.split_line - 1])
     if not lines:
@@ -42,6 +43,8 @@ def format_source(analysis: Analysis) -> str:
         "\\the\\numexpr\\pdfcolorstackinit direct{}\\relax}\\fi"
         "\\ifcsname chapmk@pdfunrecorded\\endcsname\\typeout{chapmk-pdf-unrecorded:"
         "\\csname chapmk@pdfunrecorded\\endcsname}\\fi"
+        # S13: nodes left on the main vertical list go into a dumped box (chapmk-ini.sty)
+        "\\ifdefined\\chapmk@capturemvl\\chapmk@capturemvl\\fi"
     )
     return "".join(lines) + check + "\\endofdump" + nl
 

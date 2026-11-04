@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 from collections.abc import Sequence
+from pathlib import Path
 
+from chapmk.files import read_log
 from chapmk.texsource import text_lines
 
 _FILE_LINE_ERROR = re.compile(r"^(?P<file>[^\s:][^:]*):(?P<line>\d+): (?P<msg>.*)$")
@@ -43,6 +45,14 @@ def first_error(log: str, output: str = "") -> str | None:
     if from_output:
         return from_output[0]
     return errors[0] if errors else None
+
+
+def run_error(log: Path, output: str, mapping: Sequence[tuple[str, str]]) -> str | None:
+    """First error of a failed TeX run, path-mapped: from its log file, or from the program
+    output if the run wrote no log; behind a generic stop in the log, the specific error of
+    the program output (:func:`first_error`)."""
+    text = read_log(log) if log.is_file() else output
+    return first_error(map_paths(text, mapping), map_paths(output, mapping))
 
 
 def short_list(items: Sequence[str], limit: int = 3) -> str:
