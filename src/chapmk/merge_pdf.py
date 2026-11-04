@@ -274,7 +274,7 @@ def _font_name(desc: Any) -> str:
 
 
 def _normalize_font_descriptors(pdf: pikepdf.Pdf) -> None:
-    """Font descriptor metrics as one pdfTeX run of the whole document writes them (M7).
+    """Font descriptor metrics as one pdfTeX run of the whole document writes them (§6.17).
 
     pdfTeX writes one descriptor per font. For a font that also occurs in an included PDF
     (an embedded figure, ``/PTEX.FileName``), its metrics come from the font file: Ascent and

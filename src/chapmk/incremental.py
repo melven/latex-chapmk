@@ -1,20 +1,21 @@
-"""Incremental builder (PLAN §5, §6.9; M4): full mode for fallback reasons, otherwise the
+"""Incremental builder (PLAN §5, §6.9): full mode for fallback reasons, otherwise the
 fixpoint loop.
 
 Each iteration compiles the dirty compilation units (all units: a full run; none: a glue-only
-run) together with the glue in one run, commits the result into the canonical state
-(:mod:`chapmk.canon`) and recomputes the dirty set from the dependency model (§6.8):
+run), each run with the glue, in a batch of up to ``-j`` parallel runs with predicted start
+states (§6.9.3), commits the results into the canonical state (:mod:`chapmk.canon`) and
+recomputes the dirty set from the dependency model (§6.8):
 
 - a unit is dirty if its sources changed, an imported label or citation value changed, its
   self data was unstable, its observed entry state changed or it follows such a unit (tail
-  run: without prediction, M5, the later units are compiled in the same run), unclassified
+  run: without prediction the later units are compiled in the same run), unclassified
   or aggregate aux data changed, or a list file it typesets changed; *global* units (lint,
   §6.8.4) are compiled in every run, and with all later units when they are dirty;
 - the glue (compiled in every run) is valid if its inputs (derived files, imported values,
   glue aux data, glue sources) equal those the committed glue run started from.
 
 The loop ends when nothing is dirty and the glue is valid (then every committed segment was
-compiled from the final canonical state); otherwise after :data:`MAX_ITERATIONS` runs the
+compiled from the final canonical state); otherwise after :data:`MAX_ITERATIONS` batches the
 build falls back to full mode. A cold build is the same loop starting with all units dirty
 and an empty canonical state (§6.9.4).
 """
@@ -125,7 +126,7 @@ class BuildReport:
     seconds: float = 0.0
     pdf: str | None = None
     warnings: list[str] = field(default_factory=list)
-    timings: dict[str, float] = field(default_factory=dict)  # wall time per phase (M6)
+    timings: dict[str, float] = field(default_factory=dict)  # wall time per phase
     # advice that depends on measured times (slow glue), kept apart from the warnings
     hints: list[str] = field(default_factory=list)
 
@@ -208,7 +209,7 @@ def _check_runtime_support(run: RunView, fmt: FormatInfo) -> None:
             raise FallbackError(f"package {pkg!r} is not supported (loaded at runtime)", True)
     if "hyperref.sty" in loaded and "bookmark.sty" not in loaded:
         raise FallbackError(
-            "hyperref without the bookmark package (outline via .out is phase 2)", True
+            "hyperref without the bookmark package (load bookmark to build incrementally)", True
         )
 
 
@@ -246,7 +247,7 @@ LINT_CACHE = "lint-cache.json"
 
 
 class Fixpoint:
-    """Dirty sets, runs and commits of one build (§6.9.2; one run per iteration, M4)."""
+    """Dirty sets, batches of runs and commits of one build (§6.9.2)."""
 
     def __init__(self, ctx: Context, state: State, fmt: FormatInfo) -> None:
         self.ctx, self.state, self.fmt = ctx, state, fmt
@@ -429,7 +430,7 @@ class Fixpoint:
             changed = _changed(self.ctx, self.state.segment_files.get(seg, {}))
             if changed:
                 add(seg, f"sources changed ({short_list(changed)})")
-        # tail run (§6.9.2, no prediction in M4): recompiling a unit whose entry changed may
+        # tail run (§6.9.2, without prediction): recompiling a unit whose entry changed may
         # change its exit, so all later units are compiled with it, in one run
         if moved:
             first = self.a.includes[moved[0]].arg
@@ -497,7 +498,7 @@ class Fixpoint:
 
     def groups(self, selection: list[int] | None) -> list[list[int] | None]:
         """Runs of one iteration: contiguous groups of the selected compilation units,
-        balanced by page count, at most ``jobs`` (§6.9.2, M5). One run (the M4 tail run) if
+        balanced by page count, at most ``jobs`` (§6.9.2). One run (the tail run) if
         ``jobs`` is 1, a global unit exists (it would be compiled in every run), a unit has
         no vectors yet, or a unit of the zone was mispredicted twice in a row (§6.9.3 item 6).
         """

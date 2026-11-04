@@ -3,7 +3,7 @@ canonical main aux, structural lines, bookmark records.
 
 Derived list files (.toc, .lof, ...) are not linked in Python: TeX expands their content when
 writing them (e.g. ``\\protected@file@percent``) and aux macros like ``\\babel@aux`` add entries,
-so every run writes complete list files from the aux files it read (M3).
+so every run writes complete list files from the aux files it read.
 """
 
 from __future__ import annotations
@@ -167,7 +167,7 @@ def run_input_main_aux(stmts: Sequence[str], excluded: set[str]) -> list[str]:
     """The canonical main aux as input of a run that excludes the unit segments ``excluded``:
     without their citations. biblatex compares the citations of the previous run with the
     current ones; citations of units the run does not compile would count as removed and
-    suppress e.g. the ``defernumbers`` data (M4)."""
+    suppress e.g. the ``defernumbers`` data."""
     return [
         s
         for seg, s in zip(segment_of_statements(stmts), stmts, strict=True)

@@ -1,6 +1,6 @@
 """Acceptance comparison of two builds (PLAN §3.3): rasters, text, labels, outline, links, SyncTeX.
 
-Library used by the acceptance tests and by ``chapmk check`` (M3). Needs poppler
+Library used by the acceptance tests and by ``chapmk check``. Needs poppler
 (``pdftoppm``, ``pdftotext``) and the ``synctex`` command-line tool.
 """
 

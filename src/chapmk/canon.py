@@ -170,8 +170,7 @@ def commit_run(
 
     Unit aux files, pages, vectors, citations, nomenclature entries and aggregates of the
     compiled units and of the glue come from the run; the canonical main aux keeps the unit
-    content of the other units (§6.7.2). List files come from the run if ``lists`` (TeX wrote
-    them from all aux files it read, §6.7.1).
+    content of the other units (§6.7.2). List files are committed by :func:`commit_lists`.
     """
     canon, job = layout.canon_dir, analysis.jobname
     run_name, run_dir, recs = run.name, run.directory, run.records
@@ -197,7 +196,7 @@ def commit_run(
                 normalized(exit_),
                 frozenset(recs.absolute.get(seg, ())),
             )
-    if recs.eqp_uses:  # Q records (chapmk.sty since M6)
+    if recs.eqp_uses:  # Q records
         for seg in taken:
             state.eqp_tags[seg] = sorted(recs.eqp_uses.get(seg, ()))
     run_main = run.main_statements

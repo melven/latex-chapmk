@@ -153,7 +153,7 @@
 %% ---------------------------------------------------------------- records
 \newwrite\chapmk@rec
 \immediate\openout\chapmk@rec=\jobname.frec
-% elapsed TeX time (M6 breakdown): "T <point> <scaled seconds>" at package load, \begin{document},
+% elapsed TeX time (phases of the report): "T <point> <scaled seconds>" at package load, \begin{document},
 % each segment start and \end{document}
 \def\chapmk@time#1{\ifdefined\pdfelapsedtime
   \immediate\write\chapmk@rec{T #1 \the\pdfelapsedtime}\fi}
@@ -203,7 +203,7 @@
 
 % included unit (S3: after the first \clearpage, unit aux open)
 % "O <seg> 0|1": the unit starts under twoside+openright (local settings such as KOMA's
-% open=any in a group around the \include count; M5 odd-start prediction)
+% open=any in a group around the \include count; odd-start prediction)
 % 1 if \if@<name> is true (expandable). \ifcsname first: \csname would define an undefined
 % \if@<name> as \relax; \iftrue must not appear in skipped text (it counts as a conditional)
 \def\chapmk@iftrue#1{\ifcsname if@#1\endcsname\expandafter\@firstoftwo\else
@@ -271,7 +271,7 @@
     \chapmk@orig@Gin@setfile{#1}{#2}{#3}}\fi}
 
 % counters: register and reset list (\cl@<name>) of each checkpointed counter, as
-% "name=<register>:child/child/;" (M4: entry differences in counters that a unit's leading
+% "name=<register>:child/child/;" (entry differences in counters that a unit's leading
 % numbered heading resets are irrelevant)
 \def\chapmk@counters@rec{\begingroup
   \def\@elt##1{##1,}\edef\chapmk@names{\cl@@ckpt}%
@@ -282,12 +282,12 @@
   \chapmk@main{\string\chapmk@counters{\chapmk@tmp}}%
   \endgroup}
 
-% page layout flags for prediction (M5: chapters start on odd pages in twoside+openright)
+% page layout flags for prediction (chapters start on odd pages in twoside+openright)
 \def\chapmk@layout@rec{%
   \chapmk@main{\string\chapmk@layout{twoside=\chapmk@iftrue{twoside},%
     openright=\chapmk@iftrue{openright}}}}
 
-% list-file markers (M5): \chapmk@lmark{U<k>} before a unit's list contributions (first
+% list-file markers: \chapmk@lmark{U<k>} before a unit's list contributions (first
 % statement of its aux) and \chapmk@lmark{/<seg>} after each entry record, written while
 % the aux files are read at \end{document}; the driver splices list files by them
 \providecommand\chapmk@listexts{toc,lof,lot,loalg,lol,tdo}
@@ -299,7 +299,7 @@
   \@writefile{\chapmk@ext}{\chapmk@lmark{#1}}}}
 \def\chapmk@ustart#1{\chapmk@listmarks{#1}}
 
-% eqparbox tags used per segment (M6): "Q <segment> <tag>" for every use
+% eqparbox tags used per segment: "Q <segment> <tag>" for every use
 \def\chapmk@eqp#1{\immediate\write\chapmk@rec{Q \chapmk@seg\space#1}}% expandable (eqparbox uses it in \csname)
 \def\chapmk@eqp@hooks{%
   \AddToHookWithArguments{cmd/eqp@compute@width/before}{\chapmk@eqp{##1}}%
