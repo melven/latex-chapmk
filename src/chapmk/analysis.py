@@ -14,6 +14,7 @@ from pathlib import Path, PurePosixPath
 from chapmk.config import Config
 from chapmk.errors import AnalysisError
 from chapmk.facts import SECTION_HEADINGS, UNIT_HEADINGS, UNSUPPORTED_PACKAGES
+from chapmk.segment import document_order, glue_ids, seg_index, unit_ids
 from chapmk.texsource import (
     LineIndex,
     depth_at_line_starts,
@@ -120,6 +121,25 @@ class Analysis:
     @property
     def jobname(self) -> str:
         return self.main.stem
+
+    @property
+    def segments(self) -> list[str]:
+        """All segment ids in document order (:func:`chapmk.segment.document_order`)."""
+        return document_order(len(self.includes))
+
+    @property
+    def unit_segments(self) -> list[str]:
+        """``U1 ... Un``."""
+        return unit_ids(len(self.includes))
+
+    @property
+    def glue_segments(self) -> list[str]:
+        """``G0 ... Gn``."""
+        return glue_ids(len(self.includes))
+
+    def include_of(self, seg: str) -> Include:
+        """The include of unit segment ``U<k>``."""
+        return self.includes[seg_index(seg) - 1]
 
     @property
     def newline(self) -> str:

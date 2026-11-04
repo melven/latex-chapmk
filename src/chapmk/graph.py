@@ -12,6 +12,7 @@ from chapmk.config import Config
 from chapmk.deps import defined_labels
 from chapmk.layout import Layout
 from chapmk.lint import lint_files
+from chapmk.segment import unit_id
 from chapmk.state import load_state
 
 GLUE = "glue"
@@ -49,13 +50,13 @@ def dependency_graph(analysis: Analysis, layout: Layout, config: Config | None =
     view = read_canon(analysis, layout.canon_dir)
     owner = dict.fromkeys(defined_labels(view.main), GLUE)
     for k, inc in enumerate(analysis.includes, start=1):
-        owner.update(dict.fromkeys(defined_labels(view.unit_aux.get(f"U{k}", [])), inc.arg))
+        owner.update(dict.fromkeys(defined_labels(view.unit_aux.get(unit_id(k), [])), inc.arg))
     unit_of = {
         inc.arg: n for n, unit in enumerate(analysis.units, start=1) for inc in unit.includes
     }
     g = Graph(units=[[inc.arg for inc in unit.includes] for unit in analysis.units])
     for k, inc in enumerate(analysis.includes, start=1):
-        seg = f"U{k}"
+        seg = unit_id(k)
         info = state.units.get(seg)
         imports: dict[str, list[str]] = {}
         for key in sorted(info.imports if info else {}):

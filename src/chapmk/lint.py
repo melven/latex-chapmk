@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 import chapmk
+from chapmk.segment import seg_index
 from chapmk.texsource import LineIndex, strip_comments
 
 #: hits only outside an explicit group
@@ -291,10 +292,10 @@ def glue_hints(
     numbers of its ``\\include`` commands."""
     headings = set(headings)
     hints = []
-    for seg, seconds in sorted(glue_times.items(), key=lambda x: int(x[0][1:])):
+    for seg, seconds in sorted(glue_times.items(), key=lambda x: seg_index(x[0])):
         if seconds < threshold:
             continue
-        k = int(seg[1:])
+        k = seg_index(seg)
         start = begin_line + 1 if k == 0 else include_lines[k - 1] + 1
         if k < len(include_lines):
             end = include_lines[k] - 1
