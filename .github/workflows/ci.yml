@@ -77,7 +77,6 @@ jobs:
         run: |
           docker run --rm -v "$PWD":/work -w /work --user root chapmk-dev bash -c '
             set -e
-            if [ ! -f pyproject.toml ]; then echo "no package yet (M0)"; exit 0; fi
             pip install -e .
             ruff check . && ruff format --check .
             mypy --strict src
@@ -134,4 +133,4 @@ jobs:
       - id: deploy
         uses: actions/deploy-pages@v4
 
-  # M7: add macos-texlive, windows-texlive and windows-miktex (PLAN.md §6.16).
+  # Still to add: macos-texlive, windows-texlive (MiKTeX: miktex.yml; PLAN.md §6.16).

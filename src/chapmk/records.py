@@ -179,9 +179,9 @@ class RunRecords:
     #: counter name -> (register index, names of the counters it resets)
     counters: dict[str, tuple[int, tuple[str, ...]]] = field(default_factory=dict)
     #: elapsed TeX time in seconds at points of the run (``load``, ``begin``, segment ids,
-    #: ``end``; M6 breakdown), in order
+    #: ``end``; the TeX phases of the report), in order
     times: list[tuple[str, float]] = field(default_factory=list)
-    #: eqparbox tags used per segment (``Q`` records; M6)
+    #: eqparbox tags used per segment (``Q`` records)
     eqp_uses: dict[str, set[str]] = field(default_factory=dict)
     #: page layout flags (``twoside``, ``openright``: 0/1)
     layout: dict[str, int] = field(default_factory=dict)

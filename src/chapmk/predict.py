@@ -1,4 +1,4 @@
-"""Prediction for parallel recompilation of successors (PLAN §6.9.3, M5).
+"""Prediction for parallel recompilation of successors (PLAN §6.9.3).
 
 Vectors map ``\\count`` register numbers to values; a missing register is 0 (the encoding of
 the entry and checkpoint records).
@@ -39,7 +39,7 @@ def modified(seg: SegmentVectors) -> frozenset[int]:
     """Registers the segment modifies: absolute assignments and exit different from entry.
     All other registers pass through (e.g. biblatex's ``maxextraname``, set at
     ``\\begin{document}`` from the ``.bbl``, also when it was 0): checkpoints of excluded
-    units do not restore them, so a run carries their current values (§6.9.3, M6)."""
+    units do not restore them, so a run carries their current values (§6.9.3)."""
     return frozenset(seg.absolute) | frozenset(
         r for r in seg.entry.keys() | seg.exit.keys() if seg.entry.get(r, 0) != seg.exit.get(r, 0)
     )

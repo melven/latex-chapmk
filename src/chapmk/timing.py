@@ -1,4 +1,4 @@
-"""Wall-time breakdown of a build (``--report``: ``timings``; PLAN §8.4, M6)."""
+"""Wall-time breakdown of a build (``--report``: ``timings``; PLAN §8.4)."""
 
 from __future__ import annotations
 

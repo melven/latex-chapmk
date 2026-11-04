@@ -47,7 +47,7 @@ class State:
     the files attributed to them; ``global_files`` are source files read by no particular
     segment (and ``.bib`` data sources); a change of these forces a cold build.
 
-    M4 (§6.6, §6.9): ``units`` holds the compile-time inputs per unit segment, ``citations``
+    ``units`` (§6.6, §6.9) holds the compile-time inputs per unit segment, ``citations``
     the ``.bcf`` citekey elements per segment and ``aggregates`` the end-of-document aggregate
     statements per segment (from the run that committed the segment). ``glue_inputs`` holds
     the hashes of the glue inputs (``lists``, ``labels``, ``aux``) the committed glue was
@@ -55,7 +55,7 @@ class State:
     units with reasons and ``glue_pending`` why the glue is invalid, if the last build did not
     reach the fixpoint (e.g. a TeX error). ``vectors`` holds entry, exit and absolute set of
     each segment from its committing run (prediction, §6.9.3); ``eqp_tags`` the eqparbox tags
-    each segment used in its committing run (M6). ``dist_files`` holds the stat signatures
+    each segment used in its committing run. ``dist_files`` holds the stat signatures
     of the distribution files read by the format build and the runs (C4): a change (e.g. a
     ``tlmgr`` update) forces a cold build, so reused pages and new runs never mix package
     versions.
