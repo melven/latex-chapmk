@@ -127,7 +127,7 @@ def test_miktex_command_lines(tmp_path: Path) -> None:
 @pytest.mark.parametrize(("value", "ok"), [("0", True), ("1", True), ("2", False), ("", False)])
 def test_miktex_on_the_fly_installation_must_not_prompt(value: str, ok: bool) -> None:
     """§6.16: 'ask' would prompt or block parallel runs; never (0) and always (1) are fine."""
-    mk = MiKTeX(which=lambda _: "/bin/t", config_value=lambda _: value)
+    mk = MiKTeX(which=lambda _: "/bin/t", config_value=lambda _: value, find_file=lambda f: f)
     if ok:
         mk.check_tools()
     else:
@@ -262,3 +262,18 @@ def test_external_inputs_and_signatures(tmp_path: Path) -> None:
     (dist / "p.sty").write_text("pp")
     (dist / "q.sty").unlink()
     assert sorted(changed_signatures(sigs)) == [(dist / n).as_posix() for n in ("p.sty", "q.sty")]
+
+
+def test_missing_mylatexformat_is_reported_before_the_format_build() -> None:
+    """Without mylatexformat the format build stops with only "! Emergency stop." in its log;
+    check_tools names the package and how to install it (TeX Live, MiKTeX with on-the-fly
+    installation "never"). With "always", MiKTeX installs it when the format build reads it."""
+    found = lambda f: f  # noqa: E731
+    absent = lambda f: "" if f == "mylatexformat.ltx" else f  # noqa: E731
+    TeXLive(which=lambda _: "/bin/t", find_file=found).check_tools()
+    with pytest.raises(ToolError, match=r"mylatexformat\.ltx.*tlmgr install mylatexformat"):
+        TeXLive(which=lambda _: "/bin/t", find_file=absent).check_tools()
+    never = MiKTeX(which=lambda _: "/bin/t", config_value=lambda _: "0", find_file=absent)
+    with pytest.raises(ToolError, match="miktex packages install mylatexformat"):
+        never.check_tools()
+    MiKTeX(which=lambda _: "/bin/t", config_value=lambda _: "1", find_file=absent).check_tools()
