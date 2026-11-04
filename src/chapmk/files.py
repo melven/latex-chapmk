@@ -11,12 +11,35 @@ from __future__ import annotations
 
 import hashlib
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 
 def digest(path: Path) -> str:
     """sha256 of the file's bytes (hex)."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def changed_files(base: Path, digests: Mapping[str, str]) -> list[str]:
+    """Names (relative to ``base``) of ``digests`` whose file is missing or has another
+    digest, in the order of ``digests``."""
+    return [
+        name
+        for name, stored in digests.items()
+        if not (base / name).is_file() or digest(base / name) != stored
+    ]
+
+
+def read_log(path: Path) -> str:
+    """A log or another text file for messages and searches, decoded as UTF-8 with
+    replacement characters (not in the locale's encoding, e.g. cp1252 on Windows)."""
+    return path.read_bytes().decode("utf-8", "replace")
+
+
+def read_raw(path: Path) -> str:
+    """A text file TeX or a tool wrote, decoded as UTF-8 with ``surrogateescape``: every byte
+    survives a round trip through :func:`write_atomic`."""
+    return path.read_bytes().decode("utf-8", "surrogateescape")
 
 
 def _bytes(data: bytes | str) -> bytes:

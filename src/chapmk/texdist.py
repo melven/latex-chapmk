@@ -93,8 +93,7 @@ class TeXLive:
     @cached_property
     def version(self) -> str:
         """First line of ``pdflatex --version``; part of the format fingerprint."""
-        result = run(["pdflatex", "--version"], cwd=Path.cwd(), env=dict(os.environ))
-        return text_lines(result.output)[0].strip() if result.output else "unknown"
+        return _banner("pdflatex").strip() or "unknown"
 
     def environment(
         self, epoch: int, base: Mapping[str, str], formats_dir: Path | None = None
@@ -236,13 +235,15 @@ class MiKTeX(TeXLive):
 def _initexmf_value(name: str) -> str:
     """A MiKTeX configuration value (effective for the current user)."""
     result = run(["initexmf", "--show-config-value", name], cwd=Path.cwd(), env=dict(os.environ))
-    lines = [line for line in result.output.splitlines() if line.strip()]
+    lines = [line for line in text_lines(result.output) if line.strip()]
     return lines[-1] if result.ok and lines else ""
 
 
 def _banner(pdflatex: str) -> str:
+    """First line of ``pdflatex --version``."""
     result = run([pdflatex, "--version"], cwd=Path.cwd(), env=dict(os.environ))
-    return result.output.splitlines()[0] if result.output else ""
+    lines = text_lines(result.output)
+    return lines[0] if lines else ""
 
 
 def detect(

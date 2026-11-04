@@ -13,6 +13,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from chapmk.files import read_raw
 from chapmk.texsource import text_lines
 
 _SEG_START = re.compile(r"^\\chapmk@entry\{([UG]\d+)\}")
@@ -21,7 +22,7 @@ _BKM = re.compile(r"^\\BKM@entry\{(.*)\}\{([0-9A-Fa-f]*)\}\s*$")
 
 
 def read_lines(path: Path) -> list[str]:
-    return text_lines(path.read_text(encoding="utf-8", errors="surrogateescape"))
+    return text_lines(read_raw(path))
 
 
 def segment_slices(main_aux_lines: list[str]) -> dict[str, list[str]]:

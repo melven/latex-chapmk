@@ -19,7 +19,7 @@ from typing import Any
 import pikepdf
 
 from chapmk.errors import ToolError
-from chapmk.files import digest
+from chapmk.files import digest, read_log
 from chapmk.proc import run
 from chapmk.texsource import text_lines
 
@@ -172,7 +172,7 @@ def _texts(pdf: Path, workdir: Path) -> list[str]:
     r = run(["pdftotext", "-layout", str(pdf), str(out)], cwd=workdir, env=dict(os.environ))
     if not r.ok or not out.is_file():
         raise ToolError(f"pdftotext failed on {pdf}: {r.output.strip()[-300:]}")
-    pages = out.read_text(errors="replace").split("\f")
+    pages = read_log(out).split("\f")
     return pages[:-1] if pages and not pages[-1].strip() else pages
 
 
@@ -275,7 +275,7 @@ def compare_synctex(
     ref_edits: list[list[str]] = []
     got_edits: list[list[str]] = []
     for source in sources:
-        n = len((cwd / source).read_text(errors="replace").split("\n"))
+        n = len(read_log(cwd / source).split("\n"))
         step = max(1, n // (samples * 3))
         hits = 0
         for line in range(1, n + 1, step):

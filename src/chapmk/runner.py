@@ -11,10 +11,10 @@ from pathlib import Path
 
 from chapmk.analysis import Analysis
 from chapmk.facts import DEFAULT_LIST_SUFFIXES, derived_suffixes
-from chapmk.files import write_if_changed
+from chapmk.files import read_log, write_if_changed
 from chapmk.gensrc import run_main
 from chapmk.layout import Layout
-from chapmk.logs import first_error, map_paths
+from chapmk.logs import map_paths, run_error
 from chapmk.proc import run, terminate_all
 from chapmk.texdist import TexDistribution
 
@@ -56,6 +56,11 @@ def run_path_map(analysis: Analysis, layout: Layout, run_dir: Path) -> list[tupl
         *layout.path_map(),
         (RUN_MAIN, analysis.main.name),
     ]
+
+
+def map_run_paths(analysis: Analysis, layout: Layout, run_dir: Path, text: str) -> str:
+    """``text`` (a run's log or messages) with the run's paths mapped to the user's."""
+    return map_paths(text, run_path_map(analysis, layout, run_dir))
 
 
 def prepare_run_dir(
@@ -109,12 +114,11 @@ def run_one(
     result = run(argv, cwd=layout.shadow_dir, env=run_env, log_path=run_dir / "pdflatex.out")
     log = run_dir / f"{job}.log"
     # a run without pages (glue-only run of a document whose glue ships none) writes no PDF
-    no_pages = log.is_file() and "No pages of output." in log.read_text(errors="replace")
+    no_pages = log.is_file() and "No pages of output." in read_log(log)
     ok = result.ok and ((run_dir / f"{job}.pdf").is_file() or no_pages)
     err = None
     if not ok:
-        text = log.read_text(errors="replace") if log.is_file() else result.output
-        err = first_error(map_paths(text, run_path_map(analysis, layout, run_dir)))
+        err = run_error(log, result.output, run_path_map(analysis, layout, run_dir))
     return RunResult(spec, run_dir, ok, result.seconds, err, log)
 
 

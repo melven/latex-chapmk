@@ -12,6 +12,7 @@ import pikepdf
 from pikepdf import Array, Dictionary, Name, String
 
 from chapmk.errors import FallbackError, SelfCheckError
+from chapmk.files import read_log
 
 _DUMMY = re.compile(r"name\{([^}]*)\} has been referenced but does not exist")
 
@@ -54,7 +55,7 @@ def dummy_destinations(log: Path) -> set[str]:
     """Names pdfTeX replaced by dummy destinations (referenced but not defined in the run)."""
     if not log.is_file():
         return set()
-    return set(_DUMMY.findall(log.read_text(errors="replace")))
+    return set(_DUMMY.findall(read_log(log)))
 
 
 def _roman(n: int) -> str:
