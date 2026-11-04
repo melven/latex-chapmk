@@ -94,7 +94,7 @@ def list_file(draw: st.DrawFn) -> tuple[str, dict[str, list[str]]]:
     """A list file with marked unit sections (as chapmk.sty writes them) and its sections."""
     out, sections = draw(_ENTRIES), {}
     for k in range(1, draw(st.integers(0, 4)) + 1):
-        out += [f"\\chapmk@lmark {{/G{k - 1}}}\n"] + draw(_ENTRIES)
+        out += [f"\\chapmk@lmark {{/G{k - 1}}}\n", *draw(_ENTRIES)]
         sections[f"U{k}"] = draw(_ENTRIES)
         out += [f"\\chapmk@lmark {{U{k}}}\n", *sections[f"U{k}"], f"\\chapmk@lmark {{/U{k}}}\n"]
     return "".join(out + draw(_ENTRIES)), sections
