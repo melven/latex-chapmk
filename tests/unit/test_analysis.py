@@ -103,10 +103,11 @@ def test_fingerprints(tmp_path: Path) -> None:
     f1 = analyse(cfg).fingerprints
     main = cfg.main
     assert main is not None
-    main.write_text(main.read_text().replace("Glue.", "Glue!"))
+    # newline="": keep the file's line endings (Windows translates "\n" in text mode)
+    main.write_text(main.read_text().replace("Glue.", "Glue!"), newline="")
     f2 = analyse(cfg).fingerprints
     assert (f1.pre, f1.post) == (f2.pre, f2.post) and f1.body != f2.body
-    main.write_text(main.read_text().replace("{hyperref}", "[final]{hyperref}"))
+    main.write_text(main.read_text().replace("{hyperref}", "[final]{hyperref}"), newline="")
     f3 = analyse(cfg).fingerprints
     assert f3.pre != f2.pre and f3.post == f2.post
 
