@@ -6,15 +6,16 @@
 
 `chapmk`: latexmk for books. It rebuilds only the changed `\include`'d chapters of a pdfLaTeX
 document, in parallel, and merges them into one PDF and SyncTeX file that look like a plain
-full build (`chapmk check` verifies this).
+full build (`chapmk check` verifies this). Speeds up recompiling after small changes from
+minutes to <5 seconds.
 
 ## Install
 
 ```
-pip install latex-chapmk          # or: pip install git+https://github.com/melven/latex-chapmk
+pip install git+https://github.com/melven/latex-chapmk
 ```
 
-Needs Python ≥ 3.11 and TeX Live or MiKTeX with `pdflatex`, `biber`, `makeindex` and the
+Needs Python ≥ 3.11 with pikepdf ≥ 10 and TeX Live or MiKTeX with `pdflatex`, `biber`, `makeindex` and the
 package `mylatexformat`. `chapmk check` also needs `pdfinfo`, `pdftoppm`, `pdftotext`
 (poppler-utils) and `synctex` (part of TeX Live and MiKTeX).
 The LaTeX packages chapmk uses are part of the Python package; nothing is installed into TeX.
@@ -52,13 +53,11 @@ TeX processes; a second build of the same document waits for the first.
 - **MiKTeX:** install the package `mylatexformat`, or let MiKTeX install missing packages on
   the fly ("Always" in MiKTeX Console). The setting "Ask" is refused: it would stop
   unattended and parallel runs.
-- **Antivirus:** Windows Defender scans every file chapmk reads or writes in `.chapmk\`.
-  Rebuilding one chapter of a thesis after a typo took 12.7 s on a normal drive and 4.8 s on
-  a [Dev Drive](https://learn.microsoft.com/windows/dev-drive/) (Windows 11), where Defender
-  scans asynchronously; TeX itself took 3.5 s and 2.2 s of that. Keep the project on a Dev
-  Drive, or exclude its `.chapmk` directory from scanning where your organisation allows it.
-  `--build-dir` can put only the build directory on another drive; the project directory is
-  then mirrored with symbolic links, or with copies where links are not allowed.
+- **Antivirus:** Windows Defender may scan every file chapmk reads or writes in `.chapmk\`.
+  (Re)building can get faster by more than a factor of 3 using a Windows 11
+  [Dev Drive](https://learn.microsoft.com/windows/dev-drive/) where Defender
+  scans asynchronously; keep the project on a Dev Drive, or exclude its `.chapmk` directory
+  from scanning.
 
 ## How it works
 
@@ -105,4 +104,8 @@ Details: [docs/design.md](docs/design.md).
 
 ## License
 
-BSD-3-Clause ([LICENSE](LICENSE)). Test corpora have their own licences (`REUSE.toml`).
+BSD-3-Clause ([LICENSE](LICENSE)).
+
+Exceptions:
+* hgbthesis as a test case in [tests/corpus/hgb/](tests/corpus/hgb/) - [CC BY 4.0](LICENSES/CC-BY-4.0.txt) - copyright Wilhelm Burger and the HagenbergThesis contributors, changes by Melven Roehrig-Zoellner
+* pgf/TIKZ manual as a test case in [tests/corpus/pgfmanual/upstream/](tests/corpus/pgfmanual/upstream/) - [GFDL-1.2-only](LICENSES/GFDL-1.2-only.txt) OR [LPPL-1.3c](LICENSES/LPPL-1.3c.txt) - copyright Till Tantau and the PGF/TikZ contributors
