@@ -44,3 +44,25 @@ def test_state_round_trip(tmp_path: Path) -> None:
     (tmp_path / STATE_FILE).write_text(f'{{"version": {STATE_VERSION}}}')
     with pytest.raises(CorruptStateError, match="unreadable"):  # E7: a cold build
         load_state(tmp_path)
+
+
+def test_segment_ids() -> None:
+    from chapmk.segment import (
+        document_order,
+        glue_id,
+        is_glue,
+        is_segment,
+        is_unit,
+        position,
+        seg_index,
+        unit_id,
+    )
+
+    order = document_order(2)
+    assert order == ["G0", "U1", "G1", "U2", "G2"]
+    assert [position(s) for s in order] == [0, 1, 2, 3, 4]
+    assert sorted(["G2", "U2", "G0", "U1"], key=position) == ["G0", "U1", "U2", "G2"]
+    assert unit_id(3) == "U3" and glue_id(0) == "G0" and seg_index("U12") == 12
+    assert is_unit("U1") and not is_unit("G1") and not is_unit(None)
+    assert is_glue("G0") and not is_glue("U1")
+    assert is_segment("G10") and not is_segment("load") and not is_segment("U")

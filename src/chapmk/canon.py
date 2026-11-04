@@ -34,6 +34,7 @@ from chapmk.files import copy_atomic, digest, read_raw, write_atomic, write_if_c
 from chapmk.layout import Layout
 from chapmk.predict import SegmentVectors, normalized
 from chapmk.records import RunView, read_nomenclature
+from chapmk.segment import is_glue, is_unit, position, unit_id
 from chapmk.state import SegmentArtifact, State, save_state
 from chapmk.texdist import TexDistribution
 from chapmk.texsource import split_lines
@@ -65,11 +66,6 @@ def committing(canon: Path, state: State, runs: Sequence[str]) -> Iterator[None]
     yield
     save_state(state, canon)
     (canon / JOURNAL_FILE).unlink()
-
-
-def segments(analysis: Analysis) -> list[str]:
-    """Segment ids in document order: G0, U1, G1, ..., Un, Gn."""
-    return ["G0"] + [s for k in range(1, len(analysis.includes) + 1) for s in (f"U{k}", f"G{k}")]
 
 
 def _digest(path: Path) -> str | None:
@@ -110,7 +106,7 @@ class CanonView:
         return [
             s
             for owner, s in zip(segment_of_statements(self.main), self.main, strict=True)
-            if (owner is None or owner.startswith("G")) and classify(s) == SELF
+            if (owner is None or is_glue(owner)) and classify(s) == SELF
         ]
 
     def of_class(self, kind: str) -> list[str]:
@@ -146,7 +142,7 @@ def read_canon(
     unit_aux: dict[str, list[str]] = {}
     for k, inc in enumerate(analysis.includes, start=1):
         path = canon / inc.aux_name
-        unit_aux[f"U{k}"] = statements(read_lines(path)) if path.is_file() else []
+        unit_aux[unit_id(k)] = statements(read_lines(path)) if path.is_file() else []
     values = label_values([main, *unit_aux.values()])
     values.update(cite_values(canon / f"{job}.bbl", main))
     h = hashlib.sha256()
@@ -175,10 +171,10 @@ def commit_run(
     canon, job = layout.canon_dir, analysis.jobname
     run_name, run_dir, recs = run.name, run.directory, run.records
     canon.mkdir(parents=True, exist_ok=True)
-    order = segments(analysis)
-    taken = [seg for seg in order if seg.startswith("G") or seg in compiled]
+    order = analysis.segments
+    taken = [seg for seg in order if is_glue(seg) or seg in compiled]
     for k, inc in enumerate(analysis.includes, start=1):
-        if f"U{k}" in compiled:
+        if unit_id(k) in compiled:
             (canon / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
             copy_atomic(run_dir / inc.aux_name, canon / inc.aux_name)
     for seg in taken:
@@ -188,7 +184,7 @@ def commit_run(
         if seg in recs.entries:
             exit_ = (
                 recs.checkpoints.get(seg, {})
-                if seg.startswith("U")
+                if is_unit(seg)
                 else {**recs.base, **recs.glue_exits.get(seg, {})}
             )
             state.vectors[seg] = SegmentVectors(
@@ -209,7 +205,7 @@ def commit_run(
     canonical = canonical_main_aux(
         run_main,
         old_main,
-        {s for s in order if s.startswith("U") and s not in compiled},
+        {s for s in order if is_unit(s) and s not in compiled},
         [a for s in order for a in state.aggregates.get(s, [])],
         pages,
     )
@@ -241,7 +237,7 @@ def unit_sections(text: str) -> dict[str, list[str]]:
     for line in split_lines(text):
         m = _LMARK.match(line)
         if m:
-            current = m.group(2) if not m.group(1) and m.group(2).startswith("U") else None
+            current = m.group(2) if not m.group(1) and is_unit(m.group(2)) else None
             if current is not None:
                 out[current] = []
             continue
@@ -275,7 +271,7 @@ def splice_list(base: str, sections: Mapping[str, list[str]]) -> str | None:
 
 def _check_kept_sections(new: str, old: str, kept: set[str], name: str) -> None:
     new_sections, old_sections = unit_sections(new), unit_sections(old)
-    for seg in sorted(kept, key=lambda s: int(s[1:])):
+    for seg in sorted(kept, key=position):
         if seg in new_sections and seg in old_sections and new_sections[seg] != old_sections[seg]:
             raise SelfCheckError(f"{name}: the entries of {seg} changed without a run of it")
 
@@ -309,19 +305,19 @@ def commit_lists(
             _check_kept_sections(
                 base,
                 read_raw(dst),
-                {f"U{k}" for k in range(1, len(analysis.includes) + 1)}
+                set(analysis.unit_segments)
                 - {seg for seg, art in state.segments.items() if art.run in names},
                 dst.name,
             )
         sections: dict[str, list[str]] = {}
-        for k in range(1, len(analysis.includes) + 1):
-            run = state.segments[f"U{k}"].run
+        for seg in analysis.unit_segments:
+            run = state.segments[seg].run
             if run == last.name or run not in names:
                 continue
             other = names[run].file(suffix)
             found = unit_sections(read_raw(other)) if other.is_file() else {}
-            if f"U{k}" in found:
-                sections[f"U{k}"] = found[f"U{k}"]
+            if seg in found:
+                sections[seg] = found[seg]
             else:
                 complete = False
         spliced = splice_list(base, sections)
@@ -364,7 +360,7 @@ def run_tools(
     tools: list[str] = []
     template = batch[-1].bcf
     if template is not None:
-        elements = [(seg, e) for seg in segments(analysis) for e in state.citations.get(seg, [])]
+        elements = [(seg, e) for seg in analysis.segments for e in state.citations.get(seg, [])]
         patched = patch_bcf(template, elements)
         target = canon / f"{job}.bcf"
         blocks: dict[str, str] = {}

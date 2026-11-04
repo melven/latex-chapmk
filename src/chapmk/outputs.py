@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 
 from chapmk.analysis import Analysis
 from chapmk.auxfile import parse_bookmark
-from chapmk.canon import segments
 from chapmk.errors import FallbackError, TexError
 from chapmk.files import digest, read_log, write_atomic
 from chapmk.layout import Layout
 from chapmk.publish import publish, publish_all, text_writer
 from chapmk.records import RunView
 from chapmk.runner import RUN_MAIN, map_run_paths
+from chapmk.segment import glue_id
 from chapmk.state import State
 from chapmk.synctex import SyncTexError
 from chapmk.synctex import merge as merge_synctex
@@ -71,7 +71,7 @@ def publish_state(
     pages: list[PageSource] = []
     outline: list[OutlineEntry] = []
     syn: list[tuple[Path, int]] = []
-    for seg in segments(analysis):
+    for seg in analysis.segments:
         art = state.segments[seg]
         run = view(art.run)
         recs, run_dir = run.records, run.directory
@@ -96,7 +96,7 @@ def publish_state(
             if bkm is not None:
                 level = recs.bookmark_levels.get(bkm.id, 0)
                 outline.append(OutlineEntry(level, bkm.open, bkm.dest, bkm.title))
-    first_run = layout.runs_dir / state.segments["G0"].run
+    first_run = layout.runs_dir / state.segments[glue_id(0)].run
 
     def write_pdf(tmp: Path) -> None:
         try:

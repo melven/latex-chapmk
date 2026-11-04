@@ -49,7 +49,6 @@ from chapmk.canon import (
     committing,
     read_canon,
     run_tools,
-    segments,
 )
 from chapmk.config import Config
 from chapmk.deps import TokenScan, changed_imports, imports, read_text, short_hash
@@ -104,6 +103,7 @@ from chapmk.records import (
     tex_phases,
 )
 from chapmk.runner import RunSpec, prepare_run_dir, run_batch
+from chapmk.segment import is_unit, position, seg_index, unit_id
 from chapmk.shadow import (
     changed_signatures,
     external_inputs,
@@ -258,7 +258,7 @@ class Fixpoint:
     def __init__(self, ctx: Context, state: State, fmt: FormatInfo) -> None:
         self.ctx, self.state, self.fmt = ctx, state, fmt
         self.a = ctx.analysis
-        self.units = [f"U{k}" for k in range(1, len(self.a.includes) + 1)]
+        self.units = self.a.unit_segments
         index = {inc.arg: k for k, inc in enumerate(self.a.includes, start=1)}
         self.group: dict[int, list[int]] = {}
         for unit in self.a.units:
@@ -299,9 +299,8 @@ class Fixpoint:
         if seg not in self._scans:
             if seg == "glue":
                 texts = [read_text(self.a.main) or ""]
-                for g in segments(self.a):
-                    if g.startswith("G"):
-                        texts += self._texts(g)
+                for g in self.a.glue_segments:
+                    texts += self._texts(g)
             else:
                 texts = self._texts(seg)
             self._scans[seg] = TokenScan(texts)
@@ -351,8 +350,7 @@ class Fixpoint:
     def _glue_sources_changed(self) -> list[str]:
         return [
             name
-            for g in segments(self.a)
-            if g.startswith("G")
+            for g in self.a.glue_segments
             for name in _changed(self.ctx, self.state.segment_files.get(g, {}))
         ]
 
@@ -405,7 +403,7 @@ class Fixpoint:
             known = {t for seg_tags in self.state.eqp_tags.values() for t in seg_tags}
             if not set(tags) <= known:
                 owners |= compiled
-            for seg in sorted(owners, key=lambda x: int(x[1:])):
+            for seg in sorted(owners, key=position):
                 add(seg, f"eqparbox widths changed ({short_list(tags)})")
         for seg in self.units:
             info = self.state.units.get(seg)
@@ -417,7 +415,7 @@ class Fixpoint:
                 add(seg, f"self data unstable ({short_list(names) if names else 'rerun'})")
             if seg not in compiled and seg in recs.entries:
                 entry = recs.entry_state(seg)
-                counter = self.a.includes[int(seg[1:]) - 1].resets
+                counter = self.a.include_of(seg).resets
                 reset = recs.reset_registers(counter) if counter else set()
                 regs = sorted(
                     r
@@ -427,7 +425,7 @@ class Fixpoint:
                 if regs:
                     shown = [self.register_names.get(r, f"\\count{r}") for r in regs]
                     add(seg, f"entry state changed ({short_list(shown)})")
-                    moved.append(int(seg[1:]) - 1)
+                    moved.append(seg_index(seg) - 1)
             keys = changed_imports(info.imports, self.scan(seg), post.values)
             if keys:
                 add(seg, f"imports changed ({short_list(keys)})")
@@ -459,11 +457,11 @@ class Fixpoint:
         for tag in changed:
             owners = [
                 seg
-                for seg in segments(self.a)
+                for seg in self.a.segments
                 if tag in self.state.eqp_tags.get(seg, ()) and seg in self.state.segments
             ]
             if len({self.state.segments[seg].run for seg in owners}) > 1:
-                names = [self.a.includes[int(s[1:]) - 1].arg if s[0] == "U" else s for s in owners]
+                names = [self.a.include_of(s).arg if is_unit(s) else s for s in owners]
                 raise FallbackError(
                     f"eqparbox tag {tag!r} is used in {', '.join(names)}: its width (the widest "
                     "box) changed, and a partial run sees only its own boxes (use the tag in one "
@@ -487,18 +485,18 @@ class Fixpoint:
         reasons = {seg: list(r) for seg, r in dirty.items()}
         ks: set[int] = set()
         for seg in dirty:
-            ks.update(self.group[int(seg[1:])])
+            ks.update(self.group[seg_index(seg)])
         n = len(self.units)
-        own = [k for k in sorted(ks) if self.is_global(f"U{k}")]
+        own = [k for k in sorted(ks) if self.is_global(unit_id(k))]
         if own:
             arg = self.a.includes[own[0] - 1].arg
             for k in range(own[0] + 1, n + 1):
                 if k not in ks:
-                    reasons[f"U{k}"] = [f"follows the global unit {arg} (lint)"]
+                    reasons[unit_id(k)] = [f"follows the global unit {arg} (lint)"]
                     ks.add(k)
         for k in range(1, n + 1):
-            if k not in ks and self.is_global(f"U{k}"):
-                reasons[f"U{k}"] = ["global unit (lint): compiled in every run for its state"]
+            if k not in ks and self.is_global(unit_id(k)):
+                reasons[unit_id(k)] = ["global unit (lint): compiled in every run for its state"]
                 ks.update(self.group[k])
         return (None if len(ks) == n else sorted(ks)), reasons
 
@@ -520,13 +518,13 @@ class Fixpoint:
             jobs <= 1
             or len(atoms) <= 1
             or any(self.is_global(u) for u in self.units)
-            or any(s not in self.state.vectors for s in segments(self.a)[2 * ks[0] - 1 :])
-            or any(self.mispredicted.get(f"U{k}", 0) >= 2 for k in ks)
+            or any(s not in self.state.vectors for s in self.a.segments[2 * ks[0] - 1 :])
+            or any(self.mispredicted.get(unit_id(k), 0) >= 2 for k in ks)
         )
         if single:
             return [selection]
         weights = [
-            float(sum(max(1, len(self.state.segments[f"U{k}"].pages)) for k in atom))
+            float(sum(max(1, len(self.state.segments[unit_id(k)].pages)) for k in atom))
             for atom in atoms
         ]
         return [[k for i in part for k in atoms[i]] for part in partition(weights, jobs)]
@@ -539,24 +537,24 @@ class Fixpoint:
         """Predicted (entry, exit) per segment from the first unit of the batch on, and per
         run index the checkpoints to write into its excluded units: predicted exit and the
         registers the unit modifies (only those are restored)."""
-        first = f"U{groups[0][0]}"
+        first = unit_id(groups[0][0])
         observed = self.last_entries.get(first)
         entry = observed if observed is not None else self.state.vectors[first].entry
         layout = self._canon_records(self.ctx.layout.canon_dir).layout
         default = bool(layout.get("twoside") and layout.get("openright"))
         # per unit as recorded at its start (a local open=any counts), else the document's
         odd = frozenset(
-            f"U{k}"
+            unit_id(k)
             for k, inc in enumerate(self.a.includes, start=1)
-            if inc.heading in UNIT_HEADINGS and self.state.openright.get(f"U{k}", default)
+            if inc.heading in UNIT_HEADINGS and self.state.openright.get(unit_id(k), default)
         )
         self.odd = odd
-        pred = predict(segments(self.a), self.state.vectors, first, entry, odd)
+        pred = predict(self.a.segments, self.state.vectors, first, entry, odd)
         rewrites: dict[int, dict[str, tuple[Vector, frozenset[int]]]] = {}
         for j, group in enumerate(groups):
             out: dict[str, tuple[Vector, frozenset[int]]] = {}
             for k in range(groups[0][0], group[0]):
-                seg = f"U{k}"
+                seg = unit_id(k)
                 out[seg] = (pred[seg][1], modified(self.state.vectors[seg]))
             rewrites[j] = out
         return pred, rewrites
@@ -592,8 +590,8 @@ class Fixpoint:
             name = state.new_run_name()
             ks = list(range(1, len(self.units) + 1)) if group is None else group
             args = None if group is None else tuple(a.includes[k - 1].arg for k in ks)
-            compiled = {f"U{k}" for k in ks}
-            for seg in sorted(compiled, key=lambda x: int(x[1:])):
+            compiled = {unit_id(k) for k in ks}
+            for seg in sorted(compiled, key=position):
                 for hit in self.lint(seg):
                     self._warn(hit.message())
             what = "all units" if args is None else ", ".join(args) if args else "glue only"
@@ -613,7 +611,7 @@ class Fixpoint:
                 stmts = run_input_main_aux(statements(read_lines(main_aux)), excluded)
                 _write(main_aux, stmts)
             for seg, (exit_, keep) in rewrites.get(j, {}).items():
-                path = run_dir / a.includes[int(seg[1:]) - 1].aux_name
+                path = run_dir / a.include_of(seg).aux_name
                 stmts = rewrite_checkpoint(statements(read_lines(path)), exit_, registers, keep)
                 _write(path, stmts)
             (run_dir / PICS_FILE).write_text(pictures_text, encoding="utf-8")
@@ -703,7 +701,7 @@ class Fixpoint:
                 glue_after = glue_after or "list files without unit markers (rewritten by the glue)"
             for seg, n in sorted(exported.items()):
                 # the run typeset these pictures inline; embedded, the result equals externalize
-                if seg.startswith("U"):
+                if is_unit(seg):
                     dirty_after.setdefault(seg, []).append(f"pictures exported ({n})")
                 else:
                     glue_after = glue_after or f"pictures exported ({n} in the glue)"
@@ -717,7 +715,7 @@ class Fixpoint:
                     "batch": number,
                     "selection": None if spec.selection is None else list(spec.selection),
                     "reasons": {
-                        a.includes[int(s[1:]) - 1].arg: r
+                        a.include_of(s).arg: r
                         for s, r in sorted(dirty.items())
                         if s in compiled_by_run[j]
                     },
@@ -746,7 +744,7 @@ class Fixpoint:
         real = [g for g in groups if g is not None]
         for j, (group, recs) in enumerate(zip(real[:-1], all_recs[:-1], strict=True)):
             for k in group:
-                seg = f"U{k}"
+                seg = unit_id(k)
                 actual = normalized(recs.checkpoints.get(seg, {}))
                 entry = recs.entry_state(seg)
                 keep = modified(self.state_before[seg])
@@ -773,14 +771,14 @@ class Fixpoint:
                 # entry only if the corrected chain changes their start entries (a later
                 # absolute assignment, e.g. \\mainmatter for the page, absorbs the error);
                 # the glue pages (last run) are redone in any case
-                order = segments(self.a)
+                order = self.a.segments
                 nxt = order[order.index(seg) + 1]
                 pred2 = predict(order, self.state_before, nxt, actual, self.odd)
                 for later_group in real[j + 1 :]:
-                    start = f"U{later_group[0]}"
+                    start = unit_id(later_group[0])
                     if pred2[start][0] != pred[start][0]:
                         for later in range(later_group[0], len(self.units) + 1):
-                            dirty.setdefault(f"U{later}", []).append(reason)
+                            dirty.setdefault(unit_id(later), []).append(reason)
                         break
                 return dirty, reason
         return dirty, glue
@@ -794,7 +792,7 @@ class Fixpoint:
         of exported pictures per segment."""
         ctx, state = self.ctx, self.state
         fig = ctx.layout.fig_dir if ctx.config.picture_cache else None
-        glue = [g for g in segments(self.a) if g.startswith("G")]
+        glue = self.a.glue_segments
         exported: dict[str, int] = {}
         if fig is None:
             return exported
@@ -815,7 +813,7 @@ class Fixpoint:
         """Source files of the compiled units and the glue (F records), global inputs."""
         ctx, state = self.ctx, self.state
         new_files = _segment_files(ctx, run.records)
-        for seg in [*compiled, *(g for g in segments(self.a) if g.startswith("G"))]:
+        for seg in [*compiled, *self.a.glue_segments]:
             state.segment_files[seg] = new_files.get(seg, {})
             self._scans.pop(seg, None)
             self._lint.pop(seg, None)
@@ -847,8 +845,8 @@ class Fixpoint:
             if not dirty and glue is None:
                 return runs
             selection, reasons = self.plan(dirty)
-            for seg, why in sorted(reasons.items(), key=lambda x: int(x[0][1:])):
-                arg = self.a.includes[int(seg[1:]) - 1].arg
+            for seg, why in sorted(reasons.items(), key=lambda x: position(x[0])):
+                arg = self.a.include_of(seg).arg
                 self.ctx.say(f"dirty {arg}: {'; '.join(why)}")
             if glue is not None:
                 self.ctx.say(f"glue: {glue}")

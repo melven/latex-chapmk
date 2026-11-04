@@ -12,6 +12,7 @@ from chapmk.analysis import Analysis
 from chapmk.auxfile import read_lines, segment_slices, statements
 from chapmk.errors import FallbackError
 from chapmk.files import read_log, read_raw
+from chapmk.segment import glue_id, is_glue, is_segment, unit_id
 from chapmk.texsource import text_lines
 
 Vector = dict[int, int]
@@ -106,8 +107,8 @@ def tex_phases(recs: RunRecords, total: float) -> dict[str, float]:
     out["format"] = marks.get("load", 0.0)
     out["preamble"] = marks.get("begin", 0.0) - out["format"]
     for (name, t), (_, t_next) in itertools.pairwise(points):
-        if name[:1] in "GU" and name[1:].isdigit():
-            out["glue" if name[0] == "G" else "units"] += t_next - t
+        if is_segment(name):
+            out["glue" if is_glue(name) else "units"] += t_next - t
     out["end"] = max(0.0, total - marks.get("end", total))
     return {k: round(v, 3) for k, v in out.items()}
 
@@ -118,7 +119,7 @@ def glue_times(recs: RunRecords, minimum: float = 0.05) -> dict[str, float]:
     points = [(n, t) for n, t in recs.times if not n.startswith("picture")]
     out = {}
     for (name, t), (_, t_next) in itertools.pairwise(points):
-        if name[:1] == "G" and name[1:].isdigit() and t_next - t >= minimum:
+        if is_segment(name) and is_glue(name) and t_next - t >= minimum:
             out[name] = round(t_next - t, 3)
     return out
 
@@ -316,15 +317,15 @@ def _read_run_records(run_dir: Path, analysis: Analysis) -> RunRecords:
     nlo = run_dir / f"{job}.nlo"
     if nlo.is_file():
         recs.nomenclature = read_nomenclature(nlo)
-    if "G0" not in recs.entries:
+    if glue_id(0) not in recs.entries:
         raise RecordError(f"{main_aux}: no baseline/entry records (chapmk.sty not loaded?)")
     for k, inc in enumerate(analysis.includes, start=1):
-        name = recs.units.get(f"U{k}")
+        name = recs.units.get(unit_id(k))
         if name is None:
             raise RecordError(f"{main_aux}: no record for include {k} ({inc.arg})")
         if name and _unit_name(name) != inc.arg:
             raise RecordError(f"{main_aux}: include {k} is {name!r}, expected {inc.arg!r}")
-    known = {"G0"} | {f"{p}{k}" for k in range(1, len(analysis.includes) + 1) for p in "UG"}
+    known = set(analysis.segments)
     for page in recs.pages:
         if page.segment not in known:
             raise RecordError(f"{frec}: page {page.index} has no known segment ({page.segment!r})")

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from chapmk.files import read_raw
+from chapmk.segment import is_unit
 from chapmk.texsource import text_lines
 
 _SEG_START = re.compile(r"^\\chapmk@entry\{([UG]\d+)\}")
@@ -215,7 +216,7 @@ def canonical_main_aux(
             old_content.setdefault(seg, []).append(stmt)
 
     def keyed(seg: str | None, stmt: str) -> bool:
-        return not (seg or "").startswith("U") and classify(stmt) in (EQP, BIBDATA)
+        return not is_unit(seg) and classify(stmt) in (EQP, BIBDATA)
 
     run_keys = {statement_key(s) for seg, s in zip(run_segs, run, strict=True) if keyed(seg, s)}
     carried = [
