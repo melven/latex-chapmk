@@ -35,3 +35,11 @@ def test_first_error_behind_a_generic_stop() -> None:
     # a specific error in the log wins over the terminal output
     specific = "./ch/a.tex:3: Undefined control sequence.\n! Emergency stop.\n"
     assert first_error(specific, output) == "./ch/a.tex:3: Undefined control sequence."
+
+
+def test_first_error_windows_paths() -> None:
+    """Absolute Windows paths (drive letter, spaces) as MiKTeX writes them and as the main
+    file is mapped to."""
+    for path in (r"D:\a\doc\d.tex", "D:/a/doc/d.tex", r"C:\My Documents\thesis\ch\a.tex"):
+        line = f"{path}:3: Undefined control sequence."
+        assert first_error(f"(./x.tex\n{line}\n! Emergency stop.\n") == line

@@ -17,7 +17,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from chapmk.errors import ToolError
+from chapmk.errors import ToolError, ToolTimeoutError
 
 
 @dataclass(frozen=True)
@@ -94,7 +94,7 @@ def run(
 
     stdin is closed, so programs that prompt cannot hang. The combined output is returned and,
     if ``log_path`` is given, also written there. A missing program or a timeout raises
-    :class:`ToolError`; a non-zero exit code does not.
+    :class:`ToolError` (a timeout: :class:`ToolTimeoutError`); a non-zero exit code does not.
     """
     if _STOPPING.is_set():
         raise Interrupted
@@ -120,7 +120,7 @@ def run(
     except subprocess.TimeoutExpired as err:
         _kill(p)
         p.communicate()
-        raise ToolError(f"{argv[0]} timed out after {timeout} s") from err
+        raise ToolTimeoutError(f"{argv[0]} timed out after {timeout} s") from err
     except BaseException:  # KeyboardInterrupt in the main thread
         _kill(p)
         raise

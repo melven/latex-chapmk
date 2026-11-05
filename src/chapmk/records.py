@@ -40,8 +40,13 @@ def parse_vector(text: str) -> Vector:
 _ALLOC = re.compile(r"^\\([^\s=]+)=\\count(\d+)\s*$", re.MULTILINE)
 
 
-_LOG_PAREN = re.compile(r"\(([^\s()]*)|\)")
-_LOG_FILE = re.compile(r"[^\s()]+\.(sty|cls|def|cfg|clo|ldf|fd|tex)$")
+#: an opened file in a log: ``(`` and a name up to a TeX file extension, which may contain
+#: spaces (MiKTeX: ``(C:/Program Files/MiKTeX/tex/latex/hyperref/hyperref.sty``), else ``(``
+#: and the next word (other parentheses); or ``)``
+_LOG_PAREN = re.compile(
+    r"\(([^()\n]*?\.(?:sty|cls|def|cfg|clo|ldf|fd|tex)(?=[\s()]|$)|[^\s()]*)|\)"
+)
+_LOG_FILE = re.compile(r"\.(sty|cls|def|cfg|clo|ldf|fd|tex)$")
 
 
 def register_names(logs: list[Path]) -> dict[int, str]:
@@ -66,7 +71,8 @@ def register_names(logs: list[Path]) -> dict[int, str]:
                         stack.pop()
                 else:
                     f = p.group(1)
-                    stack.append(Path(f).stem if _LOG_FILE.match(f) else None)
+                    name = re.split(r"[\\/]", f)[-1]  # / or \ (MiKTeX), on any OS
+                    stack.append(name.rsplit(".", 1)[0] if _LOG_FILE.search(f) else None)
     return names
 
 

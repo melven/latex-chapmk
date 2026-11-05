@@ -30,7 +30,17 @@ jobs:
           mpm --admin --set-repository="$env:MIKTEX_REPOSITORY"
           miktex --admin packages update-package-database
           miktex --admin packages update
-          miktex --admin packages install mylatexformat nomencl biblatex latexmk
+          # everything the tests need, installed before them: an installation during the tests
+          # rewrites pdftex.map ("miktex fontmaps configure"), and every build state recorded
+          # before then falls back to a cold build. lipsum, cleveref: minimal corpora (S7, S13).
+          # One call per package: an installed one (biblatex) makes a call with several fail
+          # without installing the others (exit code 1, which pwsh does not check).
+          foreach ($p in "mylatexformat", "nomencl", "biblatex", "latexmk", "lipsum", "cleveref") {
+            $out = miktex --admin packages install $p 2>&1 | Out-String
+            if ($LASTEXITCODE -eq 0) { "${p}: installed" }
+            elseif ($out -match "already installed") { "${p}: already installed" }
+            else { throw "installing ${p} failed: $out" }
+          }
           # on-the-fly installation "always" (the normal Windows setup; chapmk refuses "ask")
           initexmf --admin --set-config-value "[MPM]AutoInstall=1"
           initexmf --set-config-value "[MPM]AutoInstall=1"
@@ -78,10 +88,49 @@ jobs:
             Pop-Location
           }
           Get-Command pdflatex, biber, makeindex, synctex, kpsewhich, latexmk, pdftoppm | Format-Table Name, Source
+      - name: Font maps (before the tests)
+        # diagnosis: scenario tests fell back to cold builds ("TeX distribution files changed
+        # (pdftex.map)"); MiKTeX rewrites pdftex.map when it installs packages on the fly
+        run: |
+          $roots = "$env:ProgramData\MiKTeX", "$env:LOCALAPPDATA\MiKTeX", "C:\Program Files\MiKTeX"
+          Get-ChildItem $roots -Recurse -Filter pdftex.map -ErrorAction SilentlyContinue |
+            Format-Table FullName, Length, @{n = "LastWriteTimeUtc"; e = { $_.LastWriteTimeUtc.ToString("o") }} -AutoSize
+          "kpsewhich: $(kpsewhich pdftex.map)"
+          "TESTS_START=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss'))" >> $env:GITHUB_ENV
       - name: All tests (slow, scenario, acceptance)
         # a test that hangs fails after 20 min with the stacks of all threads (instead of the
         # whole job running into its timeout without a name)
         run: pytest -n auto --dist worksteal -rfE --junitxml=pytest-windows.xml --basetemp="$env:RUNNER_TEMP\pt" --timeout=1200 --timeout-method=thread
+      - name: Font maps (after the tests)
+        if: always()
+        run: |
+          $roots = "$env:ProgramData\MiKTeX", "$env:LOCALAPPDATA\MiKTeX", "C:\Program Files\MiKTeX"
+          Get-ChildItem $roots -Recurse -Filter pdftex.map -ErrorAction SilentlyContinue |
+            Format-Table FullName, Length, @{n = "LastWriteTimeUtc"; e = { $_.LastWriteTimeUtc.ToString("o") }} -AutoSize
+          "kpsewhich: $(kpsewhich pdftex.map)"
+      - name: Packages installed on the fly during the tests (belong into "Install MiKTeX")
+        if: always()
+        run: |
+          $logs = "$env:LOCALAPPDATA\MiKTeX\miktex\log", "$env:ProgramData\MiKTeX\miktex\log"
+          Get-ChildItem $logs -Recurse -Filter "*.log*" -ErrorAction SilentlyContinue |
+            Select-String "installing package (\S+) triggered by (\S+)" |
+            Where-Object { $_.Line.Substring(0, 19) -ge $env:TESTS_START } |
+            ForEach-Object { "$($_.Matches[0].Groups[1].Value) ($($_.Matches[0].Groups[2].Value))" } |
+            Sort-Object -Unique |
+            ForEach-Object { "::warning::MiKTeX package installed on the fly during the tests: $_" }
+      - name: Leftover TeX processes (a hanging test leaves its programs running)
+        if: failure()
+        run: |
+          Get-CimInstance Win32_Process |
+            Where-Object { $_.Name -match "tex|latexmk|perl|biber|makeindex|synctex|pdfto|pdfinfo|gnuplot|initexmf|mpm|miktex" } |
+            Format-Table ProcessId, ParentProcessId, CreationDate, CommandLine -Wrap
+      - name: Crashed workers once more without xdist (stack dump of a crash or timeout)
+        # two workers died ("node down: Not properly terminated") in tests/scenarios/test_basics.py
+        # without any output; sequentially, a crash or timeout dump lands in this log
+        if: failure()
+        continue-on-error: true
+        timeout-minutes: 45
+        run: pytest -p no:xdist -rfE tests/scenarios/test_basics.py --basetemp="$env:RUNNER_TEMP\pt2" --timeout=1200 --timeout-method=thread
       - name: Test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -96,4 +145,13 @@ jobs:
           path: |
             ${{ runner.temp }}/pt/**/*.log
             ${{ runner.temp }}/pt/**/*.blg
+          if-no-files-found: ignore
+      - name: MiKTeX logs (package installations, font map updates)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: miktex-logs-windows
+          path: |
+            C:/ProgramData/MiKTeX/miktex/log/
+            ~/AppData/Local/MiKTeX/miktex/log/
           if-no-files-found: ignore

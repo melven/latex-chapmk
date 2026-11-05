@@ -9,7 +9,11 @@ from pathlib import Path
 from chapmk.files import read_log
 from chapmk.texsource import text_lines
 
-_FILE_LINE_ERROR = re.compile(r"^(?P<file>[^\s:][^:]*):(?P<line>\d+): (?P<msg>.*)$")
+#: ``file:line: message``; the file may start with a drive letter (Windows: TeX gets absolute
+#: paths, and error lines are mapped to the user's main file, ``D:\\doc\\main.tex:3: ...``)
+_FILE_LINE_ERROR = re.compile(
+    r"^(?P<file>(?:[A-Za-z]:[\\/])?[^\s:][^:]*):(?P<line>\d+): (?P<msg>.*)$"
+)
 
 
 def map_paths(text: str, mapping: Sequence[tuple[str, str]]) -> str:

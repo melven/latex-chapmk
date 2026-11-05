@@ -9,7 +9,7 @@ import pytest
 from chapmk import texdist
 from chapmk.analysis import analyse
 from chapmk.config import Config
-from chapmk.errors import ToolError
+from chapmk.errors import ToolError, ToolTimeoutError
 from chapmk.layout import make_layout
 from chapmk.proc import run
 from chapmk.shadow import (
@@ -42,7 +42,7 @@ def test_run_captures_output_and_errors(tmp_path: Path) -> None:
     assert (tmp_path / "x.log").read_text().strip() == "hi"
     with pytest.raises(ToolError, match="not found"):
         run(["no-such-program-xyz"], cwd=tmp_path, env={})
-    with pytest.raises(ToolError, match="timed out"):
+    with pytest.raises(ToolTimeoutError, match="timed out"):
         run(
             [sys.executable, "-c", "import time; time.sleep(5)"],
             cwd=tmp_path,

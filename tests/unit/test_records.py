@@ -159,6 +159,27 @@ def test_register_names(tmp_path: Path) -> None:
     }
 
 
+def test_register_names_paths_with_spaces(tmp_path: Path) -> None:
+    """MiKTeX on Windows: installation paths with spaces and backslashes; the package is
+    still attributed (not the format's main file around it)."""
+    from chapmk.records import register_names
+
+    log = tmp_path / "x.log"
+    log.write_text(
+        "(./pre.tex\n"
+        "(C:/Program Files/MiKTeX/tex/latex/hyperref/hyperref.sty Package: hyperref\n"
+        "\\Hy@linkcounter=\\count514\n"
+        "(C:\\Program Files\\MiKTeX\\tex/latex/hyperref\\nameref.sty\n"
+        "\\c@section@level=\\count515\n)\n"
+        ")\n(see the transcript)\n\\c@later=\\count517\n)\n"
+    )
+    assert register_names([log]) == {
+        514: "\\Hy@linkcounter [hyperref]",
+        515: "\\c@section@level [nameref]",
+        517: "\\c@later [pre]",
+    }
+
+
 def test_run_view_parses_each_file_once(tmp_path: Path) -> None:
     from chapmk.records import RunView
 
