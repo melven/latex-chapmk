@@ -27,7 +27,7 @@ CORPUS = REPO / "tests" / "corpus"
 # files, the TeX installation (tex_key) and, for --full references, the full-mode code
 # (FULL_MODE_CODE). Entries of older keys stay unused: rm -rf .test-cache frees the space. CI
 # restores the cache of an earlier run with the same image and full-mode code
-# (.github/workflows/ci.yml; keep its key and FULL_MODE_CODE in sync).
+# (.github/workflows/ci.yml and miktex-linux.yml; keep their keys and FULL_MODE_CODE in sync).
 REFERENCE_CACHE = REPO / ".test-cache"
 FULL_MODE_CODE = tuple(
     REPO / "src" / "chapmk" / name
