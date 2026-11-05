@@ -31,7 +31,7 @@ Most of this software was generated using the AI model Claude Opus 5.5 (with eff
 pip install git+https://github.com/melven/latex-chapmk
 ```
 
-Needs Python ≥ 3.11 with pikepdf ≥ 10 and TeX Live or MiKTeX with `pdflatex`, `biber`, `makeindex` and the
+Needs Python ≥ 3.11 with pikepdf ≥ 10 and TeXLive/MiKTeX ≥ 2025 with `pdflatex`, `biber`, `makeindex` and the
 package `mylatexformat`. `chapmk check` also needs `pdfinfo`, `pdftoppm`, `pdftotext`
 (poppler-utils) and `synctex` (part of TeX Live and MiKTeX).
 The LaTeX packages chapmk uses are part of the Python package; nothing is installed into TeX.

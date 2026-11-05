@@ -34,7 +34,7 @@ missing), and restores the reference cache of an earlier run with the same image
 full-mode code.
 
 Weekly workflows run the suite on the frozen TeX Live 2025 (`texlive-2025.yml`; oldest
-supported LaTeX kernel: 2023-06-01), on the current TeX Live (`texlive-current.yml`) and on the
+supported LaTeX kernel: 2025-11-01), on the current TeX Live (`texlive-current.yml`) and on the
 current MiKTeX (`miktex-current.yml`, Linux image built from that day's packages). TeX Live 2025
 and MiKTeX run only if `src`, `tests` or the images changed since their last successful run. Each job writes the
 tested version (banner, LaTeX kernel, date of the package state) into the run summary.
