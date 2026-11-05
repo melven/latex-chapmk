@@ -60,6 +60,33 @@ def test_failing_build_keeps_previous_pdf(copy_corpus, tmp_path: Path, capsys) -
     assert "Undefined control sequence" in (src / "d.log").read_text()
 
 
+def test_print_log(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
+    """--print-log (§6.13): the published log on stdout with one banner line (LaTeX Workshop
+    parses only the output after the last one), after a success and after a TeX error."""
+    src = tmp_path / "s"
+    src.mkdir()
+    (src / "d.tex").write_text(
+        "\\documentclass{book}\n\\begin{document}\n\\include{a}\n\\include{b}\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}A\\ref{nowhere}\n")
+    (src / "b.tex").write_text("\\chapter{B}B\n")
+    assert main(["build", "d.tex", "-j", "2", "--print-log"], cwd=src) == 0
+    out = capsys.readouterr().out
+    log = (src / "d.log").read_text()
+    assert out.count("This is pdfTeX, Version") == 1
+    assert "Output written on" in out and "Reference `nowhere' on page" in out
+    assert [ln for ln in out.split("\n") if "This is pdfTeX" not in ln] == [
+        ln for ln in log.split("\n") if "This is pdfTeX" not in ln
+    ]
+    (src / "b.tex").write_text("\\chapter{B}\\undefinedmacro\n")
+    assert main(["build", "d.tex", "--print-log"], cwd=src) == 1
+    captured = capsys.readouterr()
+    assert "Undefined control sequence" in captured.out  # the failing run's log
+    assert "b.tex:1: Undefined control sequence" in captured.err
+    assert main(["build", "d.tex"], cwd=src) == 1
+    assert capsys.readouterr().out == ""  # only with --print-log
+
+
 def test_clean(tmp_path: Path) -> None:
     src = tmp_path / "s"
     src.mkdir()

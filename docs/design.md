@@ -606,6 +606,11 @@ Measured: 319 pages from 5 runs in about 0.35 s.
 - A failing run commits nothing; the previous `main.pdf` is kept; exit code 1; `main.log` is
   the failing run's log with mapped paths (editors parse it).
 - On success `main.log` concatenates the logs of the runs of the state, each with a header.
+- `--print-log` writes the published `main.log` to stdout after the build, also after a TeX
+  error (the failing run's log) and a no-op build. Editors that parse only the output of the
+  build command (VS Code LaTeX Workshop) need it; LaTeX Workshop keeps only the text after the
+  last `This is pdfTeX, Version` line, so the printed copy keeps that banner line only in the
+  first run's log (the file is unchanged).
 
 ### 6.14 Fallbacks to full mode
 
@@ -636,7 +641,7 @@ with `-v` (C9).
 ### 6.15 CLI and configuration
 
 ```
-chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [--no-wait] [-v]
+chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [--print-log] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [--no-wait] [-v]
 chapmk check [MAIN] [build options]           # = build --check
 chapmk clean [MAIN] [--no-wait]
 chapmk graph [MAIN] [--format text|dot|json]

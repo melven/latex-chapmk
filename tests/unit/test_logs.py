@@ -1,4 +1,4 @@
-from chapmk.logs import first_error, map_paths
+from chapmk.logs import first_error, map_paths, printed_log
 
 
 def test_map_paths() -> None:
@@ -43,3 +43,16 @@ def test_first_error_windows_paths() -> None:
     for path in (r"D:\a\doc\d.tex", "D:/a/doc/d.tex", r"C:\My Documents\thesis\ch\a.tex"):
         line = f"{path}:3: Undefined control sequence."
         assert first_error(f"(./x.tex\n{line}\n! Emergency stop.\n") == line
+
+
+def test_printed_log_keeps_the_first_banner_only() -> None:
+    """LaTeX Workshop keeps the text after the last banner: --print-log keeps only the first
+    one, so the logs of all runs are parsed; everything else, line endings included, stays."""
+    run1 = "This is pdfTeX, Version 3.14 (TeX Live 2026)\r\n(./a.tex\r\nLaTeX Warning: one\r\n)\r\n"
+    run2 = "This is pdfTeX, Version 3.14 (MiKTeX 26.5)\n(./b.tex\nLaTeX Warning: two\n)\n"
+    log = "%%% chapmk: log of run r1\n" + run1 + "\n%%% chapmk: log of run r2\n" + run2
+    out = printed_log(log)
+    assert out.count("This is pdfTeX, Version") == 1
+    assert out == log.replace("This is pdfTeX, Version 3.14 (MiKTeX 26.5)\n", "")
+    assert printed_log(run1) == run1
+    assert printed_log("") == ""
