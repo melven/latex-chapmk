@@ -1,9 +1,10 @@
 # Dev and CI image for chapmk: TeX Live (full scheme) + Python tooling.
 # The base image is pinned by digest (R12): TeX Live 2026 as used by CI on 2026-11-03.
 # To update: build with texlive/texlive:latest, take the digest from the build log, run the
-# full suite (the reference cache is keyed by the TeX installation).
-# Other TeX Live versions (.github/workflows/versions.yml):
-#   docker build --build-arg TEXLIVE_IMAGE=texlive/texlive:TL2024-historic -t chapmk-dev-tl2024 .
+# full suite (the reference cache is keyed by the TeX installation). Update the date here and
+# in the name of .github/workflows/ci.yml (the README badge's label).
+# Other TeX Live versions (.github/workflows/texlive-*.yml):
+#   docker build --build-arg TEXLIVE_IMAGE=texlive/texlive:TL2025-historic -t chapmk-dev-tl2025 .
 ARG TEXLIVE_IMAGE=texlive/texlive:latest@sha256:07e8062637249c4f780ca59f42cc2ed592bc2dc1db4320769406aee3f98aa70e
 FROM ${TEXLIVE_IMAGE}
 LABEL org.opencontainers.image.source="https://github.com/melven/latex-chapmk" \

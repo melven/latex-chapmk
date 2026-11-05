@@ -813,10 +813,10 @@ tests (hypothesis) for the text and file round trips, and acceptance tests compa
 with latexmk on the corpus.
 
 Slow tests check assumptions about TeX and package internals directly
-(`tests/slow/test_tex_compat.py`, e.g. how pgf loads its libraries). A weekly workflow
-(`.github/workflows/versions.yml`) runs the suite on the frozen TeX Live releases since 2023
+(`tests/slow/test_tex_compat.py`, e.g. how pgf loads its libraries). Weekly workflows
+(`.github/workflows/texlive-*.yml`, `miktex-current.yml`) run the suite on the frozen TeX Live releases since 2025
 (the oldest supported LaTeX kernel is 2023-06-01), the current TeX Live and the current
-MiKTeX, and writes the tested versions into its summary.
+MiKTeX, and write the tested versions into their summaries.
 
 ### 8.4 Benchmarks
 

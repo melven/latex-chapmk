@@ -1,0 +1,21 @@
+name: python (reusable)
+
+# unit tests (no TeX) on one Python version (R1); called by python-3.*.yml, one workflow per
+# version for one badge each; the slow suite runs in the image (ci.yml)
+on:
+  workflow_call:
+    inputs:
+      python:
+        type: string
+        required: true
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python }}
+      - run: pip install -e ".[dev]"
+      - run: pytest -n auto tests/unit

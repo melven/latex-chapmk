@@ -1,0 +1,43 @@
+name: changes (reusable)
+
+# Whether chapmk's files changed since the last successful run of the calling workflow on this
+# branch (only for scheduled runs; other runs always test). The frozen TeX versions do not
+# change, so a weekly run without a change in chapmk is skipped. The caller grants
+# contents: read and actions: read.
+on:
+  workflow_call:
+    outputs:
+      changed:
+        value: ${{ jobs.diff.outputs.changed }}
+
+env:
+  # files whose change makes the frozen versions worth testing again
+  WATCHED: src tests Dockerfile Dockerfile.miktex requirements-dev.txt pyproject.toml
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_REF: ${{ github.workflow_ref }}  # the caller: owner/repo/path@ref
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != schedule ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          workflow=${WORKFLOW_REF%@*}; workflow=${workflow##*/}
+          last=$(gh run list --workflow "$workflow" --branch "$GITHUB_REF_NAME" --status success \
+                   --limit 1 --json headSha --jq '.[0].headSha // ""')
+          if [ -n "$last" ] && git cat-file -e "$last^{commit}" 2>/dev/null \
+             && git diff --quiet "$last" HEAD -- $WATCHED; then
+            echo "unchanged since $last"; echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "skipped: no change since the last successful run ($last)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "changed since ${last:-the start}"; echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
