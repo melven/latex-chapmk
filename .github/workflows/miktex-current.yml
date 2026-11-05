@@ -40,10 +40,23 @@ jobs:
       - name: TeX version
         id: version
         run: echo "line=$(docker run --rm -v "$PWD":/work:ro chapmk-miktex bash /work/tests/tex-version.sh)" >> "$GITHUB_OUTPUT"
-      - name: All tests (slow, scenario, acceptance)
+      # as root and as the image's user: MiKTeX run as root warns on stderr ("security risk:
+      # running with elevated privileges") and keeps its user data in /root/.miktex; the
+      # repository is copied, as the image's user cannot write the runner's checkout
+      - name: All tests as root (slow, scenario, acceptance)
         run: |
-          docker run --rm -v "$PWD":/work -w /work --user root chapmk-miktex bash -c '
+          docker run --rm -v "$PWD":/work:ro --user root chapmk-miktex bash -c '
             set -e
+            w=$(mktemp -d); cp -a /work/. "$w"; cd "$w"
+            pip install -q -e .
+            pytest -n auto --dist worksteal -q -rfE
+          '
+      - name: All tests as non-root user (slow, scenario, acceptance)
+        if: success() || failure()
+        run: |
+          docker run --rm -v "$PWD":/work:ro chapmk-miktex bash -c '
+            set -e
+            w=$(mktemp -d); cp -a /work/. "$w"; cd "$w"
             pip install -q -e .
             pytest -n auto --dist worksteal -q -rfE
           '
