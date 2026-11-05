@@ -263,7 +263,7 @@ class MiKTeX(TeXLive):
 
     def synctex_input(self, cwd: Path, relative: str) -> str:
         if _WINDOWS:  # native: backslashes, also in the relative part
-            return str(PureWindowsPath(cwd, relative))
+            return str(PureWindowsPath(cwd.as_posix(), relative))
         return f"{tex_path(cwd)}/{relative}"
 
     def synctex_query(self, cwd: Path, relative: str) -> str:
