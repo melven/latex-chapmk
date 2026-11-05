@@ -30,7 +30,17 @@ jobs:
           mpm --admin --set-repository="$env:MIKTEX_REPOSITORY"
           miktex --admin packages update-package-database
           miktex --admin packages update
-          miktex --admin packages install mylatexformat nomencl biblatex latexmk
+          # everything the tests need, installed before them: an installation during the tests
+          # rewrites pdftex.map ("miktex fontmaps configure"), and every build state recorded
+          # before then falls back to a cold build. lipsum, cleveref: minimal corpora (S7, S13).
+          # One call per package: an installed one (biblatex) makes a call with several fail
+          # without installing the others (exit code 1, which pwsh does not check).
+          foreach ($p in "mylatexformat", "nomencl", "biblatex", "latexmk", "lipsum", "cleveref") {
+            $out = miktex --admin packages install $p 2>&1 | Out-String
+            if ($LASTEXITCODE -eq 0) { "${p}: installed" }
+            elseif ($out -match "already installed") { "${p}: already installed" }
+            else { throw "installing ${p} failed: $out" }
+          }
           # on-the-fly installation "always" (the normal Windows setup; chapmk refuses "ask")
           initexmf --admin --set-config-value "[MPM]AutoInstall=1"
           initexmf --set-config-value "[MPM]AutoInstall=1"
@@ -86,6 +96,7 @@ jobs:
           Get-ChildItem $roots -Recurse -Filter pdftex.map -ErrorAction SilentlyContinue |
             Format-Table FullName, Length, @{n = "LastWriteTimeUtc"; e = { $_.LastWriteTimeUtc.ToString("o") }} -AutoSize
           "kpsewhich: $(kpsewhich pdftex.map)"
+          "TESTS_START=$((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd HH:mm:ss'))" >> $env:GITHUB_ENV
       - name: All tests (slow, scenario, acceptance)
         # a test that hangs fails after 20 min with the stacks of all threads (instead of the
         # whole job running into its timeout without a name)
@@ -97,6 +108,16 @@ jobs:
           Get-ChildItem $roots -Recurse -Filter pdftex.map -ErrorAction SilentlyContinue |
             Format-Table FullName, Length, @{n = "LastWriteTimeUtc"; e = { $_.LastWriteTimeUtc.ToString("o") }} -AutoSize
           "kpsewhich: $(kpsewhich pdftex.map)"
+      - name: Packages installed on the fly during the tests (belong into "Install MiKTeX")
+        if: always()
+        run: |
+          $logs = "$env:LOCALAPPDATA\MiKTeX\miktex\log", "$env:ProgramData\MiKTeX\miktex\log"
+          Get-ChildItem $logs -Recurse -Filter "*.log*" -ErrorAction SilentlyContinue |
+            Select-String "installing package (\S+) triggered by (\S+)" |
+            Where-Object { $_.Line.Substring(0, 19) -ge $env:TESTS_START } |
+            ForEach-Object { "$($_.Matches[0].Groups[1].Value) ($($_.Matches[0].Groups[2].Value))" } |
+            Sort-Object -Unique |
+            ForEach-Object { "::warning::MiKTeX package installed on the fly during the tests: $_" }
       - name: Leftover TeX processes (a hanging test leaves its programs running)
         if: failure()
         run: |
