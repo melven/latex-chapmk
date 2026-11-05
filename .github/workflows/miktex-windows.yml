@@ -78,10 +78,38 @@ jobs:
             Pop-Location
           }
           Get-Command pdflatex, biber, makeindex, synctex, kpsewhich, latexmk, pdftoppm | Format-Table Name, Source
+      - name: Font maps (before the tests)
+        # diagnosis: scenario tests fell back to cold builds ("TeX distribution files changed
+        # (pdftex.map)"); MiKTeX rewrites pdftex.map when it installs packages on the fly
+        run: |
+          $roots = "$env:ProgramData\MiKTeX", "$env:LOCALAPPDATA\MiKTeX", "C:\Program Files\MiKTeX"
+          Get-ChildItem $roots -Recurse -Filter pdftex.map -ErrorAction SilentlyContinue |
+            Format-Table FullName, Length, @{n = "LastWriteTimeUtc"; e = { $_.LastWriteTimeUtc.ToString("o") }} -AutoSize
+          "kpsewhich: $(kpsewhich pdftex.map)"
       - name: All tests (slow, scenario, acceptance)
         # a test that hangs fails after 20 min with the stacks of all threads (instead of the
         # whole job running into its timeout without a name)
         run: pytest -n auto --dist worksteal -rfE --junitxml=pytest-windows.xml --basetemp="$env:RUNNER_TEMP\pt" --timeout=1200 --timeout-method=thread
+      - name: Font maps (after the tests)
+        if: always()
+        run: |
+          $roots = "$env:ProgramData\MiKTeX", "$env:LOCALAPPDATA\MiKTeX", "C:\Program Files\MiKTeX"
+          Get-ChildItem $roots -Recurse -Filter pdftex.map -ErrorAction SilentlyContinue |
+            Format-Table FullName, Length, @{n = "LastWriteTimeUtc"; e = { $_.LastWriteTimeUtc.ToString("o") }} -AutoSize
+          "kpsewhich: $(kpsewhich pdftex.map)"
+      - name: Leftover TeX processes (a hanging test leaves its programs running)
+        if: failure()
+        run: |
+          Get-CimInstance Win32_Process |
+            Where-Object { $_.Name -match "tex|latexmk|perl|biber|makeindex|synctex|pdfto|pdfinfo|gnuplot|initexmf|mpm|miktex" } |
+            Format-Table ProcessId, ParentProcessId, CreationDate, CommandLine -Wrap
+      - name: Crashed workers once more without xdist (stack dump of a crash or timeout)
+        # two workers died ("node down: Not properly terminated") in tests/scenarios/test_basics.py
+        # without any output; sequentially, a crash or timeout dump lands in this log
+        if: failure()
+        continue-on-error: true
+        timeout-minutes: 45
+        run: pytest -p no:xdist -rfE tests/scenarios/test_basics.py --basetemp="$env:RUNNER_TEMP\pt2" --timeout=1200 --timeout-method=thread
       - name: Test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -96,4 +124,13 @@ jobs:
           path: |
             ${{ runner.temp }}/pt/**/*.log
             ${{ runner.temp }}/pt/**/*.blg
+          if-no-files-found: ignore
+      - name: MiKTeX logs (package installations, font map updates)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: miktex-logs-windows
+          path: |
+            C:/ProgramData/MiKTeX/miktex/log/
+            ~/AppData/Local/MiKTeX/miktex/log/
           if-no-files-found: ignore
