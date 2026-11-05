@@ -1,0 +1,39 @@
+# The MiKTeX image of Dockerfile.miktex brought up to date with today's packages (CI:
+# .github/workflows/miktex-current.yml). Building Dockerfile.miktex takes about 40 minutes; CI
+# builds it once per change of its inputs, publishes it in GHCR and updates it with this file in
+# each run:
+#
+#   docker build -f Dockerfile.miktex-update --build-arg BASE=<image of Dockerfile.miktex> \
+#     -t chapmk-miktex .
+#
+# Updates the MiKTeX programs (apt), installs packages added to the complete package level
+# since the base was built and updates all installed ones (mpm, same mirror as the base).
+# Behind a proxy: as Dockerfile.miktex.
+ARG BASE
+FROM ${BASE}
+
+USER root
+RUN --mount=type=secret,id=ca,required=false \
+    set -e; \
+    if [ -s /run/secrets/ca ]; then \
+      cp /run/secrets/ca /usr/local/share/ca-certificates/build-proxy.crt; update-ca-certificates; \
+    fi; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends --only-upgrade miktex; \
+    mpm --admin --package-level=complete --upgrade; \
+    mpm --admin --update; \
+    initexmf --admin --update-fndb; \
+    initexmf --admin --mkmaps; \
+    rm -f /usr/local/share/ca-certificates/build-proxy.crt; update-ca-certificates --fresh; \
+    rm -rf /var/lib/apt/lists/*
+
+# back to the base's user (Dockerfile.miktex: UID/GID 1000 by default); file name database and
+# font maps are the shared ones updated above
+ARG UID=1000
+ARG GID=1000
+USER ${UID}:${GID}
+RUN set -e; \
+    for f in mylatexformat.ltx nomencl.sty biblatex.sty hyperref.sty gnuplot-lua-tikz.sty; do \
+      kpsewhich "$f" >/dev/null || { echo "missing: $f"; exit 1; }; \
+    done; \
+    pdflatex --version | head -1
