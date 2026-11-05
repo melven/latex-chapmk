@@ -1,0 +1,53 @@
+name: MiKTeX (current)
+
+# The suite on the current MiKTeX (Linux image built from today's packages, not cached).
+# Weekly, but only if chapmk's files changed since the last successful run (_changes.yml); by
+# hand or in a PR that changes this workflow: always. Writes the tested version into the run
+# summary.
+on:
+  schedule:
+    - cron: "41 3 * * 1"  # Mondays 03:41 UTC
+  workflow_dispatch:
+  pull_request:  # a PR that changes this workflow tests it
+    paths:
+      - .github/workflows/miktex-current.yml
+      - .github/workflows/_changes.yml
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    permissions:
+      contents: read
+      actions: read  # the last successful run of this workflow
+    uses: ./.github/workflows/_changes.yml
+
+  miktex:
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # the image is about 7.6 GB packed and 11 GB unpacked; a runner has about 14 GB free
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          docker system prune -af
+      - name: Current MiKTeX image (built from today's packages, not cached)
+        run: docker build -q -f Dockerfile.miktex -t chapmk-miktex . > /dev/null
+      - name: TeX version
+        id: version
+        run: echo "line=$(docker run --rm -v "$PWD":/work:ro chapmk-miktex bash /work/tests/tex-version.sh)" >> "$GITHUB_OUTPUT"
+      - name: All tests (slow, scenario, acceptance)
+        run: |
+          docker run --rm -v "$PWD":/work -w /work --user root chapmk-miktex bash -c '
+            set -e
+            pip install -q -e .
+            pytest -n auto --dist worksteal -q -rfE
+          '
+      - name: Summary
+        if: always()
+        run: |
+          echo "MiKTeX (Linux): **${{ job.status }}** — ${{ steps.version.outputs.line }}" >> "$GITHUB_STEP_SUMMARY"

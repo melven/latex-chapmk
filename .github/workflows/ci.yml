@@ -1,4 +1,8 @@
-name: ci
+name: TeX Live (2026-11-03)
+
+# The whole suite on the pinned TeX Live image (Dockerfile; the date in the name is the one
+# there and the README badge's label: update both when re-pinning), lint, type check, coverage, wheel;
+# unit tests per Python: python-3.*.yml, licences: reuse.yml
 
 # PRs run on pull_request only (a push to a PR branch would otherwise run everything twice);
 # main runs after each merge; any branch can be run by hand
@@ -15,27 +19,6 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # unit tests (no TeX) on every supported Python (R1); the slow suite runs in the image
-  python:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python: ["3.11", "3.12", "3.13", "3.14"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
-      - run: pip install -e ".[dev]"
-      - run: pytest -n auto tests/unit
-
-  # licence and copyright information of every file (R9)
-  reuse:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: fsfe/reuse-action@v5
-
   linux-texlive:
     runs-on: ubuntu-latest
     permissions:
@@ -59,6 +42,10 @@ jobs:
             docker tag chapmk-dev "$image"
             docker push -q "$image" || echo "::warning::could not publish $image (no package permission)"
           fi
+      - name: TeX version
+        # banner, LaTeX kernel and package date of the pinned image (cf. the date in the name)
+        run: |
+          echo "TeX: $(docker run --rm -v "$PWD":/work:ro chapmk-dev bash /work/tests/tex-version.sh)" >> "$GITHUB_STEP_SUMMARY"
       - name: Reference cache key
         # what the references depend on besides the sources (each entry is keyed by a hash of
         # its sources, tests/conftest.py): the TeX image and the full-mode code
@@ -133,4 +120,4 @@ jobs:
       - id: deploy
         uses: actions/deploy-pages@v4
 
-  # Still to add: macos-texlive, windows-texlive (MiKTeX: miktex.yml; design §6.16).
+  # Still to add: macos-texlive, windows-texlive (MiKTeX: miktex-windows.yml; design §6.16).

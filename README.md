@@ -1,6 +1,18 @@
 # latex-chapmk
 
-[![ci](https://github.com/melven/latex-chapmk/actions/workflows/ci.yml/badge.svg)](https://github.com/melven/latex-chapmk/actions/workflows/ci.yml)
+[![Python 3.11](https://github.com/melven/latex-chapmk/actions/workflows/python-3.11.yml/badge.svg?branch=main)](https://github.com/melven/latex-chapmk/actions/workflows/python-3.11.yml?query=branch%3Amain)
+[![Python 3.12](https://github.com/melven/latex-chapmk/actions/workflows/python-3.12.yml/badge.svg?branch=main)](https://github.com/melven/latex-chapmk/actions/workflows/python-3.12.yml?query=branch%3Amain)
+[![Python 3.13](https://github.com/melven/latex-chapmk/actions/workflows/python-3.13.yml/badge.svg?branch=main)](https://github.com/melven/latex-chapmk/actions/workflows/python-3.13.yml?query=branch%3Amain)
+[![Python 3.14](https://github.com/melven/latex-chapmk/actions/workflows/python-3.14.yml/badge.svg?branch=main)](https://github.com/melven/latex-chapmk/actions/workflows/python-3.14.yml?query=branch%3Amain)
+[![REUSE](https://github.com/melven/latex-chapmk/actions/workflows/reuse.yml/badge.svg?branch=main)](https://github.com/melven/latex-chapmk/actions/workflows/reuse.yml?query=branch%3Amain)
+
+[![TeX Live (2026-11-03)](https://github.com/melven/latex-chapmk/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/melven/latex-chapmk/actions/workflows/ci.yml?query=branch%3Amain)
+[![TeX Live 2025](https://github.com/melven/latex-chapmk/actions/workflows/texlive-2025.yml/badge.svg?branch=main)](https://github.com/melven/latex-chapmk/actions/workflows/texlive-2025.yml?query=branch%3Amain)
+[![TeX Live (current)](https://github.com/melven/latex-chapmk/actions/workflows/texlive-current.yml/badge.svg?branch=main)](https://github.com/melven/latex-chapmk/actions/workflows/texlive-current.yml?query=branch%3Amain)
+[![MiKTeX (current)](https://github.com/melven/latex-chapmk/actions/workflows/miktex-current.yml/badge.svg?branch=main)](https://github.com/melven/latex-chapmk/actions/workflows/miktex-current.yml?query=branch%3Amain)
+[![MiKTeX Linux](https://github.com/melven/latex-chapmk/actions/workflows/miktex-linux.yml/badge.svg?branch=main)](https://github.com/melven/latex-chapmk/actions/workflows/miktex-linux.yml?query=branch%3Amain)
+[![MiKTeX Windows](https://github.com/melven/latex-chapmk/actions/workflows/miktex-windows.yml/badge.svg?branch=main)](https://github.com/melven/latex-chapmk/actions/workflows/miktex-windows.yml?query=branch%3Amain)
+
 [![coverage](https://melven.github.io/latex-chapmk/coverage.svg)](https://melven.github.io/latex-chapmk/)
 [![license](https://img.shields.io/badge/license-BSD--3--Clause-blue)](LICENSE)
 
@@ -19,7 +31,7 @@ Most of this software was generated using the AI model Claude Opus 5.5 (with eff
 pip install git+https://github.com/melven/latex-chapmk
 ```
 
-Needs Python ≥ 3.11 with pikepdf ≥ 10 and TeX Live or MiKTeX with `pdflatex`, `biber`, `makeindex` and the
+Needs Python ≥ 3.11 with pikepdf ≥ 10 and TeXLive/MiKTeX ≥ 2025 with `pdflatex`, `biber`, `makeindex` and the
 package `mylatexformat`. `chapmk check` also needs `pdfinfo`, `pdftoppm`, `pdftotext`
 (poppler-utils) and `synctex` (part of TeX Live and MiKTeX).
 The LaTeX packages chapmk uses are part of the Python package; nothing is installed into TeX.

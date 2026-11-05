@@ -1,0 +1,33 @@
+name: TeX Live 2025
+
+# The suite on the frozen TeX Live 2025 (texlive/texlive:TL2025-historic, the oldest release
+# chapmk supports; rebuilt by upstream for OS updates only). Weekly, but only if chapmk's
+# files changed since the last successful run (_changes.yml); by hand or in a PR that changes
+# this workflow: always.
+on:
+  schedule:
+    - cron: "41 3 * * 1"  # Mondays 03:41 UTC
+  workflow_dispatch:
+  pull_request:  # a PR that changes this workflow tests it
+    paths:
+      - .github/workflows/texlive-2025.yml
+      - .github/workflows/_texlive-version.yml
+      - .github/workflows/_changes.yml
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    permissions:
+      contents: read
+      actions: read  # the last successful run of this workflow
+    uses: ./.github/workflows/_changes.yml
+
+  texlive:
+    needs: changes
+    if: needs.changes.outputs.changed == 'true'
+    uses: ./.github/workflows/_texlive-version.yml
+    with:
+      image: TL2025-historic

@@ -89,9 +89,9 @@ chapmk relies on these rules and checks them where it can (README "Document assu
 
 - **N1** A typo-sized edit in one unit costs about format load + glue + that unit + merge.
 - **N2** At most `-j N` parallel pdflatex processes (default: CPU count).
-- **N3** Python ≥ 3.11 with `pikepdf`; LaTeX kernel ≥ 2023 (hooks, mark classes);
-  `check` also needs poppler (`pdfinfo`, `pdftoppm`, `pdftotext`) and the `synctex` CLI.
-  Platforms: TeX Live on Linux, macOS and Windows; MiKTeX (§6.16).
+- **N3** Python ≥ 3.11 with `pikepdf`; LaTeX kernel ≥ 2025-11-01 (TeX Live 2025; hooks,
+  mark classes); `check` also needs poppler (`pdfinfo`, `pdftoppm`, `pdftotext`) and the
+  `synctex` CLI. Platforms: TeX Live on Linux, macOS and Windows; MiKTeX (§6.16).
 - **N4** Deterministic environment: `SOURCE_DATE_EPOCH` and `FORCE_SOURCE_DATE=1`. The epoch is
   fixed per canonical state (set at the cold build, from the environment or the start time)
   and used by all later runs, `--full` and the `check` reference: reused pages and new runs
@@ -813,10 +813,10 @@ tests (hypothesis) for the text and file round trips, and acceptance tests compa
 with latexmk on the corpus.
 
 Slow tests check assumptions about TeX and package internals directly
-(`tests/slow/test_tex_compat.py`, e.g. how pgf loads its libraries). A weekly workflow
-(`.github/workflows/versions.yml`) runs the suite on the frozen TeX Live releases since 2023
-(the oldest supported LaTeX kernel is 2023-06-01), the current TeX Live and the current
-MiKTeX, and writes the tested versions into its summary.
+(`tests/slow/test_tex_compat.py`, e.g. how pgf loads its libraries). Weekly workflows
+(`.github/workflows/texlive-*.yml`, `miktex-current.yml`) run the suite on the frozen TeX Live releases since 2025
+(the oldest supported LaTeX kernel is 2025-11-01), the current TeX Live and the current
+MiKTeX, and write the tested versions into their summaries.
 
 ### 8.4 Benchmarks
 

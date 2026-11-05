@@ -1,0 +1,22 @@
+name: TeX Live (current)
+
+# The suite on the current TeX Live with this week's packages (texlive/texlive:latest; the
+# pinned image is tested in ci.yml). Weekly, by hand, or in a PR that changes this workflow.
+on:
+  schedule:
+    - cron: "41 3 * * 1"  # Mondays 03:41 UTC
+  workflow_dispatch:
+  pull_request:  # a PR that changes this workflow tests it
+    paths:
+      - .github/workflows/texlive-current.yml
+      - .github/workflows/_texlive-version.yml
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  texlive:
+    uses: ./.github/workflows/_texlive-version.yml
+    with:
+      image: latest

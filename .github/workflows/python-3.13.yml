@@ -1,0 +1,18 @@
+name: Python 3.13
+
+# unit tests on Python 3.13 (_python.yml); triggers as ci.yml
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  python:
+    uses: ./.github/workflows/_python.yml
+    with:
+      python: "3.13"
