@@ -39,7 +39,7 @@ The LaTeX packages chapmk uses are part of the Python package; nothing is instal
 `chapmk check [MAIN]` that your document and setup is supported, and [report any problems](https://github.com/melven/latex-chapmk/issues).
 
 ```
-chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [-v]
+chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [--print-log] [-v]
 chapmk check [MAIN]                            # build, plain full build, compare
 chapmk graph [MAIN] [--format text|dot|json]   # compilation units and dependencies
 chapmk clean [MAIN]
@@ -50,12 +50,16 @@ chapmk clean [MAIN]
 - Exit codes: 0 ok, 1 TeX error (or `check` found a difference), 2 other error, 3 internal
   error, 130/143 interrupted. One build per document at a time (a second one waits).
 - `--report FILE`: JSON with the runs, why each chapter was recompiled, and times.
+- `--print-log`: also write the log to stdout (also after an error), for editors that parse
+  only the output of the build command.
 - Optional `chapmk.toml` next to the main file: [docs/configuration.md](docs/configuration.md).
 
 ## Editor setup
 
 - **VS Code (LaTeX Workshop):** tool `{"name": "chapmk", "command": "chapmk", "args":
-  ["build", "%DOCFILE_EXT%"]}`, recipe `{"name": "chapmk", "tools": ["chapmk"]}`.
+  ["build", "--print-log", "%DOCFILE_EXT%"]}`, recipe `{"name": "chapmk", "tools": ["chapmk"]}`.
+  LaTeX Workshop reads errors and warnings only from the output of the build command, not
+  from the `.log` file; `--print-log` writes the log there.
 - **TeXstudio:** Options → Build → user command `chapmk build %.tex`, set as default compiler.
 - **vimtex:** `let g:vimtex_compiler_method = 'generic'` and
   `let g:vimtex_compiler_generic = {'command': 'chapmk build main.tex'}`.

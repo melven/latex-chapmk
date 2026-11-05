@@ -7,7 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from chapmk.files import read_log
-from chapmk.texsource import text_lines
+from chapmk.texsource import split_lines, text_lines
 
 #: ``file:line: message``; the file may start with a drive letter (Windows: TeX gets absolute
 #: paths, and error lines are mapped to the user's main file, ``D:\\doc\\main.tex:3: ...``)
@@ -67,3 +67,22 @@ def short_list(items: Sequence[str], limit: int = 3) -> str:
     """``a, b, c, ... (+12 more)``: at most ``limit`` items of a list in a message."""
     shown = ", ".join(items[:limit])
     return shown if len(items) <= limit else f"{shown}, ... (+{len(items) - limit} more)"
+
+
+#: the first line of a TeX log
+_BANNER = re.compile(r"^This is \S*TeX, Version")
+
+
+def printed_log(text: str) -> str:
+    """The published log as ``--print-log`` writes it (§6.13): the banner line only in the first
+    run's log. VS Code LaTeX Workshop parses only the build command's output and keeps the text
+    after the last banner (latexmk prints several runs), so it would see only the last run."""
+    seen = False
+    lines = []
+    for line in split_lines(text):
+        if _BANNER.match(line):
+            if seen:
+                continue
+            seen = True
+        lines.append(line)
+    return "".join(lines)

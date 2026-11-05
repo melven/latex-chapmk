@@ -36,6 +36,8 @@ First test release (formerly developed as `fastinc`).
   - SIGTERM/SIGINT stop all TeX processes;
   - a stale state after a chapmk upgrade or a TeX package update gives a cold build.
 - Exit codes 0 / 1 (TeX error or check difference) / 2 / 3 (internal error) / 130 / 143.
+- `--print-log` writes the log to stdout, also after a TeX error, for editors that parse only
+  the build output (VS Code LaTeX Workshop: errors and warnings of all runs).
 - A missing `mylatexformat` is reported at startup with how to install it (TeX Live:
   `tlmgr`; MiKTeX: MiKTeX Console or `miktex packages install`, unless MiKTeX installs missing
   packages on the fly). An error that TeX writes only to the terminal (e.g. a missing file on

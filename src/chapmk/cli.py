@@ -18,10 +18,12 @@ import chapmk
 from chapmk.analysis import Analysis, analyse
 from chapmk.config import Config, load_config
 from chapmk.errors import ChapmkError, ConfigError, InternalError, TexError
+from chapmk.files import read_raw
 from chapmk.fullbuild import full_build
 from chapmk.incremental import Context, build, load_epoch
 from chapmk.layout import DEFAULT_BUILD_DIR, Layout, build_dir_of, make_layout
 from chapmk.lock import LOCK_FILE, build_lock
+from chapmk.logs import printed_log
 from chapmk.proc import Interrupted, allow_runs, terminate_all
 from chapmk.texdist import TexDistribution, detect
 from chapmk.timing import Timings
@@ -63,6 +65,12 @@ def _build_args(p: argparse.ArgumentParser) -> None:
         "--keep-runs", action="store_true", help="keep old run directories (for debugging)"
     )
     p.add_argument("--report", type=Path, help="write a JSON report of the build to this file")
+    p.add_argument(
+        "--print-log",
+        action="store_true",
+        help="write the published log to stdout, also after a TeX error (for editors that "
+        "parse only the build output, e.g. VS Code LaTeX Workshop)",
+    )
     p.add_argument(
         "-v", "--verbose", action="store_true", help="print progress, reasons and tracebacks"
     )
@@ -170,9 +178,26 @@ def _build_locked(
     _say(f"wrote {result.pdf} ({result.mode}{compiled}, {result.seconds:.1f} s)")
     if getattr(args, "report", None):
         (cwd / args.report).write_text(result.to_json(), encoding="utf-8")
+    if getattr(args, "print_log", False):
+        _print_log(layout.output(".log"))
     if checking:
         return _check(ctx, analysis, layout, dist, epoch)
     return 0
+
+
+def _print_log(log: Path) -> None:
+    """``--print-log`` (§6.13): the published log on stdout, its bytes unchanged except for the
+    repeated banner lines (:func:`printed_log`)."""
+    if not log.is_file():
+        return
+    data = printed_log(read_raw(log)).encode("utf-8", "surrogateescape")
+    sys.stdout.flush()
+    buffer = getattr(sys.stdout, "buffer", None)
+    if buffer is None:  # a text-only stream (e.g. redirected in tests)
+        sys.stdout.write(data.decode("utf-8", "replace"))
+    else:
+        buffer.write(data)
+        buffer.flush()
 
 
 def _check(
@@ -283,6 +308,8 @@ def _main(args: argparse.Namespace, workdir: Path) -> int:
         return cmd_clean(args, workdir)
     except ChapmkError as err:
         _say(f"error: {err}")
+        if isinstance(err, TexError) and err.log and getattr(args, "print_log", False):
+            _print_log(err.log)  # the failing run's log
         if isinstance(err, TexError) and err.first_error:
             print(err.first_error, file=sys.stderr)
             if err.log:
