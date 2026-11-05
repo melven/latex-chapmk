@@ -26,8 +26,13 @@ EPOCH = 1700000000
 LATEXMKRC = r"""
 add_cus_dep('nlo', 'nls', 0, 'nlo2nls');
 sub nlo2nls {
-  my ($dir, $base) = ($_[0] =~ m{^(.*)/([^/]+)$}) ? ($1, $2) : ('.', $_[0]);
-  return system("cd '$dir' && makeindex -s nomencl.ist -o '$base.nls' '$base.nlo'");
+  my ($dir, $base) = ($_[0] =~ m{^(.*)[/\\]+([^/\\]+)$}) ? ($1, $2) : ('.', $_[0]);
+  require Cwd;
+  my $cwd = Cwd::getcwd();
+  chdir($dir) or return 1;
+  my $status = system('makeindex', '-s', 'nomencl.ist', '-o', "$base.nls", "$base.nlo");
+  chdir($cwd) or return 1;
+  return $status;
 }
 """
 
