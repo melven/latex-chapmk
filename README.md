@@ -10,6 +10,7 @@ full build (`chapmk check` verifies this). Speeds up recompiling after small cha
 minutes to <5 seconds.
 
 ## Declaration of AI usage
+
 Most of this software was generated using the AI model Claude Opus 5.5 (with effort = High).
 
 ## Install
@@ -24,6 +25,9 @@ package `mylatexformat`. `chapmk check` also needs `pdfinfo`, `pdftoppm`, `pdfto
 The LaTeX packages chapmk uses are part of the Python package; nothing is installed into TeX.
 
 ## Usage
+
+*Warning:* `chapmk` was only tested on a small subset of LaTeX packages. Please verify with
+`chapmk check [MAIN]` that your document and setup is supported, and [report any problems](https://github.com/melven/latex-chapmk/issues).
 
 ```
 chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [-v]
