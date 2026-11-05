@@ -34,7 +34,7 @@ docker build -f Dockerfile.miktex -t chapmk-miktex .
 docker run --rm -it -v "$PWD":/work -w /work chapmk-miktex bash
 ```
 
-Windows/MiKTeX runs in GitHub Actions only (`.github/workflows/miktex.yml`, manual trigger).
+Windows/MiKTeX runs in GitHub Actions only (`.github/workflows/miktex-windows.yml`, manual trigger).
 
 Behind a proxy: pass it as build args (`--build-arg HTTPS_PROXY=...`, `--network host` for a local proxy); if it intercepts TLS, add `--secret id=ca,src=<CA bundle incl. public CAs>`.
 
@@ -85,5 +85,5 @@ pytest -m acceptance -n auto          # scenario tests with the design §3.3 com
 - References (the `--full` build of `--check`, latexmk in the acceptance tests) are cached in `.test-cache/` by a hash of the source files, the TeX installation (`pdflatex` version, `ls-R` signatures) and, for `--full` references, the full-mode code (`FULL_MODE_CODE` in `tests/conftest.py`). `rm -rf .test-cache` frees the space of unused entries. CI restores it from an earlier run with the same image and full-mode code (`actions/cache`, key in `.github/workflows/ci.yml`); when full-mode output starts to depend on another file, extend both `FULL_MODE_CODE` and that key.
 - Tests must be xdist-safe: no shared paths outside `tmp_path`/`tmp_path_factory`, no global state beyond the process. Session fixtures (e.g. the built thesis state) run once per worker.
 - Scenario tests ([design §8.2](docs/design.md#82-scenario-tests)) assert both §3.3 equality and the expected set of compiled units, from `chapmk build --report json`.
-- Other TeX versions: `.github/workflows/versions.yml` (weekly; frozen TeX Live releases since 2023, current TeX Live, current MiKTeX; `Dockerfile` takes `--build-arg TEXLIVE_IMAGE=texlive/texlive:TL2024-historic`).
-- MiKTeX: the whole suite runs in the MiKTeX image (`Dockerfile.miktex`; CI: `.github/workflows/miktex.yml`, manual). Windows/macOS are tested only in CI.
+- Other TeX versions: `.github/workflows/texlive-2025.yml`, `texlive-current.yml`, `miktex-current.yml` (weekly; frozen TeX Live 2025, current TeX Live, current MiKTeX; `Dockerfile` takes `--build-arg TEXLIVE_IMAGE=texlive/texlive:TL2025-historic`).
+- MiKTeX: the whole suite runs in the MiKTeX image (`Dockerfile.miktex`; CI: `.github/workflows/miktex-linux.yml`, manual). Windows/macOS are tested only in CI.

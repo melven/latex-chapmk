@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One line describing the TeX installation in use: distribution banner, LaTeX kernel version
-# and the date of its package state (CI job summaries, .github/workflows/versions.yml).
+# and the date of its package state (CI job summaries, .github/workflows/texlive-*.yml, miktex-current.yml).
 set -e
 banner=$(pdflatex --version | head -1)
 dir=$(mktemp -d)

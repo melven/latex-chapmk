@@ -1,0 +1,41 @@
+name: texlive version (reusable)
+
+# The test suite on one texlive/texlive image other than the pinned one of ci.yml (called by
+# texlive-*.yml). Writes the TeX version it tested (banner, LaTeX kernel, date of the package
+# state) into the run summary.
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "tag of texlive/texlive"
+        type: string
+        required: true
+
+jobs:
+  texlive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dev image on texlive/texlive:${{ inputs.image }}
+        run: docker build -q --build-arg TEXLIVE_IMAGE=texlive/texlive:${{ inputs.image }} -t chapmk-dev . > /dev/null
+      - name: TeX version
+        id: version
+        run: echo "line=$(docker run --rm -v "$PWD":/work:ro chapmk-dev bash /work/tests/tex-version.sh)" >> "$GITHUB_OUTPUT"
+      - name: Reference cache
+        # per TeX version (tests/conftest.py keys the entries by the installation as well)
+        uses: actions/cache@v4
+        with:
+          path: .test-cache
+          key: versions-cache-${{ inputs.image }}-${{ github.run_id }}
+          restore-keys: versions-cache-${{ inputs.image }}-
+      - name: All tests (slow, scenario, acceptance)
+        run: |
+          docker run --rm -v "$PWD":/work -w /work --user root chapmk-dev bash -c '
+            set -e
+            pip install -q -e .
+            pytest -n auto --dist worksteal -q -rfE
+          '
+      - name: Summary
+        if: always()
+        run: |
+          echo "texlive/texlive:${{ inputs.image }}: **${{ job.status }}** — ${{ steps.version.outputs.line }}" >> "$GITHUB_STEP_SUMMARY"
