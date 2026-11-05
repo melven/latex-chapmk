@@ -115,7 +115,8 @@ class TeXLive:
 
     @cached_property
     def version(self) -> str:
-        """First line of ``pdflatex --version``; part of the format fingerprint."""
+        """Version line of ``pdflatex --version`` (:func:`banner_line`); part of the format
+        fingerprint."""
         return _banner("pdflatex").strip() or "unknown"
 
     def environment(
@@ -285,10 +286,17 @@ def _initexmf_value(name: str) -> str:
 
 
 def _banner(pdflatex: str) -> str:
-    """First line of ``pdflatex --version``."""
+    """The version line of ``pdflatex --version`` (:func:`banner_line`)."""
     result = run([pdflatex, "--version"], cwd=Path.cwd(), env=dict(os.environ))
-    lines = text_lines(result.output)
-    return lines[0] if lines else ""
+    return banner_line(result.output)
+
+
+def banner_line(output: str) -> str:
+    """The version line in the output of ``pdflatex --version``: the first line naming pdfTeX,
+    else the first non-empty line. The output includes stderr, where MiKTeX run as root first
+    warns ``pdflatex: security risk: running with elevated privileges``."""
+    lines = [line for line in text_lines(output) if line.strip()]
+    return next((line for line in lines if "pdfTeX" in line), lines[0] if lines else "")
 
 
 def detect(
