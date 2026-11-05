@@ -20,7 +20,15 @@ from chapmk.shadow import (
     sync_project_shadow,
     sync_shadow,
 )
-from chapmk.texdist import TEX_DIR, MiKTeX, TeXLive, detect, deterministic_env, tex_path
+from chapmk.texdist import (
+    TEX_DIR,
+    MiKTeX,
+    TeXLive,
+    banner_line,
+    detect,
+    deterministic_env,
+    tex_path,
+)
 
 
 def test_run_captures_output_and_errors(tmp_path: Path) -> None:
@@ -91,6 +99,22 @@ def test_check_tools_and_detect() -> None:
     win = "C:/Program Files/MiKTeX/miktex/bin/x64/pdflatex.exe"
     assert isinstance(detect(lambda _: win, lambda _: miktex), MiKTeX)
     assert isinstance(detect(lambda _: "/usr/local/bin/pdflatex", lambda _: miktex), MiKTeX)
+
+
+def test_banner_line_skips_warnings() -> None:
+    """MiKTeX run as root warns on stderr before the banner (merged into the output); the
+    banner decides the distribution and is part of the format fingerprint."""
+    root = "pdflatex: security risk: running with elevated privileges\r\n"
+    miktex = "MiKTeX-pdfTeX 4.27 (MiKTeX 26.5)\r\n© 2026 Han The Thanh\r\n"
+    assert banner_line(root + miktex) == "MiKTeX-pdfTeX 4.27 (MiKTeX 26.5)"
+    assert banner_line(miktex) == "MiKTeX-pdfTeX 4.27 (MiKTeX 26.5)"
+    texlive = "pdfTeX 3.141592653-2.6-1.40.29 (TeX Live 2026)\nkpathsea version 6.4.1\n"
+    assert banner_line(texlive) == "pdfTeX 3.141592653-2.6-1.40.29 (TeX Live 2026)"
+    assert banner_line("\nsomething else\n") == "something else"
+    assert banner_line("") == ""
+    assert isinstance(
+        detect(lambda _: "/usr/local/bin/pdflatex", lambda _: banner_line(root + miktex)), MiKTeX
+    )
 
 
 def test_miktex_command_lines(tmp_path: Path) -> None:
