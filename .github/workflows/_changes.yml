@@ -12,7 +12,7 @@ on:
 
 env:
   # files whose change makes the frozen versions worth testing again
-  WATCHED: src tests Dockerfile Dockerfile.miktex requirements-dev.txt pyproject.toml
+  WATCHED: src tests Dockerfile Dockerfile.miktex Dockerfile.miktex-update requirements-dev.txt pyproject.toml
 
 jobs:
   diff:

@@ -1,6 +1,8 @@
 name: MiKTeX (current)
 
-# The suite on the current MiKTeX (Linux image built from today's packages, not cached).
+# The suite on the current MiKTeX: the Linux image of Dockerfile.miktex (about 40 minutes to
+# build; the same GHCR image as miktex-linux.yml, rebuilt only when its inputs change), updated
+# in each run to today's packages (Dockerfile.miktex-update, a few minutes).
 # Weekly, but only if chapmk's files changed since the last successful run (_changes.yml); by
 # hand or in a PR that changes this workflow: always. Writes the tested version into the run
 # summary.
@@ -12,6 +14,7 @@ on:
     paths:
       - .github/workflows/miktex-current.yml
       - .github/workflows/_changes.yml
+      - Dockerfile.miktex-update
 
 concurrency:
   group: ${{ github.workflow }}
@@ -28,6 +31,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.changed == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write  # the base image in GHCR
     steps:
       - uses: actions/checkout@v4
       # the image is about 7.6 GB packed and 11 GB unpacked; a runner has about 14 GB free
@@ -35,8 +41,24 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           docker system prune -af
-      - name: Current MiKTeX image (built from today's packages, not cached)
-        run: docker build -q -f Dockerfile.miktex -t chapmk-miktex . > /dev/null
+      - name: Base image (from GHCR, else build and publish)
+        # as in miktex-linux.yml: tagged by the hash of its inputs, built once; packages that
+        # MiKTeX removes upstream stay in the base until Dockerfile.miktex changes
+        env:
+          TAG: ${{ hashFiles('Dockerfile.miktex', 'requirements-dev.txt') }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          base="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/latex-chapmk-miktex:$TAG"
+          echo "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          if docker pull -q "$base"; then
+            echo "pulled $base"
+          else
+            docker build -q -f Dockerfile.miktex -t "$base" . > /dev/null
+            docker push -q "$base" || echo "::warning::could not publish $base (no package permission)"
+          fi
+          echo "BASE=$base" >> "$GITHUB_ENV"
+      - name: Current MiKTeX image (base updated to today's packages)
+        run: docker build -f Dockerfile.miktex-update --build-arg BASE="$BASE" -t chapmk-miktex .
       - name: TeX version
         id: version
         run: echo "line=$(docker run --rm -v "$PWD":/work:ro chapmk-miktex bash /work/tests/tex-version.sh)" >> "$GITHUB_OUTPUT"
