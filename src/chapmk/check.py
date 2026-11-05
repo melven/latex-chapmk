@@ -19,7 +19,7 @@ from typing import Any
 
 import pikepdf
 
-from chapmk.errors import ToolError
+from chapmk.errors import ToolError, ToolTimeoutError
 from chapmk.files import digest, read_log
 from chapmk.proc import run
 from chapmk.texsource import text_lines
@@ -27,6 +27,11 @@ from chapmk.texsource import text_lines
 DPI = 150
 SYNCTEX_SAMPLES = 8
 _SYNCTEX_KEYS = re.compile(r"^(Page|x|y|h|v|W|H|Input|Line|Column):")
+#: seconds per ``synctex`` call (one takes milliseconds) and attempts: MiKTeX's synctex on
+#: Windows rarely hangs at start-up, before it reads anything (1 in about 17,000 calls in CI,
+#: no log line); the same deterministic query is repeated once
+SYNCTEX_TIMEOUT = 60.0
+SYNCTEX_ATTEMPTS = 2
 
 
 @dataclass(frozen=True)
@@ -244,9 +249,18 @@ def _document(path: Path) -> tuple[list[Any], list[Any]]:
 # --- SyncTeX -----------------------------------------------------------------------------------
 
 
-def _synctex(args: list[str], cwd: Path) -> list[str]:
-    r = run(["synctex", *args], cwd=cwd, env=dict(os.environ))
-    return [line for line in text_lines(r.output) if _SYNCTEX_KEYS.match(line)]
+def _synctex(args: list[str], cwd: Path, timeout: float = SYNCTEX_TIMEOUT) -> list[str]:
+    """The result lines of one ``synctex`` call; a hanging call is killed and repeated
+    (:data:`SYNCTEX_ATTEMPTS`), then :class:`ToolTimeoutError` names the query."""
+    for _ in range(SYNCTEX_ATTEMPTS):
+        try:
+            r = run(["synctex", *args], cwd=cwd, env=dict(os.environ), timeout=timeout)
+        except ToolTimeoutError:
+            continue
+        return [line for line in text_lines(r.output) if _SYNCTEX_KEYS.match(line)]
+    raise ToolTimeoutError(
+        f"synctex {' '.join(args)} timed out {SYNCTEX_ATTEMPTS} times after {timeout} s"
+    )
 
 
 def _first(result: list[str], key: str) -> str:

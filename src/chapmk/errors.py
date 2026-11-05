@@ -48,6 +48,10 @@ class ToolError(ChapmkError):
     """An external tool is missing or failed outside a TeX run (biber, makeindex, ...)."""
 
 
+class ToolTimeoutError(ToolError):
+    """An external program ran longer than its timeout and was killed."""
+
+
 class TexError(ChapmkError):
     """A TeX run failed. ``log`` is the run's log file, ``first_error`` its first error line."""
 
