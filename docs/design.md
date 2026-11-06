@@ -339,6 +339,15 @@ A run compiles the glue plus its selection: all units (full run), some, or none 
 run). Runs execute in a thread pool that waits on subprocesses (no fork); each process runs
 in its own process group (§6.15).
 
+**First-page material** (S15): what is on the main vertical list before the first page
+(`\begin{document}` material such as hyperref's `Doc-Start` destination, the S13 nodes) and
+LaTeX's `shipout/firstpage` hook belong to the first page TeX ships. In a full build that is
+the document's first page. When the document starts with an `\include` that a run excludes,
+it would be a later page of the run. Before the first excluded unit's checkpoint, if the run
+has shipped nothing yet, `chapmk.sty` ships them on an extra page (`\RawShipout`: no page
+record, so the merges skip it); their effects (e.g. the colour stack) still hold for the
+run's pages.
+
 ### 6.6 Canonical state and commit
 
 `canon/` holds the committed state: unit aux files, the canonical main aux, the list files,
