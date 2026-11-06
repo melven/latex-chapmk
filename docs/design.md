@@ -718,6 +718,12 @@ to a TikZ-externalized build** (S12). Without `\tikzexternalize` pictures stay i
   announced by a log record. The driver cuts it into `<key>.pdf` plus `.dpth`; the merges skip
   extra pages. The run typeset the picture inline, so its unit (or the glue) is compiled once
   more with the figure embedded; full mode adds a pass.
+- **Side effects beyond the cache** (S14): a picture whose code contains `remember picture` or
+  `\label` writes aux records that a cached figure cannot replay (an exporting and an embedding
+  pass would disagree, full mode would not converge). It is typeset inline and never exported,
+  as with `\tikzexternaldisable`, with a `Package chapmk Warning` at its input line. Unlike
+  real externalize, its labels and positions are kept. Global `remember picture` styles are not
+  detected.
 - **Keys** (content-addressed, independent of the run's selection): md5 of the picture code, a
   stamp (format stamp, main fingerprints), the state at the picture start if the code shows
   counters, `\linewidth`, `\hsize`, font, `\baselineskip`, colour; full mode also a digest of
