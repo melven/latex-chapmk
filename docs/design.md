@@ -605,7 +605,16 @@ Measured: 319 pages from 5 runs in about 0.35 s.
 - Errors are printed in `file:line: message` form with mapped paths.
 - A failing run commits nothing; the previous `main.pdf` is kept; exit code 1; `main.log` is
   the failing run's log with mapped paths (editors parse it).
-- On success `main.log` concatenates the logs of the runs of the state, each with a header.
+- On success `main.log` is composed in the order of a plain pdflatex run: chapmk.sty writes a
+  marker line (`chapmk-segment: <seg>`, `\wlog`) at the start of every segment and after the
+  last page (`end`); `\include`'s `\clearpage` puts each segment's pages and messages between
+  its markers. The composed log is the head of the run of `G0` with the preamble part of the
+  format build's log after the main file is opened (files still open at the dump closed), each
+  segment's slice from the run that produced it (state), and the tail (aux check, summaries)
+  of the last glue segment's run, its `Output written on` line replaced by the merged PDF's.
+  Messages and their order match a full build; differences: summaries at the end cover the
+  last run only, pages of exported pictures appear as extra `[n]`. A run log without markers
+  (older chapmk) gives the logs of the runs one after the other, each with a header.
 - `--print-log` writes the published `main.log` to stdout after the build, also after a TeX
   error (the failing run's log) and a no-op build. Editors that parse only the output of the
   build command (VS Code LaTeX Workshop) need it; LaTeX Workshop keeps only the text after the
