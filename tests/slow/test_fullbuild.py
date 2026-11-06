@@ -74,7 +74,7 @@ def test_print_log(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-d
     (src / "b.tex").write_text("\\chapter{B}B\n")
     assert main(["build", "d.tex", "-j", "2", "--print-log"], cwd=src) == 0
     out = capsys.readouterr().out
-    log = (src / "d.log").read_text()
+    log = (src / "d.log").read_bytes().decode("utf-8")  # as printed: line endings unchanged
     assert out.count("This is pdfTeX, Version") == 1
     assert "Output written on" in out and "Reference `nowhere' on page" in out
     assert [ln for ln in out.split("\n") if "This is pdfTeX" not in ln] == [
