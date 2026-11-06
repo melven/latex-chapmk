@@ -1,0 +1,10 @@
+\chapter{One}
+Text with a \tikz[remember picture] \node (m) {mark}; and an overlay.
+\begin{tikzpicture}[remember picture,overlay]
+  \draw[->,red] (m) -- ++(2,1);
+\end{tikzpicture}
+
+\begin{tikzpicture}
+  \node[draw] {a node with a label\label{pic:node}};
+\end{tikzpicture}
+See page~\pageref{pic:node}.
