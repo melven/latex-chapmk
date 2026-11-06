@@ -49,7 +49,8 @@ First test release (formerly developed as `fastinc`).
 
 ### Known limitations
 
-- pdfLaTeX and TeX Live on Linux only (MiKTeX, Windows and macOS are not tested yet).
+- pdfLaTeX only. Tested with TeX Live on Linux and MiKTeX on Linux and Windows; macOS is not
+  tested yet.
 - Full builds (with a warning) for:
   - the packages `glossaries`, `imakeidx`/`makeidx`, `minted`, `cleveref`;
   - BibTeX and biblatex backends other than biber;
