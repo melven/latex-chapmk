@@ -309,3 +309,32 @@ def test_nodes_left_on_the_main_vertical_list_are_replayed(
     path = src / "b.tex"
     edit(path, "Text b.", "Txet b.")
     assert checked(src, capsys)["mode"] == "incremental"
+
+
+@pytest.mark.parametrize(
+    "before",
+    ["\\addtocontents{toc}{\\protect\\relax}", "\\selectlanguage{english}"],
+)
+def test_list_writes_before_the_first_include(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], before: str
+) -> None:
+    """S15: a deferred list-file write before the first \\include (\\addtocontents, babel's
+    language record) reaches the list files at the first page shipped. A run that compiles
+    the first unit ships it after the unit's entry record; the extra first page of a run that
+    excludes the unit must too, else the write lands in the unit's list-file section and the
+    self-check fails in every build that excludes the unit (full build, then cold)."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage[ngerman,english]{babel}\n\\begin{document}\n"
+        f"{before}\n\\include{{a}}\n\\include{{b}}\n\\tableofcontents\n\\include{{c}}\n"
+        "\\end{document}\n"
+    )
+    (src / "a.tex").write_text("Title page.\n")
+    (src / "b.tex").write_text("Verso.\n")
+    (src / "c.tex").write_text("\\chapter{C}Text c.\n")
+    rep = checked(src, capsys)
+    assert rep["mode"] == "cold" and not any("full build" in w for w in rep["warnings"]), rep
+    edit(src / "c.tex", "Text c.", "Txet c.")
+    rep = checked(src, capsys)
+    assert rep["mode"] == "incremental" and rep["compiled"] == ["c"], rep
