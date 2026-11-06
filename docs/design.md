@@ -353,7 +353,11 @@ the document's first page. When the document starts with an `\include` that a ru
 it would be a later page of the run. Before the first excluded unit's checkpoint, if the run
 has shipped nothing yet, `chapmk.sty` ships them on an extra page (`\RawShipout`: no page
 record, so the merges skip it); their effects (e.g. the colour stack) still hold for the
-run's pages.
+run's pages. The extra page is shipped after the unit's entry record, as the unit's first
+page is in a run that compiles it: deferred writes before the first `\include`
+(`\addtocontents`, babel's language records) then reach the main aux after that record in
+both cases, so they never enter the unit's list-file section or main-aux slice (else the
+§6.7 self-check of the unit's list-file section fails in every run that excludes it).
 
 ### 6.6 Canonical state and commit
 
