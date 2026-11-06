@@ -11,6 +11,8 @@ from typing import Any
 import pytest
 from _helpers import EPOCH, build, selections
 
+from chapmk.synctex import parse as parse_synctex
+
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
 
 
@@ -281,6 +283,29 @@ def test_open_action_when_the_document_starts_with_an_include(
     path.write_text(path.read_text().replace("Text c.", "Txet c."))
     rep = checked(src, capsys)
     assert rep["mode"] == "incremental" and selections(rep) == [["c"]], rep
+
+
+def test_first_page_material_when_the_first_unit_is_excluded(
+    copy_corpus,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """S15: the document starts with an \\include; a run of a later unit must not put the
+    first-page material (hyperref's Doc-Start, xcolor's colour stack push, the
+    shipout/firstpage hook) onto its first page: the SyncTeX records per page equal the
+    --full reference's (§3.3 holds anyway: the material is invisible)."""
+    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
+    src = copy_corpus("minimal/S15-first-page")
+    assert checked(src, capsys)["mode"] == "cold"
+    path = src / "c.tex"
+    path.write_text(path.read_text().replace("Text c.", "Txet c."))
+    rep = checked(src, capsys)
+    assert rep["mode"] == "incremental" and selections(rep) == [["c"]], rep
+    ref = parse_synctex(src / ".chapmk" / "main" / "check" / "main.synctex.gz")
+    got = parse_synctex(src / "main.synctex.gz")
+    assert [len(ref.sheets[n]) for n in sorted(ref.sheets)] == [
+        len(got.sheets[n]) for n in sorted(got.sheets)
+    ]
 
 
 def test_nodes_left_on_the_main_vertical_list_are_replayed(

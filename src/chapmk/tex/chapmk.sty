@@ -256,7 +256,23 @@
   \expandafter\global\expandafter\let\csname chapmk@mk@#1\endcsname\chapmk@lastmk
   \global\let\chapmk@lastmk\@empty
   \chapmk@orig@setckpt{#1}{\chapmk@excluded@begin{#1}#2\chapmk@restore{#1}}}
-\def\chapmk@excluded@begin#1{\chapmk@unit@begin{#1}\xdef\chapmk@wrapped{\chapmk@k}}
+\def\chapmk@excluded@begin#1{\chapmk@firstpage\chapmk@unit@begin{#1}\xdef\chapmk@wrapped{\chapmk@k}}
+% S15: the nodes on the main vertical list before the first page (\begin{document} material
+% such as hyperref's Doc-Start destination, the S13 nodes) go to the first page TeX ships. In
+% a full build that is the document's first page; when the document starts with an \include
+% this run excludes, it would be a later page. Before the first excluded unit's checkpoint, if
+% nothing was shipped yet, they are shipped on an extra page, which the merges skip (no page
+% record), so their effects (colour stack) still hold for the run's pages. \RawShipout: no
+% shipout/before hooks (no page record), but LaTeX's shipout/firstpage material (hyperref) goes
+% onto this page, and the shipout counter counts it (page indices stay right). Local output
+% routine as \chapmk@capturemvl (S13): the empty \hbox and its \topskip glue are removed.
+\def\chapmk@firstpage{\ifvmode\ifnum\ReadonlyShipoutCounter=0 \ifnum\chapmk@pics=0
+  \edef\chapmk@pd{\the\prevdepth}\edef\chapmk@op{\the\outputpenalty}%
+  \begingroup
+    \output{\RawShipout\vbox{\unvbox255 \setbox0\lastbox\unskip}}%
+    \hbox{}\penalty-10000
+  \endgroup
+  \deadcycles=0 \global\outputpenalty=\chapmk@op\relax \prevdepth=\chapmk@pd\relax\fi\fi\fi}
 \def\chapmk@restore#1{% assign the stored post-kernel registers (S4) and marks
   \edef\chapmk@tmp{\csname chapmk@ck@#1\endcsname}%
   \@for\chapmk@tmp:=\chapmk@tmp\do{\ifx\chapmk@tmp\@empty\else
