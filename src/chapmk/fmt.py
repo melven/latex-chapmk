@@ -17,7 +17,7 @@ from chapmk.gensrc import format_source
 from chapmk.layout import Layout
 from chapmk.logs import run_error
 from chapmk.proc import run
-from chapmk.shadow import changed_signatures, external_inputs, source_inputs, stat_signatures
+from chapmk.recorder import changed_signatures, dist_signatures, source_inputs
 from chapmk.texdist import TEX_DIR, TexDistribution
 
 FORMAT_NAME = "pre"
@@ -79,14 +79,9 @@ def format_inputs(layout: Layout) -> dict[str, str]:
 
 def format_dist_inputs(layout: Layout) -> dict[str, str]:
     """Distribution files read by the format build with their stat signatures
-    (:func:`chapmk.shadow.stat_signatures`): an update (``tlmgr``) means a new format and a
+    (:func:`chapmk.recorder.stat_signatures`): an update (``tlmgr``) means a new format and a
     cold build, the pdfTeX banner changes only yearly (C4)."""
     return _read_stamp(layout.fmt_dir / STAMP_FILE)[2]
-
-
-def internal_dirs(layout: Layout) -> tuple[Path, ...]:
-    """Directories whose files are not distribution inputs (:func:`external_inputs`)."""
-    return (layout.shadow_dir, layout.build_dir, layout.source_dir)
 
 
 def _lost_state(log: str) -> str | None:
@@ -167,7 +162,7 @@ def ensure_format(
         name: digest(layout.source_dir / name)
         for name in sorted(source_inputs(fls, layout.shadow_dir, layout.source_dir))
     }
-    dist_inputs = stat_signatures(external_inputs(fls, layout.shadow_dir, internal_dirs(layout)))
+    dist_inputs = dist_signatures(fls, layout.shadow_dir, layout.internal_dirs)
     write_atomic(
         stamp_file,
         json.dumps({"stamp": stamp, "inputs": inputs, "dist": dist_inputs}, sort_keys=True),

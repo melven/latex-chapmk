@@ -17,7 +17,7 @@ from chapmk.pictures import (
     stale_figures,
     store_references,
 )
-from chapmk.shadow import stat_signatures
+from chapmk.recorder import stat_signatures
 
 KEY_A = "0B1360971630C73019099E9F886EC9A7"
 KEY_B = "40DEAF2B0E91DA6C2B120A60FC4ECAE6"

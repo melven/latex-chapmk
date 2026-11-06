@@ -20,7 +20,7 @@ from chapmk.auxfile import read_lines
 from chapmk.deps import cite_values, label_values, short_hash
 from chapmk.errors import TexError
 from chapmk.files import digest, read_log, write_atomic
-from chapmk.fmt import format_stamp, internal_dirs
+from chapmk.fmt import format_stamp
 from chapmk.gensrc import full_mode_input
 from chapmk.layout import Layout
 from chapmk.logs import map_paths, run_error, short_list
@@ -38,7 +38,7 @@ from chapmk.pictures import (
 )
 from chapmk.proc import run
 from chapmk.publish import copy_bytes, publish, publish_all, text_writer
-from chapmk.shadow import external_inputs, read_inputs, stat_signatures
+from chapmk.recorder import dist_signatures, read_inputs
 from chapmk.synctex import rewrite_paths
 from chapmk.texdist import TexDistribution
 from chapmk.tools import NOMENCL_STYLE, run_biber, run_makeindex
@@ -230,8 +230,9 @@ def full_build(
                         store_references(fig_dir, p, {}, analysis.source_dir)
                 if exported:
                     fls = out / f"{job}.fls"
-                    dist_files = external_inputs(fls, layout.shadow_dir, internal_dirs(layout))
-                    record_inputs(fig_dir, stat_signatures(dist_files))
+                    record_inputs(
+                        fig_dir, dist_signatures(fls, layout.shadow_dir, layout.internal_dirs)
+                    )
                 collect_garbage(fig_dir, {p.key for p in pictures})
             return PassResult(True, None, f"{exported} pictures exported" if exported else None)
         return PassResult(False, run_error(out / f"{job}.log", result.output, layout.path_map()))

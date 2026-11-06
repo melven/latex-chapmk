@@ -53,14 +53,13 @@ from chapmk.deps import imports, short_hash
 from chapmk.dirty import DirtyRules
 from chapmk.errors import FallbackError, TexError
 from chapmk.facts import UNIT_HEADINGS, UNSUPPORTED_PACKAGES, derived_suffixes
-from chapmk.files import changed_files, digest, read_log, source_name, write_atomic
+from chapmk.files import changed_files, digest, source_name, write_atomic
 from chapmk.fmt import (
     FormatInfo,
     ensure_format,
     format_dist_inputs,
     format_inputs,
     format_stamp,
-    internal_dirs,
 )
 from chapmk.fullbuild import full_build
 from chapmk.layout import Layout
@@ -89,6 +88,7 @@ from chapmk.predict import (
     normalized,
     rewrite_checkpoint,
 )
+from chapmk.recorder import changed_signatures, dist_signatures, loaded_names, source_inputs
 from chapmk.records import (
     RunRecords,
     RunView,
@@ -100,17 +100,10 @@ from chapmk.records import (
 from chapmk.runner import RunSpec, prepare_run_dir, run_batch
 from chapmk.schedule import Schedule
 from chapmk.segment import is_unit, position, unit_id
-from chapmk.shadow import (
-    changed_signatures,
-    external_inputs,
-    source_inputs,
-    stat_signatures,
-    sync_project_shadow,
-)
+from chapmk.shadow import sync_project_shadow
 from chapmk.sources import UnitSources, load_lint_cache, save_lint_cache
 from chapmk.state import CorruptStateError, State, UnitInputs, load_state
 from chapmk.texdist import TexDistribution
-from chapmk.texsource import text_lines
 from chapmk.timing import Timings
 
 MAX_ITERATIONS = 8
@@ -192,11 +185,7 @@ def _global_files(ctx: Context, run: RunView, attributed: set[str]) -> dict[str,
 
 def _check_runtime_support(run: RunView, fmt: FormatInfo) -> None:
     """Packages loaded by the format or the run (also those loaded by the class)."""
-    loaded = set(run.loaded)
-    fls = fmt.directory / f"{fmt.name}.fls"
-    if fls.is_file():
-        lines = text_lines(read_log(fls))
-        loaded |= {Path(line[6:]).name for line in lines if line.startswith("INPUT ")}
+    loaded = run.loaded | loaded_names(fmt.directory / f"{fmt.name}.fls")
     for pkg in sorted(UNSUPPORTED_PACKAGES):
         if f"{pkg}.sty" in loaded:
             raise FallbackError(f"package {pkg!r} is not supported (loaded at runtime)", True)
@@ -471,7 +460,7 @@ class Fixpoint:
         fls = run.file(".fls")
         state.dist_files.update(format_dist_inputs(ctx.layout))
         state.dist_files.update(
-            stat_signatures(external_inputs(fls, ctx.layout.shadow_dir, internal_dirs(ctx.layout)))
+            dist_signatures(fls, ctx.layout.shadow_dir, ctx.layout.internal_dirs)
         )
 
     def _canon_records(self, canon: Path) -> RunRecords:
