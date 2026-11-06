@@ -71,3 +71,16 @@ def write_if_changed(path: Path, data: bytes | str) -> bool:
 def copy_atomic(src: Path, dst: Path) -> None:
     """Copy the bytes of ``src`` to ``dst`` atomically."""
     write_atomic(dst, src.read_bytes())
+
+
+def recorded_name(recorded: str) -> str:
+    """A file name as a run recorded it (``/ch1.tex``, ``./ch1.tex``, ``ch1.tex``: relative to
+    the TeX working directory, the shadow tree) without the leading ``/`` and ``./``."""
+    name = recorded.lstrip("/")
+    return name[2:] if name.startswith("./") else name
+
+
+def source_name(recorded: str, source_dir: Path) -> str | None:
+    """The :func:`recorded_name` as a relative posix name, if it is a file of ``source_dir``."""
+    name = recorded_name(recorded)
+    return Path(name).as_posix() if name and (source_dir / name).is_file() else None
