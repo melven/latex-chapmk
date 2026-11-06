@@ -109,8 +109,15 @@ reference in:
 3. page labels; outline (titles, levels, open state, target page and position); link
    annotations (rectangle, target page and position, or URI); document info and catalog
    entries (S13);
-4. SyncTeX: `synctex view` at sampled lines of every source file returns the same page and
-   position, `synctex edit` at those positions the same file and line.
+4. SyncTeX: every record of every page is the same after normalisation: input tags replaced
+   by their files (sources relative to the source directory, other files by name), `!` offsets
+   and the header and postamble left out, and the line numbers of generated files (`.toc`,
+   `.bbl`, …, which chapmk assembles differently) not compared. In addition, `synctex view` at
+   one line with records of every source file returns the same page and position, and
+   `synctex edit` at that position the same file and line: editors find the records (the
+   normalisation would hide a path form `synctex` cannot match, S11). Each `synctex` call is
+   a process start (0.3–0.5 s with MiKTeX on Windows), so the complete comparison reads the
+   files instead.
 
 Not required: byte identity (object order, font subset names, `/ID` differ).
 
