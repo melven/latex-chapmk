@@ -49,7 +49,7 @@ from chapmk.canon import (
     run_tools,
 )
 from chapmk.config import Config
-from chapmk.deps import imports, short_hash
+from chapmk.deps import imports
 from chapmk.dirty import DirtyRules
 from chapmk.errors import FallbackError, TexError
 from chapmk.facts import UNIT_HEADINGS, UNSUPPORTED_PACKAGES, derived_suffixes
@@ -73,15 +73,13 @@ from chapmk.outputs import (
 )
 from chapmk.pictures import (
     PICS_FILE,
-    check_inputs,
     collect_garbage,
     driver_file,
-    export_figures,
+    export_run,
     parse_pictures,
+    picture_stamp,
     record_inputs,
-    remove_figures,
-    stale_figures,
-    store_references,
+    refresh_cache,
 )
 from chapmk.predict import (
     Vector,
@@ -233,11 +231,8 @@ class Fixpoint:
         if not ctx.config.picture_cache:
             return driver_file(None, ctx.layout.shadow_dir, "", {})
         fig = ctx.layout.fig_dir
-        check_inputs(fig)  # package updates
-        remove_figures(fig, stale_figures(fig, view.values, self.a.source_dir))
-        stamp = short_hash(
-            self.state.format_stamp + json.dumps(self.state.fingerprints, sort_keys=True)
-        )
+        refresh_cache(fig, view.values, self.a.source_dir)
+        stamp = picture_stamp(self.state.format_stamp, self.state.fingerprints)
         return driver_file(fig, ctx.layout.shadow_dir, stamp, {})
 
     def batch(
@@ -429,12 +424,11 @@ class Fixpoint:
             return exported
         for view, compiled in zip(views, compiled_by_run, strict=True):
             pics = parse_pictures(view.log)
-            export_figures(view.file(".pdf"), pics, fig)
+            export_run(fig, view.file(".pdf"), pics, pre.values, self.a.source_dir)
             for seg in [*compiled, *glue]:
                 state.pictures[seg] = sorted({p.key for p in pics if p.segment == seg})
             for p in pics:
                 if p.exported:
-                    store_references(fig, p, pre.values, self.a.source_dir)
                     exported[p.segment] = exported.get(p.segment, 0) + 1
         if exported:
             record_inputs(fig, state.dist_files)
