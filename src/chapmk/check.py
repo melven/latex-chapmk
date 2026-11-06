@@ -22,10 +22,12 @@ import pikepdf
 from chapmk.errors import ToolError, ToolTimeoutError
 from chapmk.files import digest, read_log
 from chapmk.proc import run
+from chapmk.synctex import parse as parse_synctex
 from chapmk.texsource import text_lines
 
 DPI = 150
-SYNCTEX_SAMPLES = 8
+#: lines per source file queried with the ``synctex`` tool (each call is a process start)
+SYNCTEX_SAMPLES = 1
 _SYNCTEX_KEYS = re.compile(r"^(Page|x|y|h|v|W|H|Input|Line|Column):")
 #: seconds per ``synctex`` call (one takes milliseconds) and attempts: MiKTeX's synctex on
 #: Windows rarely hangs at start-up, before it reads anything (1 in about 17,000 calls in CI,
@@ -270,6 +272,62 @@ def _first(result: list[str], key: str) -> str:
     return found
 
 
+#: a record with an input tag: type, tag, line (the rest of the line is compared as it is)
+_RECORD = re.compile(r"^([\[(hgkx$vrf])(\d+),(\d+)")
+
+
+def input_key(name: str, cwd: Path) -> tuple[str, bool]:
+    """How a SyncTeX input is compared (§3.3 item 4): a ``.tex`` file below ``cwd`` by its path
+    relative to ``cwd`` (``/./`` and separators normalised, case-insensitive on Windows), any
+    other file by its name; and whether its line numbers are compared (only for ``.tex``
+    files: generated files such as ``.toc`` or ``.bbl`` differ in their line numbers)."""
+    given = Path(os.path.normpath(name.replace("\\", "/").replace("/./", "/")))
+    path = str(given if given.is_absolute() else Path(os.path.normpath(cwd / given)))
+    base = os.path.normpath(cwd)
+    is_tex = path.lower().endswith(".tex")
+    if is_tex and os.path.normcase(path).startswith(os.path.normcase(base) + os.sep):
+        return path[len(base) + 1 :].replace("\\", "/"), True
+    return Path(path).name, is_tex
+
+
+@dataclass
+class SyncTexRecords:
+    """The records of a SyncTeX file in a form independent of tag numbers and paths
+    (``"<page>|<type><file>,<line><rest>"``, ``*`` for the line of a generated file) and the
+    lines with records per compared input (:func:`input_key`)."""
+
+    records: list[str]
+    lines: dict[str, set[int]]
+
+
+def synctex_records(path: Path, cwd: Path) -> SyncTexRecords:
+    """§3.3 item 4: the normalised records of a ``.synctex.gz`` file; ``!`` offsets,
+    ``Input:`` lines, header and postamble are left out (:func:`chapmk.synctex.parse`)."""
+    parsed = parse_synctex(path)
+    keys = {tag: input_key(name, cwd) for tag, name in parsed.inputs.items()}
+    out = SyncTexRecords([], {})
+    for page in sorted(parsed.sheets):
+        for line in parsed.sheets[page]:
+            m = _RECORD.match(line)
+            if m:
+                key, numbered = keys.get(m.group(2), (f"?{m.group(2)}", True))
+                if numbered:
+                    out.lines.setdefault(key, set()).add(int(m.group(3)))
+                number = m.group(3) if numbered else "*"
+                line = f"{m.group(1)}{key},{number}{line[m.end() :]}"
+            out.records.append(f"{page}|{line}")
+    return out
+
+
+def _spread(lines: Sequence[int], count: int) -> list[int]:
+    """``count`` of the sorted ``lines``, evenly spread (the middle one for 1)."""
+    if not lines or count <= 0:
+        return []
+    if count >= len(lines):
+        return list(lines)
+    return [lines[(2 * i + 1) * len(lines) // (2 * count)] for i in range(count)]
+
+
 def compare_synctex(
     ref_pdf: Path,
     got_pdf: Path,
@@ -279,21 +337,23 @@ def compare_synctex(
     samples: int = SYNCTEX_SAMPLES,
     report: Report | None = None,
 ) -> Report:
-    """§3.3 item 4: ``synctex view`` at up to ``samples`` lines per source file (evenly spread
-    over the lines that have records in the reference) and ``synctex edit`` at the resulting
-    positions. ``sources`` are relative to ``cwd`` or absolute, in the form ``synctex view``
-    matches for the distribution (:meth:`TexDistribution.synctex_query`). No record found for
-    any source is a difference: the comparison would otherwise pass without comparing (S11)."""
+    """§3.3 item 4. All records of both SyncTeX files after normalisation
+    (:func:`synctex_records`); then ``synctex view`` at ``samples`` lines per source file
+    (evenly spread over its lines with records in the reference) and ``synctex edit`` at the
+    resulting positions, which shows that editors find the records. ``sources`` are relative
+    to ``cwd`` or absolute, in the form ``synctex view`` matches for the distribution
+    (:meth:`TexDistribution.synctex_query`). No record found by ``synctex view`` for any
+    source is a difference: the comparison would otherwise pass without querying (S11)."""
     report = report or Report()
+    ref = synctex_records(ref_pdf.with_name(ref_pdf.stem + ".synctex.gz"), cwd)
+    got = synctex_records(got_pdf.with_name(got_pdf.stem + ".synctex.gz"), cwd)
+    report.compare("synctex records", ref.records, got.records)
     ref_views: list[list[str]] = []
     got_views: list[list[str]] = []
     ref_edits: list[list[str]] = []
     got_edits: list[list[str]] = []
     for source in sources:
-        n = len(read_log(cwd / source).split("\n"))
-        step = max(1, n // (samples * 3))
-        hits = 0
-        for line in range(1, n + 1, step):
+        for line in _spread(sorted(ref.lines.get(input_key(source, cwd)[0], ())), samples):
             a = _synctex(["view", "-i", f"{line}:1:{source}", "-o", str(ref_pdf)], cwd)
             if not a:
                 continue
@@ -303,9 +363,6 @@ def compare_synctex(
             page, x, y = _first(a, "Page"), _first(a, "x"), _first(a, "y")
             ref_edits.append(_synctex(["edit", "-o", f"{page}:{x}:{y}:{ref_pdf}"], cwd))
             got_edits.append(_synctex(["edit", "-o", f"{page}:{x}:{y}:{got_pdf}"], cwd))
-            hits += 1
-            if hits >= samples:
-                break
     report.compare("synctex view", ref_views, got_views)
     report.compare("synctex edit", ref_edits, got_edits)
     if sources and not ref_views:
