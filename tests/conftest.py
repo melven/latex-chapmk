@@ -27,7 +27,7 @@ CORPUS = REPO / "tests" / "corpus"
 # files, the TeX installation (tex_key) and, for --full references, the full-mode code
 # (FULL_MODE_CODE). Entries of older keys stay unused: rm -rf .test-cache frees the space. CI
 # restores the cache of an earlier run with the same image and full-mode code
-# (.github/workflows/ci.yml; keep its key and FULL_MODE_CODE in sync).
+# (.github/workflows/ci.yml and miktex-linux.yml; keep their keys and FULL_MODE_CODE in sync).
 REFERENCE_CACHE = REPO / ".test-cache"
 FULL_MODE_CODE = tuple(
     REPO / "src" / "chapmk" / name
@@ -54,28 +54,37 @@ def pytest_report_header(config: pytest.Config) -> list[str]:
     ]
 
 
+def _stdout(argv: list[str]) -> str:
+    return subprocess.run(argv, capture_output=True, text=True, check=False).stdout
+
+
+def _file_name_databases() -> list[Path]:
+    """The file name databases, rewritten by every package installation or update. TeX Live:
+    ``ls-R`` of the distribution trees. MiKTeX has no ``ls-R``: its ``*.fndb-5`` files in the
+    data directories that ``initexmf --report`` names (``UserData``, ``CommonData``)."""
+    trees = _stdout(["kpsewhich", "-var-value", "TEXMFDIST", "-var-value", "TEXMFLOCAL"]).split()
+    dbs = [Path(tree) / "ls-R" for tree in trees]
+    if shutil.which("initexmf"):
+        for line in _stdout(["initexmf", "--report"]).splitlines():
+            key, sep, value = line.partition(":")
+            if sep and key.strip() in ("UserData", "CommonData") and value.strip():
+                dbs += sorted((Path(value.strip()) / "miktex" / "data" / "le").glob("*.fndb-5"))
+    return [db for db in dbs if db.is_file()]
+
+
 @functools.cache
 def tex_key() -> str:
     """The TeX installation: pdflatex's version line and the stat signatures of the file name
-    databases (``ls-R``, rewritten by every package update) of the distribution trees."""
+    databases (:func:`_file_name_databases`)."""
     try:
-        version = subprocess.run(
-            ["pdflatex", "--version"], capture_output=True, text=True, check=False
-        ).stdout.partition("\n")[0]
-        trees = subprocess.run(
-            ["kpsewhich", "-var-value", "TEXMFDIST", "-var-value", "TEXMFLOCAL"],
-            capture_output=True,
-            text=True,
-            check=False,
-        ).stdout.split()
+        version = _stdout(["pdflatex", "--version"]).partition("\n")[0]
+        dbs = _file_name_databases()
     except OSError:  # no TeX: nothing to build references with
         return "no-tex"
     parts = [version]
-    for tree in trees:
-        db = Path(tree) / "ls-R"
-        if db.is_file():
-            st = db.stat()
-            parts.append(f"{db}:{st.st_size}:{st.st_mtime_ns}")
+    for db in dbs:
+        st = db.stat()
+        parts.append(f"{db}:{st.st_size}:{st.st_mtime_ns}")
     return hashlib.sha256("\0".join(parts).encode()).hexdigest()[:16]
 
 

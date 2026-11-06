@@ -34,16 +34,37 @@ jobs:
             docker tag chapmk-miktex "$image"
             docker push -q "$image" || echo "::warning::could not publish $image (no package permission)"
           fi
+      - name: Reference cache key
+        # the references depend on the TeX installation (the image itself: rebuilt under the same
+        # tag it has newer packages) and the full-mode code (tests/conftest.py, FULL_MODE_CODE;
+        # keep in sync with ci.yml)
+        id: refs
+        run: |
+          echo "image=$(docker image inspect -f '{{.Id}}' chapmk-miktex | cut -d: -f2 | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "code=${{ hashFiles('tests/conftest.py', 'src/chapmk/fullbuild.py', 'src/chapmk/gensrc.py', 'src/chapmk/texdist.py', 'src/chapmk/pictures.py', 'src/chapmk/synctex.py', 'src/chapmk/publish.py', 'src/chapmk/tex/chapmk-ini.sty') }}" >> "$GITHUB_OUTPUT"
+      - name: Reference cache
+        # .test-cache: --full and latexmk references, restored from the latest run with the same
+        # image and code (as in ci.yml); writable for the container's users
+        uses: actions/cache@v4
+        with:
+          path: .test-cache
+          key: miktex-refs-${{ steps.refs.outputs.image }}-${{ steps.refs.outputs.code }}-${{ github.run_id }}
+          restore-keys: miktex-refs-${{ steps.refs.outputs.image }}-${{ steps.refs.outputs.code }}-
       - name: Smoke test (corpora with latexmk, biber, makeindex, synctex, mylatexformat)
         run: docker run --rm -v "$PWD":/work:ro chapmk-miktex bash /work/tests/miktex-smoke.sh
       # as root and as the image's user: MiKTeX run as root warns on stderr ("security risk:
       # running with elevated privileges") and keeps its user data in /root/.miktex; the
-      # repository is copied, as the image's user cannot write the runner's checkout
+      # repository is copied, as the image's user cannot write the runner's checkout. The
+      # reference cache .test-cache is mounted writable for both (the second run reuses the
+      # references of the first)
+      - name: Reference cache writable in the container
+        run: mkdir -p .test-cache && chmod 777 .test-cache
       - name: Lint, type-check, all tests as root (slow, scenario, acceptance)
         run: |
-          docker run --rm -v "$PWD":/work:ro --user root chapmk-miktex bash -c '
+          docker run --rm -v "$PWD":/work:ro -v "$PWD/.test-cache":/cache --user root chapmk-miktex bash -c '
             set -e
-            w=$(mktemp -d); cp -a /work/. "$w"; cd "$w"
+            w=$(mktemp -d); tar -C /work --exclude=./.test-cache -cf - . | tar -C "$w" -xf -
+            ln -s /cache "$w/.test-cache"; cd "$w"
             pip install -e .
             ruff check . && ruff format --check .
             mypy --strict src
@@ -52,9 +73,10 @@ jobs:
       - name: All tests as non-root user (slow, scenario, acceptance)
         if: success() || failure()
         run: |
-          docker run --rm -v "$PWD":/work:ro chapmk-miktex bash -c '
+          docker run --rm -v "$PWD":/work:ro -v "$PWD/.test-cache":/cache chapmk-miktex bash -c '
             set -e
-            w=$(mktemp -d); cp -a /work/. "$w"; cd "$w"
+            w=$(mktemp -d); tar -C /work --exclude=./.test-cache -cf - . | tar -C "$w" -xf -
+            ln -s /cache "$w/.test-cache"; cd "$w"
             pip install -q -e .
             pytest -n auto --dist worksteal
           '
