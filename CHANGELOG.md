@@ -39,7 +39,8 @@ First test release (formerly developed as `fastinc`).
 - The published log is composed in document order from the runs (messages as in a full build,
   preamble from the format build).
 - `--print-log` writes the log to stdout, also after a TeX error, for editors that parse only
-  the build output (VS Code LaTeX Workshop: errors and warnings of all runs).
+  the build output (VS Code LaTeX Workshop: errors and warnings of all runs), followed by the
+  last biber run's output (biber's warnings and errors, as in latexmk's output).
 - A missing `mylatexformat` is reported at startup with how to install it (TeX Live:
   `tlmgr`; MiKTeX: MiKTeX Console or `miktex packages install`, unless MiKTeX installs missing
   packages on the fly). An error that TeX writes only to the terminal (e.g. a missing file on

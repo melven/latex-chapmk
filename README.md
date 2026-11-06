@@ -50,8 +50,8 @@ chapmk clean [MAIN]
 - Exit codes: 0 ok, 1 TeX error (or `check` found a difference), 2 other error, 3 internal
   error, 130/143 interrupted. One build per document at a time (a second one waits).
 - `--report FILE`: JSON with the runs, why each chapter was recompiled, and times.
-- `--print-log`: also write the log to stdout (also after an error), for editors that parse
-  only the output of the build command.
+- `--print-log`: also write the log and biber's output to stdout (also after an error), for
+  editors that parse only the output of the build command.
 - Optional `chapmk.toml` next to the main file: [docs/configuration.md](docs/configuration.md).
 
 ## Editor setup

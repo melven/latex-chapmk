@@ -128,6 +128,23 @@ def test_composed_log_matches_a_full_build(copy_corpus, tmp_path: Path, capsys) 
     assert f"Output written on {src / 'main.pdf'}" in log
 
 
+def test_print_log_includes_biber_output(copy_corpus, capsys) -> None:  # type: ignore[no-untyped-def]
+    """--print-log (§6.13) also writes the last biber run's output, from which LaTeX Workshop
+    takes biber's warnings (here: a missing entry), as latexmk's output contains it;
+    incremental (canon/) and full mode (full/)."""
+    src = copy_corpus("minimal/S1-format")
+    main_tex = src / "main.tex"
+    main_tex.write_text(
+        main_tex.read_text().replace("\\cite{lamport94}", "\\cite{lamport94,nosuchkey}")
+    )
+    for extra in ([], ["--full"]):
+        assert main(["build", "main.tex", "--print-log", *extra], cwd=src) == 0
+        out = capsys.readouterr().out
+        assert "INFO - This is Biber" in out, extra
+        assert "WARN - I didn't find a database entry for 'nosuchkey'" in out, extra
+        assert "INFO - Found BibTeX data source 'thesis.bib'" in out, extra
+
+
 def test_clean(tmp_path: Path) -> None:
     src = tmp_path / "s"
     src.mkdir()
