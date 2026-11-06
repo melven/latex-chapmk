@@ -12,7 +12,7 @@ from chapmk.files import (
     write_atomic,
 )
 from chapmk.logs import run_error
-from chapmk.shadow import source_inputs
+from chapmk.recorder import fls_inputs, loaded_names, source_inputs
 
 
 def test_changed_files(tmp_path: Path) -> None:
@@ -66,3 +66,11 @@ def test_recorded_and_source_names(tmp_path: Path) -> None:
     assert source_name("ch/b.tex", tmp_path) is None
     assert source_name("ch", tmp_path) is None  # a directory
     assert source_name("/", tmp_path) is None
+
+
+def test_fls_inputs_and_loaded_names(tmp_path: Path) -> None:
+    fls = tmp_path / "r.fls"
+    assert fls_inputs(fls) == [] and loaded_names(fls) == frozenset()
+    fls.write_bytes(b"PWD /w\r\nINPUT /tex/hyperref.sty\r\nOUTPUT r.log\r\nINPUT ./ch/a.tex\r\n")
+    assert fls_inputs(fls) == ["/tex/hyperref.sty", "./ch/a.tex"]
+    assert loaded_names(fls) == {"hyperref.sty", "a.tex"}

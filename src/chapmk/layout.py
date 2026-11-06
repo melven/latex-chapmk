@@ -55,6 +55,12 @@ class Layout:
     def full_fig_dir(self) -> Path:
         return self.build_dir / "fig-full"
 
+    @property
+    def internal_dirs(self) -> tuple[Path, ...]:
+        """Directories whose files are not distribution inputs (shadow tree, build and source
+        directory; :func:`chapmk.recorder.external_inputs`)."""
+        return (self.shadow_dir, self.build_dir, self.source_dir)
+
     def output(self, suffix: str) -> Path:
         """Published file ``<out_dir>/<jobname><suffix>`` (``.pdf``, ``.synctex.gz``, ``.log``)."""
         return self.out_dir / f"{self.jobname}{suffix}"

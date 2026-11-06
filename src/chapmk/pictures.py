@@ -30,7 +30,7 @@ from pathlib import Path
 
 from chapmk.deps import TokenScan, changed_imports, imports
 from chapmk.files import digest, read_log, source_name, write_atomic
-from chapmk.shadow import changed_signatures
+from chapmk.recorder import changed_signatures
 from chapmk.texdist import tex_path
 from chapmk.texsource import text_lines
 

@@ -11,13 +11,12 @@ import os
 import re
 import shutil
 import sys
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from chapmk.analysis import Analysis
 from chapmk.facts import DEFAULT_LIST_SUFFIXES, TOOL_SUFFIXES
-from chapmk.files import read_raw
 from chapmk.layout import DEFAULT_BUILD_DIR
 
 ALWAYS_SKIPPED_DIRS = frozenset({".git", ".hg", ".svn"})
@@ -190,77 +189,3 @@ def sync_project_shadow(
         skip_dirs=[build_dir, analysis.source_dir / DEFAULT_BUILD_DIR],
         excluded=build_output_filter(analysis, list_suffixes),
     )
-
-
-def read_inputs(fls: Path, cwd: Path, within: Path) -> set[Path]:
-    """Files read by a run (``INPUT`` lines of the ``-recorder`` file) that lie in ``within``,
-    as paths below ``within``. The test is made on the normalised path before resolving
-    symlinks (files of the shadow tree are symlinks into the source directory), and on the
-    resolved path (a ``within`` given through a symlink)."""
-    if not fls.is_file():
-        return set()
-    root = Path(within).absolute()
-    resolved_root = root.resolve()
-    found: set[Path] = set()
-    for line in read_raw(fls).split("\n"):
-        if line.startswith("INPUT "):
-            p = Path(line[6:].rstrip("\r"))
-            p = Path(os.path.normpath(p if p.is_absolute() else Path(cwd).absolute() / p))
-            if p.is_relative_to(root):
-                rel = p.relative_to(root)
-            elif p.resolve().is_relative_to(resolved_root):
-                rel = p.resolve().relative_to(resolved_root)
-            else:
-                continue
-            if (root / rel).is_file():
-                found.add(root / rel)
-    return found
-
-
-def source_inputs(fls: Path, shadow_dir: Path, source_dir: Path) -> set[str]:
-    """Source files a run read through the shadow tree: the :func:`read_inputs` below
-    ``shadow_dir`` that exist in ``source_dir``, as relative posix names."""
-    root = Path(shadow_dir).absolute()
-    return {
-        name
-        for path in read_inputs(fls, shadow_dir, shadow_dir)
-        if (source_dir / (name := path.relative_to(root).as_posix())).is_file()
-    }
-
-
-def external_inputs(fls: Path, cwd: Path, internal: Iterable[Path]) -> set[Path]:
-    """Files read by a run (``INPUT`` lines) outside the ``internal`` directories (shadow
-    tree, build and source directory): the TeX distribution, ``TEXMFHOME``, ``TEXINPUTS``.
-    Absolute, normalised paths of existing files."""
-    if not fls.is_file():
-        return set()
-    roots = [Path(d).absolute() for d in internal]
-    roots += [r.resolve() for r in roots]
-    found: set[Path] = set()
-    for line in read_raw(fls).split("\n"):
-        if line.startswith("INPUT "):
-            p = Path(line[6:].rstrip("\r"))
-            p = Path(os.path.normpath(p if p.is_absolute() else Path(cwd).absolute() / p))
-            if any(p.is_relative_to(r) for r in roots) or not p.is_file():
-                continue
-            if not any(p.resolve().is_relative_to(r) for r in roots):
-                found.add(p)
-    return found
-
-
-def _stat(path: Path) -> str:
-    try:
-        st = path.stat()
-    except OSError:
-        return ""
-    return f"{st.st_size}:{st.st_mtime_ns}"
-
-
-def stat_signatures(paths: Iterable[Path]) -> dict[str, str]:
-    """``{path: "size:mtime_ns"}``: cheap change detection for distribution files (C4)."""
-    return {p.as_posix(): _stat(p) for p in paths}
-
-
-def changed_signatures(signatures: Mapping[str, str]) -> list[str]:
-    """Paths whose size or mtime changed since :func:`stat_signatures` (or that vanished)."""
-    return [p for p, s in signatures.items() if _stat(Path(p)) != s]

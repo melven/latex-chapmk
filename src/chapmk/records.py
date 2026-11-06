@@ -12,6 +12,7 @@ from chapmk.analysis import Analysis
 from chapmk.auxfile import read_lines, segment_slices, statements
 from chapmk.errors import FallbackError
 from chapmk.files import read_log, read_raw, recorded_name
+from chapmk.recorder import loaded_names
 from chapmk.segment import glue_id, is_glue, is_segment, unit_id
 from chapmk.texsource import text_lines
 
@@ -393,8 +394,4 @@ class RunView:
     @cached_property
     def loaded(self) -> frozenset[str]:
         """File names (without directory) of the ``INPUT`` lines of the run's ``.fls``."""
-        path = self.file(".fls")
-        if not path.is_file():
-            return frozenset()
-        lines = text_lines(read_log(path))
-        return frozenset(Path(line[6:]).name for line in lines if line.startswith("INPUT "))
+        return loaded_names(self.file(".fls"))

@@ -12,11 +12,9 @@ from chapmk.config import Config
 from chapmk.errors import ToolError, ToolTimeoutError
 from chapmk.layout import make_layout
 from chapmk.proc import run
+from chapmk.recorder import changed_signatures, external_inputs, stat_signatures
 from chapmk.shadow import (
     build_output_filter,
-    changed_signatures,
-    external_inputs,
-    stat_signatures,
     sync_project_shadow,
     sync_shadow,
 )
