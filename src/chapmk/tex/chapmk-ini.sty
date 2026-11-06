@@ -51,8 +51,19 @@
 % not \theta): otherwise shifted page numbers would invalidate every later figure
 \edef\chapmk@countersre{\detokenize{\\}(the([^t]|t[^a]|ta[^ ])|arabic|roman|Roman|alph|Alph|%
   fnsymbol|value|number|romannumeral|c@)}
+% S14: side effects a cached figure cannot replay (aux records of `remember picture' and of a
+% \label in the picture): such a picture is not externalized, as with \tikzexternaldisable
+\edef\chapmk@sidefxre{remember picture|\detokenize{\\}label[^a-zA-Z@]}
 % replaces TikZ external's system-call handler; #1: the picture body
 \long\def\chapmk@picture#1{%
+  \ifnum\pdfmatch{\chapmk@sidefxre}{\detokenize{#1}}=1
+    \expandafter\@firstoftwo\else\expandafter\@secondoftwo\fi
+  {\chapmk@sidefx{#1}}{\chapmk@picture@{#1}}}
+\long\def\chapmk@sidefx#1{%
+  \PackageWarning{chapmk}{Picture not externalized: its code has `remember picture'\MessageBreak
+    or \string\label, which a cached figure cannot replay}%
+  \tikzexternaldisable\tikzpicture#1\end{tikzpicture}}
+\long\def\chapmk@picture@#1{%
   \chapmk@picstate@setup
   \edef\chapmk@pickey{\pdfmdfivesum{\detokenize{#1}|\chapmk@picstamp|\chapmk@picrefs|%
     \ifnum\pdfmatch{\chapmk@countersre}{\detokenize{#1}}=1 \chapmk@picstate\fi|\the\linewidth|\the\hsize|\fontname\font|\f@size|\the\baselineskip|%
