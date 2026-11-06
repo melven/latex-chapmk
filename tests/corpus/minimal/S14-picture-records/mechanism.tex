@@ -1,0 +1,24 @@
+% S14 mechanism, without chapmk: a box with delayed writes (a \label, the position record of
+% `remember picture') shipped twice, as chapmk-ini.sty's extra page does. Run twice with
+%   pdflatex mechanism.tex                        (plain: duplicates)
+%   pdflatex '\def\useskip{}\input{mechanism}'    (enclosed in the skip markers)
+% and look for "multiply defined" in the second run's log.
+\documentclass{article}
+\usepackage{tikz}
+\makeatletter
+\newbox\picbox
+\def\skipmark#1{\if@filesw\immediate\write\@auxout{\string#1}\fi}
+\long\def\chapmk@picskip#1\chapmk@picskipend{}
+\let\chapmk@picskipend\relax
+\ExplSyntaxOn \cs_new_eq:NN \rawshipout \tex_shipout:D \ExplSyntaxOff
+\begin{document}
+\setbox\picbox\hbox{\begin{tikzpicture}[remember picture]
+  \node (m) {mark\label{pic:node}};\end{tikzpicture}}
+\begingroup
+  \ifdefined\useskip\skipmark\chapmk@picskip\fi
+  \rawshipout\vbox{\copy\picbox}%
+  \ifdefined\useskip\skipmark\chapmk@picskipend\fi
+\endgroup
+\noindent\box\picbox\ see page \pageref{pic:node}.
+\begin{tikzpicture}[remember picture,overlay]\draw[->] (m) -- ++(1,1);\end{tikzpicture}
+\end{document}
