@@ -177,7 +177,11 @@
   \AddToHook{cmd/pgfpicture/before}{\chapmk@time{picture+}}%
   \AddToHook{cmd/endpgfpicture/after}{\chapmk@time{picture-}}\fi}
 \def\chapmk@main#1{\immediate\write\@mainaux{#1}}
-\def\chapmk@entry@rec{\chapmk@time{\chapmk@seg}\chapmk@markmap\chapmk@msnap\chapmk@mprep
+% segment start marker in the log (§6.13: the driver composes one log from the runs' slices;
+% \include's \clearpage before include/before and include/after puts each segment's pages
+% and messages between its markers)
+\def\chapmk@logmark#1{\wlog{chapmk-segment: #1}}
+\def\chapmk@entry@rec{\chapmk@logmark{\chapmk@seg}\chapmk@time{\chapmk@seg}\chapmk@markmap\chapmk@msnap\chapmk@mprep
   \def\chapmk@pfx{chapmk@b}%
   \chapmk@main{\string\chapmk@entry{\chapmk@seg}{\chapmk@vec}}}
 \def\chapmk@gexit@rec{\chapmk@mprep\def\chapmk@pfx{chapmk@b}%
@@ -349,6 +353,10 @@
   \chapmk@main{\string\chapmk@base{\chapmk@vec}}%
   \chapmk@entry@rec\chapmk@mark
   \gdef\chapmk@absnames{}}
+
+% end of the last segment's pages: the rest of the log (aux check, rerun warnings, output
+% summary) is the tail of the composed log
+\AddToHook{enddocument/afterlastpage}{\chapmk@logmark{end}}
 
 % end of the last glue segment; bookmark levels (S6: \BKM@<id> = {parent}{level}{children})
 \def\chapmk@lvl#1#2#3{#2}
