@@ -5,12 +5,14 @@ from pathlib import Path
 import pytest
 
 from chapmk.config import ConfigError, parse_config_file
+from chapmk.deps import short_hash
 from chapmk.pictures import (
     INPUTS_FILE,
     PictureRecord,
     check_inputs,
     collect_garbage,
     driver_file,
+    picture_stamp,
     read_pictures,
     record_inputs,
     remove_figures,
@@ -122,3 +124,9 @@ def test_cache_inputs(tmp_path: Path) -> None:
     assert check_inputs(fig) is True
     assert list(fig.iterdir()) == []
     assert check_inputs(fig) is False
+
+
+def test_picture_stamp() -> None:
+    """The stamp is part of every figure key: a change of its text invalidates all caches."""
+    fingerprints = {"preamble": "p", "main": "m"}
+    assert picture_stamp("fmt", fingerprints) == short_hash('fmt{"main": "m", "preamble": "p"}')

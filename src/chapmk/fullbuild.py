@@ -26,15 +26,13 @@ from chapmk.layout import Layout
 from chapmk.logs import map_paths, run_error, short_list
 from chapmk.pictures import (
     PICS_FILE,
-    check_inputs,
     collect_garbage,
     driver_file,
-    export_figures,
+    export_run,
+    picture_stamp,
     read_pictures,
     record_inputs,
-    remove_figures,
-    stale_figures,
-    store_references,
+    refresh_cache,
 )
 from chapmk.proc import run
 from chapmk.publish import copy_bytes, publish, publish_all, text_writer
@@ -202,11 +200,7 @@ def full_build(
         (out / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
     argv = dist.pdflatex(full_mode_input(analysis), job, out)
     fig_dir = (fig_dir or layout.full_fig_dir) if picture_cache else None
-    # format stamp: distribution, chapmk-ini.sty, chapmk.sty, driver version, preamble
-    stamp = short_hash(
-        format_stamp(analysis, dist.version)
-        + json.dumps(asdict(analysis.fingerprints), sort_keys=True)
-    )
+    stamp = picture_stamp(format_stamp(analysis, dist.version), asdict(analysis.fingerprints))
 
     def run_pass() -> PassResult:
         # key part for references in pictures: all label and citation values of the last pass
@@ -215,8 +209,7 @@ def full_build(
         values.update(cite_values(out / f"{job}.bbl"))
         refs = short_hash(json.dumps(sorted(values.items())))
         if fig_dir is not None:  # package updates; files (tables, inputs, images) changed
-            check_inputs(fig_dir)
-            remove_figures(fig_dir, stale_figures(fig_dir, None, analysis.source_dir))
+            refresh_cache(fig_dir, None, analysis.source_dir)
         text = driver_file(fig_dir, layout.shadow_dir, stamp, {"-": refs})
         (out / PICS_FILE).write_text(text, encoding="utf-8")
         result = run(argv, cwd=layout.shadow_dir, env=env)
@@ -224,10 +217,8 @@ def full_build(
             pictures = read_pictures(out / f"{job}.log")
             exported = 0
             if fig_dir is not None:
-                exported = export_figures(out / f"{job}.pdf", pictures, fig_dir)
-                for p in pictures:
-                    if p.exported:
-                        store_references(fig_dir, p, {}, analysis.source_dir)
+                pdf = out / f"{job}.pdf"
+                exported = export_run(fig_dir, pdf, pictures, {}, analysis.source_dir)
                 if exported:
                     fls = out / f"{job}.fls"
                     dist_files = external_inputs(fls, layout.shadow_dir, internal_dirs(layout))

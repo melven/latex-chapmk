@@ -28,7 +28,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from chapmk.deps import TokenScan, changed_imports, imports
+from chapmk.deps import TokenScan, changed_imports, imports, short_hash
 from chapmk.files import digest, read_log, source_name, write_atomic
 from chapmk.shadow import changed_signatures
 from chapmk.texdist import tex_path
@@ -120,6 +120,30 @@ def export_figures(pdf: Path, records: Iterable[PictureRecord], fig_dir: Path) -
             write_atomic(fig_dir / f"{r.key}.dpth", f"{r.depth}\n")
             tmp.replace(fig_dir / f"{r.key}.pdf")
     return len(exported)
+
+
+def export_run(
+    fig_dir: Path,
+    pdf: Path,
+    records: Iterable[PictureRecord],
+    values: Mapping[str, str],
+    source_dir: Path,
+) -> int:
+    """Export the figures of a run (:func:`export_figures`) and store their references
+    (:func:`store_references`, ``values``: the label and citation values the run read);
+    returns the number exported."""
+    records = list(records)
+    exported = export_figures(pdf, records, fig_dir)
+    for rec in records:
+        if rec.exported:
+            store_references(fig_dir, rec, values, source_dir)
+    return exported
+
+
+def picture_stamp(format_stamp: str, fingerprints: Mapping[str, object]) -> str:
+    """The stamp of the figures (§6.17): format stamp (distribution, chapmk-ini.sty,
+    chapmk.sty, driver version, preamble) and the analysis fingerprints (as in ``state.json``)."""
+    return short_hash(format_stamp + json.dumps(fingerprints, sort_keys=True))
 
 
 def driver_file(fig_dir: Path | None, cwd: Path, stamp: str, refs: Mapping[str, str]) -> str:
@@ -218,6 +242,13 @@ def check_inputs(fig_dir: Path) -> bool:
         if f.is_file():
             f.unlink()
     return True
+
+
+def refresh_cache(fig_dir: Path, values: Mapping[str, str] | None, source_dir: Path) -> None:
+    """Before runs that use the cache: empty it after package updates (:func:`check_inputs`),
+    then remove the :func:`stale_figures` (their pictures are exported again)."""
+    check_inputs(fig_dir)
+    remove_figures(fig_dir, stale_figures(fig_dir, values, source_dir))
 
 
 def remove_figures(fig_dir: Path, keys: Iterable[str]) -> None:
