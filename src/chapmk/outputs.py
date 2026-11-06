@@ -12,7 +12,7 @@ from chapmk.analysis import Analysis
 from chapmk.auxfile import parse_bookmark
 from chapmk.errors import FallbackError, TexError
 from chapmk.files import digest, read_log, write_atomic
-from chapmk.fmt import FORMAT_NAME
+from chapmk.fmt import FORMAT_NAME, format_path_map
 from chapmk.layout import Layout
 from chapmk.logs import compose_log, format_preamble, map_paths
 from chapmk.publish import publish, publish_all, text_writer
@@ -155,12 +155,10 @@ def _composed_log(
         name: map_run_paths(analysis, layout, view(name).directory, view(name).log)
         for name in names
     }
-    fmt_tex = layout.fmt_dir / f"{FORMAT_NAME}.tex"
     fmt_log = layout.fmt_dir / f"{FORMAT_NAME}.log"
     preamble = ""
     if fmt_log.is_file():
-        main = str(analysis.main)
-        mapping = [(fmt_tex.as_posix(), main), (str(fmt_tex), main), *layout.path_map()]
+        mapping = format_path_map(analysis, layout)
         preamble = format_preamble(map_paths(read_log(fmt_log), mapping))
     plural = "" if pages == 1 else "s"
     size = pdf.stat().st_size if pdf.is_file() else 0

@@ -106,6 +106,15 @@ def _lost_state(log: str) -> str | None:
     return None
 
 
+def format_path_map(analysis: Analysis, layout: Layout) -> list[tuple[str, str]]:
+    """Path map for the format build's messages and log: the format source ``pre.tex`` keeps
+    the main file's line numbers, so it maps to the main file; then :meth:`Layout.path_map`."""
+    source = layout.fmt_dir / f"{FORMAT_NAME}.tex"
+    main = str(analysis.main)
+    forms = dict.fromkeys([str(source), source.as_posix()])
+    return [*((form, main) for form in forms), *layout.path_map()]
+
+
 def ensure_format(
     analysis: Analysis, layout: Layout, dist: TexDistribution, env: Mapping[str, str]
 ) -> FormatInfo:
@@ -140,7 +149,7 @@ def ensure_format(
     )
     log_file = fmt_dir / f"{FORMAT_NAME}.log"
     if not result.ok or not fmt_file.is_file():
-        err = run_error(log_file, result.output, layout.path_map())
+        err = run_error(log_file, result.output, format_path_map(analysis, layout))
         raise TexError("format build failed", log=log_file, first_error=err)
     lost = _lost_state(read_log(log_file))
     if lost:
