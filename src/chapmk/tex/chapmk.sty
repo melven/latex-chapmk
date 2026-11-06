@@ -256,7 +256,7 @@
   \expandafter\global\expandafter\let\csname chapmk@mk@#1\endcsname\chapmk@lastmk
   \global\let\chapmk@lastmk\@empty
   \chapmk@orig@setckpt{#1}{\chapmk@excluded@begin{#1}#2\chapmk@restore{#1}}}
-\def\chapmk@excluded@begin#1{\chapmk@firstpage\chapmk@unit@begin{#1}\xdef\chapmk@wrapped{\chapmk@k}}
+\def\chapmk@excluded@begin#1{\chapmk@unit@begin{#1}\chapmk@firstpage\xdef\chapmk@wrapped{\chapmk@k}}
 % S15: the nodes on the main vertical list before the first page (\begin{document} material
 % such as hyperref's Doc-Start destination, the S13 nodes) go to the first page TeX ships. In
 % a full build that is the document's first page; when the document starts with an \include
@@ -266,6 +266,10 @@
 % shipout/before hooks (no page record), but LaTeX's shipout/firstpage material (hyperref) goes
 % onto this page, and the shipout counter counts it (page indices stay right). Local output
 % routine as \chapmk@capturemvl (S13): the empty \hbox and its \topskip glue are removed.
+% After the unit's entry record, as in a run that compiles the unit (its first page ships
+% after include/before): deferred writes of the glue before it (\addtocontents, babel's
+% language records) then reach the aux and list files after that record, not inside the
+% unit's list-file section or main-aux slice.
 \def\chapmk@firstpage{\ifvmode\ifnum\ReadonlyShipoutCounter=0 \ifnum\chapmk@pics=0
   \edef\chapmk@pd{\the\prevdepth}\edef\chapmk@op{\the\outputpenalty}%
   \begingroup
