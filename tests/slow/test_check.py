@@ -37,7 +37,7 @@ def test_identical_and_different(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     compare_synctex(a, b, [detect().synctex_query(src, "d.tex")], src, report=rep)
     assert rep.ok, rep.summary()
     assert rep.counts["links"] == 1 and rep.counts["outline items"] == 2
-    assert rep.counts["synctex view"] >= 3
+    assert rep.counts["synctex records"] > 0 and rep.counts["synctex view"] == 1
     c = build(src, "Other text.", "c")
     rep2 = compare_pdfs(a, c)
     assert {d.item for d in rep2.differences} >= {"raster pages", "text pages"}
