@@ -96,4 +96,6 @@ def test_full_build_matches_latexmk(
     compare_synctex(ref, ours, sources, src, report=report)
     print(report.summary())
     assert report.ok, report.summary()
-    assert report.counts["synctex view"] >= 5 * len(sources) // 2
+    # all records compared; one synctex view/edit query per source file (each has records)
+    assert report.counts["synctex records"] > 0
+    assert report.counts["synctex view"] == len(sources)
