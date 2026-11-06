@@ -7,20 +7,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from _helpers import EPOCH, build, edit
+from _helpers import checked, edit
+from conftest import EPOCH
 
 import chapmk.incremental
 from chapmk.cli import main
 
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
-
-
-def checked(src: Path, capsys: pytest.CaptureFixture[str]) -> dict[str, Any]:
-    rc, rep = build(src, "--check")
-    out = capsys.readouterr()
-    assert rc == 0, out.out + out.err
-    assert "PASS" in out.out, out.out
-    return rep
 
 
 def _document(src: Path) -> None:
@@ -39,7 +32,6 @@ def test_interrupted_commit(
     """C7: a build killed while committing (after commit_run, before the state is saved)
     leaves the journal; a canonical file it truncated is never read: the next build is cold
     and equals --full."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     _document(src)
     assert checked(src, capsys)["mode"] == "cold"
@@ -60,12 +52,9 @@ def test_interrupted_commit(
     assert not (canon / ".in-progress").exists()
 
 
-def test_interrupted_full_build(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_interrupted_full_build(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """C7: a full build killed during a pass may leave truncated aux files; the next full
     build starts from an empty full-mode directory."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     _document(src)
     assert main(["build", "main.tex", "--full"], cwd=src) == 0
@@ -132,7 +121,6 @@ def test_fallback_uses_the_state_epoch(
 ) -> None:
     """C11: a fallback full build days after the cold build uses the dates of the canonical
     state, like --full and the check reference (no spurious \\today difference)."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     _document(src)
     edit(src / "a.tex", "Alpha,", "Alpha (\\today),")
@@ -146,12 +134,10 @@ def test_fallback_uses_the_state_epoch(
 @pytest.mark.parametrize("mode", [(), ("--full",)])
 def test_biber_error_is_shown(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     mode: tuple[str, ...],
 ) -> None:
     """E7: a broken .bib: exit code 2 with biber's error lines, in both builders."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     src.mkdir()
     (src / "main.tex").write_text(
@@ -169,10 +155,9 @@ def test_biber_error_is_shown(
 
 
 def test_unreadable_state_gives_a_cold_build(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """E7: a corrupt state.json is a cold build with the reason, not an error."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     _document(src)
     assert checked(src, capsys)["mode"] == "cold"

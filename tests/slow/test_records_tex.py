@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pikepdf
 import pytest
-from conftest import hgb_class_loads_cmap
+from conftest import EPOCH, hgb_class_loads_cmap
 
 from chapmk.analysis import analyse
 from chapmk.config import Config
@@ -21,7 +21,6 @@ from chapmk.shadow import sync_project_shadow
 from chapmk.texdist import detect
 
 pytestmark = pytest.mark.slow
-EPOCH = 1700000000
 
 
 def setup(src: Path):  # type: ignore[no-untyped-def]
@@ -30,7 +29,7 @@ def setup(src: Path):  # type: ignore[no-untyped-def]
     lay = make_layout(cfg, a)
     sync_project_shadow(a, lay.shadow_dir, lay.build_dir)
     dist = detect()
-    env = dist.environment(EPOCH, os.environ, lay.fmt_dir)
+    env = dist.environment(int(EPOCH), os.environ, lay.fmt_dir)
     fmt = ensure_format(a, lay, dist, env)
     return a, lay, dist, env, fmt
 

@@ -7,27 +7,14 @@ compared with latexmk and real externalize in ``tests/acceptance/test_full_vs_la
 
 import re
 from pathlib import Path
-from typing import Any
 
 import pytest
-from _helpers import build, edit, selections
+from _helpers import checked, edit, reasons, selections
 
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
 
 PLOTS = "chapters/plots"
 _RECORD = re.compile(r"^chapmk-picture: ([xu]) \S+ .*?(\S+)$", re.MULTILINE)
-
-
-def checked(src: Path, capsys: pytest.CaptureFixture[str]) -> dict[str, Any]:
-    rc, rep = build(src, "--check")
-    out = capsys.readouterr()
-    assert rc == 0, out.out + out.err
-    assert "PASS" in out.out, out.out
-    return rep
-
-
-def reasons(rep: dict[str, Any]) -> list[str]:
-    return [x for r in rep["runs"] for rs in r["reasons"].values() for x in rs]
 
 
 def records(src: Path, run: str) -> list[tuple[str, str]]:
@@ -96,7 +83,7 @@ def test_page_shift_keeps_pictures(pictures: Path, capsys: pytest.CaptureFixture
     text = "\n\n".join(["Additional text to make the chapter longer. " * 40] * 8)
     edit(pictures / "chapters" / "plots.tex", "See Figure~", text + "\n\nSee Figure~")
     rep = checked(pictures, capsys)
-    diagrams = [x for r in rep["runs"] for x in r["reasons"].get("chapters/diagrams", [])]
+    diagrams = reasons(rep, "chapters/diagrams")
     assert any(x.startswith("entry state changed") for x in diagrams), diagrams
     assert [x for x in diagrams if x.startswith("pictures exported")] == [
         "pictures exported (1)"
@@ -107,6 +94,6 @@ def test_table_read_by_a_picture(pictures: Path, capsys: pytest.CaptureFixture[s
     """C3: a pgfplots table read by a picture changes; the picture key (its code) stays, but
     the figure is stale and exported again (also in the --full reference of check)."""
     table = pictures / "data" / "points.dat"
-    table.write_text(table.read_text().replace("3 4", "3 1"))
+    edit(table, "3 4", "3 1")
     rep = checked(pictures, capsys)
     assert any(r.startswith("pictures exported") for r in reasons(rep)), rep["runs"]

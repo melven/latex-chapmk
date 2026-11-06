@@ -27,8 +27,7 @@ def build(src: Path, body: str, out: str) -> Path:
     return src / out / "d.pdf"
 
 
-def test_identical_and_different(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", "1700000000")
+def test_identical_and_different(tmp_path: Path) -> None:
     src = tmp_path / "s"
     src.mkdir()
     a = build(src, "Same text.", "a")

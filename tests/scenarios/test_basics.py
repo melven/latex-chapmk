@@ -7,7 +7,7 @@ compiled includes from ``--report``.
 from pathlib import Path
 
 import pytest
-from _helpers import EPOCH, build, edit, selections
+from _helpers import build, edit, selections
 from conftest import hgb_class_loads_cmap
 
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
@@ -80,11 +80,9 @@ def test_t14_syntax_error_keeps_previous_pdf(
 
 
 def test_compilation_unit_grouping_hgb(
-    copy_corpus,
-    monkeypatch: pytest.MonkeyPatch,  # type: ignore[no-untyped-def]
+    copy_corpus,  # type: ignore[no-untyped-def]
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = copy_corpus("hgb")
     rc, rep = build(src)
     assert rc == 0
