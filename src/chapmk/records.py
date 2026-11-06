@@ -11,7 +11,7 @@ from pathlib import Path
 from chapmk.analysis import Analysis
 from chapmk.auxfile import read_lines, segment_slices, statements
 from chapmk.errors import FallbackError
-from chapmk.files import read_log, read_raw
+from chapmk.files import read_log, read_raw, recorded_name
 from chapmk.segment import glue_id, is_glue, is_segment, unit_id
 from chapmk.texsource import text_lines
 
@@ -340,9 +340,7 @@ def _read_run_records(run_dir: Path, analysis: Analysis) -> RunRecords:
 
 def _unit_name(recorded: str) -> str:
     """Normalise a recorded unit name (``/ch1.tex``, ``chapters/ch1.tex``, ``ch1``)."""
-    name = recorded.lstrip("/")
-    if name.startswith("./"):
-        name = name[2:]
+    name = recorded_name(recorded)
     return name[:-4] if name.endswith(".tex") else name
 
 

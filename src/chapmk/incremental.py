@@ -53,7 +53,7 @@ from chapmk.deps import imports, short_hash
 from chapmk.dirty import DirtyRules
 from chapmk.errors import FallbackError, TexError
 from chapmk.facts import UNIT_HEADINGS, UNSUPPORTED_PACKAGES, derived_suffixes
-from chapmk.files import changed_files, digest, read_log, write_atomic
+from chapmk.files import changed_files, digest, read_log, source_name, write_atomic
 from chapmk.fmt import (
     FormatInfo,
     ensure_format,
@@ -162,14 +162,8 @@ class Context:
 
 def _source_file(ctx: Context, recorded: str) -> str | None:
     """Source-tree path (relative, posix) of a file name recorded by a run, if it is one."""
-    name = recorded.lstrip("/")
-    name = name[2:] if name.startswith("./") else name
-    if not name:
-        return None
-    shadow = ctx.layout.shadow_dir / name
-    if shadow.is_file() and (ctx.analysis.source_dir / name).is_file():
-        return Path(name).as_posix()
-    return None
+    name = source_name(recorded, ctx.analysis.source_dir)
+    return name if name is not None and (ctx.layout.shadow_dir / name).is_file() else None
 
 
 def _hashes(ctx: Context, names: set[str]) -> dict[str, str]:

@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from chapmk.deps import TokenScan, changed_imports, imports
-from chapmk.files import digest, read_log, write_atomic
+from chapmk.files import digest, read_log, source_name, write_atomic
 from chapmk.shadow import changed_signatures
 from chapmk.texdist import tex_path
 from chapmk.texsource import text_lines
@@ -137,13 +137,6 @@ def driver_file(fig_dir: Path | None, cwd: Path, stamp: str, refs: Mapping[str, 
     return text
 
 
-def _source_name(recorded: str, source_dir: Path) -> str | None:
-    """A file name as TeX recorded it, relative to the source directory, if it is a source."""
-    name = recorded.strip().lstrip("/")
-    name = name[2:] if name.startswith("./") else name
-    return name if name and (source_dir / name).is_file() else None
-
-
 def store_references(
     fig_dir: Path, rec: PictureRecord, values: Mapping[str, str], source_dir: Path
 ) -> None:
@@ -151,8 +144,8 @@ def store_references(
     digests of the source files it read or names (tables, inputs, images)."""
     write_atomic(fig_dir / f"{rec.key}.src", rec.source)
     scan = TokenScan([rec.source])
-    names = {_source_name(f, source_dir) for f in rec.files}
-    names |= {_source_name(t, source_dir) for t in scan.tokens if "." in t or "/" in t}
+    names = {source_name(f.strip(), source_dir) for f in rec.files}
+    names |= {source_name(t.strip(), source_dir) for t in scan.tokens if "." in t or "/" in t}
     files = {n: digest(source_dir / n) for n in sorted(n for n in names if n)}
     data = {
         "deps": imports(scan, values),
