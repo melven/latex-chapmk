@@ -110,3 +110,24 @@ def test_table_read_by_a_picture(pictures: Path, capsys: pytest.CaptureFixture[s
     table.write_text(table.read_text().replace("3 4", "3 1"))
     rep = checked(pictures, capsys)
     assert any(r.startswith("pictures exported") for r in reasons(rep)), rep["runs"]
+
+
+def test_pictures_with_aux_side_effects_stay_inline(
+    copy_corpus,  # type: ignore[no-untyped-def]
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """S14: a picture with `remember picture` or a \\label writes aux records a cached figure
+    cannot replay; it is typeset inline (never exported) with a warning at its line, so labels
+    are not written twice and --full converges (§3.3 with --check). Other pictures of the unit
+    are still exported."""
+    src: Path = copy_corpus("minimal/S14-picture-records")
+    rep = checked(src, capsys)
+    assert any(r.startswith("pictures exported") for r in reasons(rep))
+    log = (src / "main.log").read_text()
+    assert log.count("Package chapmk Warning: Picture not externalized") == 2, log
+    assert "multiply defined" not in log
+    assert [k for k, _ in records(src, rep["runs"][0]["name"])].count("x") == 1
+    edit(src / "u2.tex", "Text.", "Text, edited.")
+    rep = checked(src, capsys)
+    assert selections(rep) == [["u2"]]
+    assert "multiply defined" not in (src / "main.log").read_text()
