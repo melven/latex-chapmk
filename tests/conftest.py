@@ -237,7 +237,16 @@ def hgb_class_loads_cmap() -> bool:
     return bool(path) and "\\RequirePackage{cmap}" in Path(path).read_text(errors="replace")
 
 
-THESIS_EPOCH = "1700000000"
+#: SOURCE_DATE_EPOCH of all TeX tests (N4): without it a build uses the current time
+EPOCH = "1700000000"
+
+
+@pytest.fixture(autouse=True)
+def fixed_epoch(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tests marked ``slow`` (TeX runs) build with :data:`EPOCH`; a test may set another one
+    (autouse: set before the test's other fixtures, e.g. a built corpus)."""
+    if request.node.get_closest_marker("slow") is not None:
+        monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
 
 
 @pytest.fixture(scope="session")
@@ -251,16 +260,10 @@ def thesis_template(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[
     live, cache = base / "live" / "src", base / "cache"
     shutil.copytree(CORPUS / "thesis", live, ignore=shutil.ignore_patterns("generate.py"))
     prepare_figures(live)
-    old = os.environ.get("SOURCE_DATE_EPOCH")
-    os.environ["SOURCE_DATE_EPOCH"] = THESIS_EPOCH
     report = base / "live" / "report.json"
-    try:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("SOURCE_DATE_EPOCH", EPOCH)
         rc = main(["build", "main.tex", "--check", "--report", str(report)], cwd=live)
-    finally:
-        if old is None:
-            del os.environ["SOURCE_DATE_EPOCH"]
-        else:
-            os.environ["SOURCE_DATE_EPOCH"] = old
     rep = json.loads(report.read_text())
     assert rc == 0, rep
     assert rep["mode"] == "cold" and rep["reason"] == "no previous state"
@@ -269,9 +272,9 @@ def thesis_template(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[
 
 
 @pytest.fixture
-def thesis(thesis_template: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch) -> Path:
-    """A freshly restored, built thesis corpus (same absolute path in every test)."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", THESIS_EPOCH)
+def thesis(thesis_template: tuple[Path, Path]) -> Path:
+    """A freshly restored, built thesis corpus (same absolute path in every test; built with
+    :data:`EPOCH`, as :func:`fixed_epoch` sets for the test)."""
     live, cache = thesis_template
     shutil.rmtree(live)
     shutil.copytree(cache, live, symlinks=True)

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import pytest
+from conftest import EPOCH
 
 from chapmk.analysis import analyse
 from chapmk.config import Config
@@ -27,7 +28,7 @@ def test_format_build_reuse_and_run(copy_corpus) -> None:  # type: ignore[no-unt
     lay = make_layout(cfg, a)
     sync_project_shadow(a, lay.shadow_dir, lay.build_dir)
     dist = detect()
-    env = dist.environment(1700000000, os.environ, lay.fmt_dir)
+    env = dist.environment(int(EPOCH), os.environ, lay.fmt_dir)
     info = ensure_format(a, lay, dist, env)
     assert info.rebuilt and (lay.fmt_dir / "pre.fmt").is_file()
     assert not ensure_format(a, lay, dist, env).rebuilt

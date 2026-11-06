@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 import pytest
-from conftest import reuse_reference, source_hash
+from conftest import EPOCH, reuse_reference, source_hash
 
 from chapmk.analysis import analyse
 from chapmk.check import compare_pdfs, compare_synctex
@@ -22,7 +22,6 @@ from chapmk.texdist import detect
 
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
 
-EPOCH = 1700000000
 LATEXMKRC = r"""
 add_cus_dep('nlo', 'nls', 0, 'nlo2nls');
 sub nlo2nls {
@@ -41,7 +40,7 @@ def latexmk(src: Path, main_name: str, rc_dir: Path) -> Path:
     """latexmk with shell escape in ``src`` (reused from the reference cache, conftest);
     returns the PDF."""
     job = Path(main_name).stem
-    key = source_hash(src, "latexmk", main_name, LATEXMKRC, str(EPOCH))
+    key = source_hash(src, "latexmk", main_name, LATEXMKRC, EPOCH)
     outputs = {f"ref{s}": src / f"{job}{s}" for s in (".pdf", ".synctex.gz")}
     reuse_reference(key, src, outputs, lambda: _latexmk(src, main_name, rc_dir))
     return src / f"{job}.pdf"
@@ -64,7 +63,7 @@ def _latexmk(src: Path, main_name: str, rc_dir: Path) -> None:
         f"-jobname={Path(main_name).stem}",
         main_name,
     ]
-    env = detect().environment(EPOCH, os.environ)
+    env = detect().environment(int(EPOCH), os.environ)
     r = run(argv, cwd=src, env=env)
     assert r.ok, r.output[-3000:]
 
@@ -74,13 +73,11 @@ def _latexmk(src: Path, main_name: str, rc_dir: Path) -> None:
     [("thesis", "twoside"), ("thesis", "oneside"), ("hgb", None), ("pictures", None)],
 )
 def test_full_build_matches_latexmk(
-    copy_corpus,
+    copy_corpus,  # type: ignore[no-untyped-def]
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,  # type: ignore[no-untyped-def]
     corpus: str,
     variant: str | None,
 ) -> None:
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", str(EPOCH))
     src = copy_corpus(corpus)
     main_tex = src / "main.tex"
     if variant == "oneside":

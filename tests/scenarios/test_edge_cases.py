@@ -6,31 +6,21 @@ Each build asserts §3.3 against ``--full`` (``--check``).
 import json
 import os
 from pathlib import Path
-from typing import Any
 
 import pytest
-from _helpers import EPOCH, build, selections
+from _helpers import checked, edit, reasons, selections
 
 from chapmk.synctex import parse as parse_synctex
 
 pytestmark = [pytest.mark.slow, pytest.mark.acceptance]
 
 
-def checked(src: Path, capsys: pytest.CaptureFixture[str], *args: str) -> dict[str, Any]:
-    rc, rep = build(src, "--check", *args)
-    out = capsys.readouterr()
-    assert rc == 0, out.out + out.err
-    assert "PASS" in out.out, out.out
-    return rep
-
-
 def test_local_packages_before_and_after_the_split(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """C1: a local package read by the format build (before the split point) and one read by
     the runs' preamble (after it) are global inputs: editing either gives a cold build with a
     new format, not a stale format or a glue-only run."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     src.mkdir()
     (src / "main.tex").write_text(
@@ -45,18 +35,17 @@ def test_local_packages_before_and_after_the_split(
     assert checked(src, capsys)["mode"] == "cold"
     for name, old, new in (("late.sty", "LATE-1", "LATE-2"), ("early.sty", "EARLY-1", "EARLY-2")):
         path = src / name
-        path.write_text(path.read_text().replace(old, new))
+        edit(path, old, new)
         rep = checked(src, capsys)
         assert rep["mode"] == "cold" and name in rep["reason"], rep
 
 
 def test_list_file_with_another_extension(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """C2: \\listofalgorithms of algorithm.sty reads <job>.loa, an extension chapmk did not know.
     It is recorded, stored, spliced and kept fresh; a stale main.loa of a manual build in
     the source directory is not read."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     src.mkdir()
     (src / "main.tex").write_text(
@@ -73,7 +62,7 @@ def test_list_file_with_another_extension(
     state = (src / ".chapmk" / "main" / "canon" / "state.json").read_text()
     assert '".loa"' in state
     path = src / "b.tex"
-    path.write_text(path.read_text().replace("Beta method", "Gamma method"))
+    edit(path, "Beta method", "Gamma method")
     rep = checked(src, capsys)
     assert rep["mode"] == "incremental", rep
     loa = (src / ".chapmk" / "main" / "canon" / "main.loa").read_text()
@@ -89,7 +78,6 @@ def test_distribution_update_and_upgrade(
     too."""
     import chapmk
 
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     dist, src = tmp_path / "texmf", tmp_path / "src"
     dist.mkdir()
     src.mkdir()
@@ -106,7 +94,7 @@ def test_distribution_update_and_upgrade(
     assert checked(src, capsys)["mode"] == "cold"
     for name, old, new in (("distlate", "LATE-1", "LATE-22"), ("distearly", "EARLY-1", "EARLY-22")):
         path = dist / f"{name}.sty"
-        path.write_text(path.read_text().replace(old, new))
+        edit(path, old, new)
         rep = checked(src, capsys)
         assert rep["mode"] == "cold" and f"{name}.sty" in rep["reason"], rep
     assert checked(src, capsys)["mode"] == "noop"
@@ -130,32 +118,28 @@ def _heads_document(src: Path, extra: str = "") -> None:
 
 
 def test_running_heads_of_excluded_units(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """book, openright: the blank page before a chapter shows the running head of the last
     section of the previous chapter. An excluded unit restores the marks its committing run
     recorded at its end; the marks are part of the state vector, so a changed last heading
     recompiles the following unit (entry state changed)."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     _heads_document(src)
     assert checked(src, capsys)["mode"] == "cold"
     path = src / "b.tex"
-    path.write_text(path.read_text().replace("Text b.", "Txet b."))
+    edit(path, "Text b.", "Txet b.")
     rep = checked(src, capsys)
     assert selections(rep) == [["b"]], rep["runs"]
     path = src / "a.tex"
-    path.write_text(path.read_text().replace("Sec a two", "Sec a TWO"))
+    edit(path, "Sec a two", "Sec a TWO")
     rep = checked(src, capsys)
-    b = [x for r in rep["runs"] for x in r["reasons"].get("b", [])]
+    b = reasons(rep, "b")
     assert any(x.startswith("entry state changed (marks 2e-right") for x in b), rep["runs"]
 
 
-def test_primitive_marks_fall_back(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_primitive_marks_fall_back(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """A primitive \\mark cannot be restored for excluded units: full mode with a warning."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     _heads_document(src, "\\mark{raw}")
     rep = checked(src, capsys)
@@ -173,12 +157,11 @@ def test_primitive_marks_fall_back(
 
 @pytest.mark.parametrize("jobs", ["1", "4"])
 def test_eqparbox_tag_shared_by_chapters(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], jobs: str
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], jobs: str
 ) -> None:
     """C13: an eqparbox tag used in two chapters with different widths. A partial run computes
     the width from its own boxes only, so a changed width of such a tag means a full build,
     with the reason; a tag used in one chapter stays incremental."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     src.mkdir()
     (src / "main.tex").write_text(
@@ -188,7 +171,9 @@ def test_eqparbox_tag_shared_by_chapters(
     (src / "a.tex").write_text("\\chapter{A}\\eqparbox{shared}{a very very wide box}|after\n")
     (src / "b.tex").write_text("\\chapter{B}\\eqparbox{shared}{narrow}|after\n\nText b.\n")
     (src / "c.tex").write_text("\\chapter{C}\\eqparbox{own}{only here}|after\n\nText c.\n")
-    for _ in range(2):  # cold build, then an edit of b
+    for edited in (False, True):  # cold build, then an edit of b
+        if edited:
+            edit(src / "b.tex", "Text b.", "Txet b.")
         rep = checked(src, capsys, "-j", jobs)  # §3.3 in any case
         # which units share a run depends on the run grouping (measured run times): either
         # the shared tag gave a full build, or a and b were last compiled in one run
@@ -198,13 +183,11 @@ def test_eqparbox_tag_shared_by_chapters(
         else:
             state = json.loads((src / ".chapmk" / "main" / "canon" / "state.json").read_text())
             assert state["segments"]["U1"]["run"] == state["segments"]["U2"]["run"], rep
-        path = src / "b.tex"
-        path.write_text(path.read_text().replace("Text b.", "Txet b."))
     # the shared tag in one chapter only: incremental again
     (src / "b.tex").write_text("\\chapter{B}\\eqparbox{bown}{narrow}|after\n\nText b.\n")
     assert checked(src, capsys)["mode"] == "cold"
     path = src / "c.tex"
-    path.write_text(path.read_text().replace("Text c.", "Txet c."))
+    edit(path, "Text c.", "Txet c.")
     assert checked(src, capsys)["mode"] == "incremental"
 
 
@@ -228,14 +211,12 @@ def _format_state_document(src: Path, preamble: str) -> None:
 )
 def test_state_a_format_loses_gives_a_full_build(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     preamble: str,
     reason: str,
 ) -> None:
     """S13: immediate PDF objects (cmap's ToUnicode maps), colour stacks and catalog entries
     that cannot be recorded in the format part: full build with the reason."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     _format_state_document(src, preamble)
     rep = checked(src, capsys)
@@ -244,32 +225,30 @@ def test_state_a_format_loses_gives_a_full_build(
 
 
 def test_catalog_and_info_of_the_format_part_are_replayed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """S13: \\pdfcatalog and \\pdfinfo in the format part are recorded and replayed by every
     run (check compares the catalog and the document info)."""
     import pikepdf
 
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     _format_state_document(src, "\\pdfcatalog{/PageMode /UseThumbs}\\pdfinfo{/Keywords (k1)}")
     assert checked(src, capsys)["mode"] == "cold"
     path = src / "b.tex"
-    path.write_text(path.read_text().replace("Text b.", "Txet b."))
+    edit(path, "Text b.", "Txet b.")
     assert checked(src, capsys)["mode"] == "incremental"
     with pikepdf.open(src / "main.pdf") as pdf:
         assert pdf.Root.PageMode == "/UseThumbs" and str(pdf.docinfo["/Keywords"]) == "k1"
 
 
 def test_open_action_when_the_document_starts_with_an_include(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """hyperref's ``/OpenAction`` (``goto page 1``) refers to the first page. With no page
     before the first ``\\include``, G0 has no pages and its run (the last one) may not have
     compiled the first unit: the catalog then came from a run whose page 1 is a later chapter
     (check: OpenAction on page 5 instead of 1). The catalog now comes from the run of the
     first page."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     src.mkdir()
     (src / "main.tex").write_text(
@@ -280,25 +259,23 @@ def test_open_action_when_the_document_starts_with_an_include(
         (src / f"{name}.tex").write_text(f"\\chapter{{{name}}}Text {name}.\\clearpage Page 2.\n")
     assert checked(src, capsys)["mode"] == "cold"
     path = src / "c.tex"
-    path.write_text(path.read_text().replace("Text c.", "Txet c."))
+    edit(path, "Text c.", "Txet c.")
     rep = checked(src, capsys)
     assert rep["mode"] == "incremental" and selections(rep) == [["c"]], rep
 
 
 def test_first_page_material_when_the_first_unit_is_excluded(
     copy_corpus,  # type: ignore[no-untyped-def]
-    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """S15: the document starts with an \\include; a run of a later unit must not put the
     first-page material (hyperref's Doc-Start, xcolor's colour stack push, the
     shipout/firstpage hook) onto its first page: the SyncTeX records per page equal the
     --full reference's (§3.3 holds anyway: the material is invisible)."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = copy_corpus("minimal/S15-first-page")
     assert checked(src, capsys)["mode"] == "cold"
     path = src / "c.tex"
-    path.write_text(path.read_text().replace("Text c.", "Txet c."))
+    edit(path, "Text c.", "Txet c.")
     rep = checked(src, capsys)
     assert rep["mode"] == "incremental" and selections(rep) == [["c"]], rep
     ref = parse_synctex(src / ".chapmk" / "main" / "check" / "main.synctex.gz")
@@ -309,14 +286,13 @@ def test_first_page_material_when_the_first_unit_is_excluded(
 
 
 def test_nodes_left_on_the_main_vertical_list_are_replayed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """S13: xcolor leaves an unmatched \\pdfcolorstack push on the main vertical list of the
     format part, which a format does not dump. A colour left open in a textpos block of the
     title page (hgbthesis 2025/02/24) then reaches the next page in a plain build only. The
     format build keeps those nodes in a box that every run puts back: check passes, cold and
     incremental (it failed on page 2 before)."""
-    monkeypatch.setenv("SOURCE_DATE_EPOCH", EPOCH)
     src = tmp_path / "src"
     src.mkdir()
     (src / "main.tex").write_text(
@@ -331,5 +307,5 @@ def test_nodes_left_on_the_main_vertical_list_are_replayed(
     (src / "b.tex").write_text("\\chapter{B}Text b.\n")
     assert checked(src, capsys)["mode"] == "cold"
     path = src / "b.tex"
-    path.write_text(path.read_text().replace("Text b.", "Txet b."))
+    edit(path, "Text b.", "Txet b.")
     assert checked(src, capsys)["mode"] == "incremental"
