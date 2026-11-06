@@ -171,7 +171,9 @@ def test_eqparbox_tag_shared_by_chapters(
     (src / "a.tex").write_text("\\chapter{A}\\eqparbox{shared}{a very very wide box}|after\n")
     (src / "b.tex").write_text("\\chapter{B}\\eqparbox{shared}{narrow}|after\n\nText b.\n")
     (src / "c.tex").write_text("\\chapter{C}\\eqparbox{own}{only here}|after\n\nText c.\n")
-    for _ in range(2):  # cold build, then an edit of b
+    for edited in (False, True):  # cold build, then an edit of b
+        if edited:
+            edit(src / "b.tex", "Text b.", "Txet b.")
         rep = checked(src, capsys, "-j", jobs)  # §3.3 in any case
         # which units share a run depends on the run grouping (measured run times): either
         # the shared tag gave a full build, or a and b were last compiled in one run
@@ -181,8 +183,6 @@ def test_eqparbox_tag_shared_by_chapters(
         else:
             state = json.loads((src / ".chapmk" / "main" / "canon" / "state.json").read_text())
             assert state["segments"]["U1"]["run"] == state["segments"]["U2"]["run"], rep
-        path = src / "b.tex"
-        edit(path, "Text b.", "Txet b.")
     # the shared tag in one chapter only: incremental again
     (src / "b.tex").write_text("\\chapter{B}\\eqparbox{bown}{narrow}|after\n\nText b.\n")
     assert checked(src, capsys)["mode"] == "cold"
