@@ -44,11 +44,19 @@ def test_format_build_reuse_and_run(copy_corpus) -> None:  # type: ignore[no-unt
     assert "start reading document" in (out / "main.log").read_text()
 
 
-def test_format_build_error_is_mapped(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("line2", "expected"),
+    [
+        ("\\usepackage{nonexistent-pkg}", "nonexistent-pkg"),
+        # a file:line error names the main file: pre.tex keeps its line numbers
+        ("\\undefinedmacro", "d.tex:2: Undefined control sequence"),
+    ],
+)
+def test_format_build_error_is_mapped(tmp_path: Path, line2: str, expected: str) -> None:
     src = tmp_path / "s"
     src.mkdir()
     (src / "d.tex").write_text(
-        "\\documentclass{article}\n\\usepackage{nonexistent-pkg}\n"
+        f"\\documentclass{{article}}\n{line2}\n"
         "\\tikzexternalize\n\\begin{document}x\\end{document}\n"
     )
     cfg = Config(main=src / "d.tex")
@@ -58,7 +66,8 @@ def test_format_build_error_is_mapped(tmp_path: Path) -> None:
     dist = detect()
     with pytest.raises(TexError) as err:
         ensure_format(a, lay, dist, dist.environment(1, os.environ, lay.fmt_dir))
-    assert "nonexistent-pkg" in (err.value.first_error or "")
+    message = err.value.first_error or ""
+    assert expected in message and "pre.tex" not in message, message
 
 
 def test_pdf_objects_in_the_format_fall_back(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
