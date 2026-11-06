@@ -619,7 +619,10 @@ Measured: 319 pages from 5 runs in about 0.35 s.
   error (the failing run's log) and a no-op build. Editors that parse only the output of the
   build command (VS Code LaTeX Workshop) need it; LaTeX Workshop keeps only the text after the
   last `This is pdfTeX, Version` line, so the printed copy keeps that banner line only in the
-  first run's log (the file is unchanged).
+  first run's log (the file is unchanged). After the log it writes the output of the state's
+  last biber run (`biber.out` in `canon/`, in full mode in `full/`; paths mapped), as latexmk's
+  output contains it: LaTeX Workshop parses biber's `INFO`/`WARN`/`ERROR` lines from there
+  (the `.blg` has a prefix on every line). After a biber failure, that run's output.
 
 ### 6.14 Fallbacks to full mode
 
