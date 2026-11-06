@@ -1,10 +1,10 @@
 """Published outputs of the incremental builder (design §6.11 to §6.13): merged PDF, merged SyncTeX
-file, concatenated log, and the log of a failed run."""
+file, composed log, and the log of a failed run."""
 
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -12,7 +12,9 @@ from chapmk.analysis import Analysis
 from chapmk.auxfile import parse_bookmark
 from chapmk.errors import FallbackError, TexError
 from chapmk.files import digest, read_log, write_atomic
+from chapmk.fmt import FORMAT_NAME
 from chapmk.layout import Layout
+from chapmk.logs import compose_log, format_preamble, map_paths
 from chapmk.publish import publish, publish_all, text_writer
 from chapmk.records import RunView
 from chapmk.runner import RUN_MAIN, map_run_paths
@@ -129,16 +131,48 @@ def publish_state(
     _, pdf = publish_all(
         [(write_synctex, layout.output(".synctex.gz")), (write_pdf, layout.output(".pdf"))]
     )
-    texts = []
-    for name in sorted(state.run_names(), key=lambda r: int(r[1:])):
-        run = view(name)
-        texts.append(
-            f"%%% chapmk: log of run {name}\n"
-            + map_run_paths(analysis, layout, run.directory, run.log)
-        )
-    publish(text_writer("\n".join(texts)), layout.output(".log"))
+    publish(
+        text_writer(_composed_log(analysis, layout, state, view, pdf, len(pages))),
+        layout.output(".log"),
+    )
     t.lap("log")
     return pdf
+
+
+def _composed_log(
+    analysis: Analysis,
+    layout: Layout,
+    state: State,
+    view: Callable[[str], RunView],
+    pdf: Path,
+    pages: int,
+) -> str:
+    """The published log (§6.13): composed in document order from the segments' runs, with the
+    format build's preamble and the merged PDF's output line; the run logs one after the other
+    if a run log has no segment markers."""
+    names = sorted(state.run_names(), key=lambda r: int(r[1:]))
+    logs = {
+        name: map_run_paths(analysis, layout, view(name).directory, view(name).log)
+        for name in names
+    }
+    fmt_tex = layout.fmt_dir / f"{FORMAT_NAME}.tex"
+    fmt_log = layout.fmt_dir / f"{FORMAT_NAME}.log"
+    preamble = ""
+    if fmt_log.is_file():
+        main = str(analysis.main)
+        mapping = [(fmt_tex.as_posix(), main), (str(fmt_tex), main), *layout.path_map()]
+        preamble = format_preamble(map_paths(read_log(fmt_log), mapping))
+    plural = "" if pages == 1 else "s"
+    size = pdf.stat().st_size if pdf.is_file() else 0
+    composed = compose_log(
+        logs,
+        [(seg, state.segments[seg].run) for seg in analysis.segments],
+        preamble,
+        f"Output written on {pdf} ({pages} page{plural}, {size} bytes).",
+    )
+    if composed is not None:
+        return composed
+    return "\n".join(f"%%% chapmk: log of run {name}\n" + logs[name] for name in names)
 
 
 def _published_stamp(layout: Layout) -> dict[str, object]:

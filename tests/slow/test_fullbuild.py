@@ -1,5 +1,7 @@
 """Full-mode build and CLI against real TeX."""
 
+import json
+import re
 from pathlib import Path
 
 import pytest
@@ -85,6 +87,45 @@ def test_print_log(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-d
     assert "b.tex:1: Undefined control sequence" in captured.err
     assert main(["build", "d.tex"], cwd=src) == 1
     assert capsys.readouterr().out == ""  # only with --print-log
+
+
+#: messages a log parser shows: warnings, bad boxes, errors
+_MESSAGE = re.compile(r"^(?:(?:LaTeX|Package|Class) .*Warning|(?:Over|Under)full \\[hv]box|! )")
+#: summaries at the end of a run: they cover that run's units only, or ask for another run
+_SUMMARY = re.compile(
+    r"Rerun|may have changed|There were (?:undefined references|multiply-defined labels)"
+    r"|Some font shapes were not available|Size substitutions"
+)
+
+
+def _messages(log: str) -> list[str]:
+    return [ln for ln in log.splitlines() if _MESSAGE.match(ln) and not _SUMMARY.search(ln)]
+
+
+def test_composed_log_matches_a_full_build(copy_corpus, tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
+    """§6.13: the log composed from several runs (cold build, incremental runs) has the messages
+    of a plain full build in the same order (preamble from the format build, each unit from
+    its run), one banner and the merged PDF's output line."""
+    src = copy_corpus("thesis")
+    assert main(["build", "main.tex"], cwd=src) == 0
+    # two units recompiled in parallel runs, the others stay in the cold build's run
+    for name, extra in (("ch2", "\\ref{nowhere-two}"), ("ch5", "\\hbox to 1pt{too wide here}")):
+        with (src / "chapters" / f"{name}.tex").open("a") as f:
+            f.write(f"\n{extra}\n")
+    assert main(["build", "main.tex", "-j", "2", "--report", "r.json"], cwd=src) == 0
+    report = json.loads((src / "r.json").read_text())
+    assert report["mode"] == "incremental" and report["runs"], report
+    log = (src / "main.log").read_text()
+    assert main(["build", "main.tex", "--full", "--out-dir", str(tmp_path / "full")], cwd=src) == 0
+    capsys.readouterr()
+    full = (tmp_path / "full" / "main.log").read_text()
+    assert _messages(log) == _messages(full)
+    assert any("nowhere-two" in m for m in _messages(full))
+    assert any(m.startswith("Overfull") for m in _messages(full))
+    assert log.count("This is pdfTeX, Version") == 1 and "chapmk-segment" not in log
+    pages = re.search(r"^Output written on .*\((\d+) pages", full, re.MULTILINE)
+    assert pages and f"({pages.group(1)} pages," in log
+    assert f"Output written on {src / 'main.pdf'}" in log
 
 
 def test_clean(tmp_path: Path) -> None:

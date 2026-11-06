@@ -1,9 +1,9 @@
-"""TeX log handling (design §6.13): path mapping and error extraction."""
+"""TeX log handling (design §6.13): path mapping, error extraction, the composed log."""
 
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from chapmk.files import read_log
@@ -86,3 +86,114 @@ def printed_log(text: str) -> str:
             seen = True
         lines.append(line)
     return "".join(lines)
+
+
+# --- composed log (§6.13) ---------------------------------------------------------------------
+
+#: start of a segment's slice in a run log (chapmk.sty, ``\wlog``: a line of its own)
+SEGMENT_MARKER = "chapmk-segment: "
+#: marker after the last page (``enddocument/afterlastpage``): the tail follows
+END_MARKER = "end"
+_OUTPUT_WRITTEN = re.compile(r"^Output written on .*$", re.MULTILINE)
+
+
+def split_segments(text: str) -> tuple[str, dict[str, str], str] | None:
+    """A run log split at the segment markers: the head (before the first marker), the text of
+    each segment (the first slice of a marker seen twice), the tail (after the end marker).
+    None without an end marker (a log from an older chapmk, or a run that stopped early)."""
+    head = ""
+    slices: dict[str, str] = {}
+    current: str | None = None
+    lines: list[str] = []
+    for line in split_lines(text):
+        if not line.startswith(SEGMENT_MARKER):
+            lines.append(line)
+            continue
+        chunk, lines = "".join(lines), []
+        if current is None:
+            head = chunk
+        else:
+            slices.setdefault(current, chunk)
+        current = line[len(SEGMENT_MARKER) :].strip()
+    if current != END_MARKER:
+        return None
+    return head, slices, "".join(lines)
+
+
+def _open_parentheses(text: str) -> int:
+    """Parentheses opened and not closed (file opens and others, as log parsers count them)."""
+    depth = 0
+    for ch in text:
+        if ch == "(":
+            depth += 1
+        elif ch == ")" and depth:
+            depth -= 1
+    return depth
+
+
+def format_preamble(fmt_log: str) -> str:
+    """The preamble part of the format build's log (package loading and its messages): the
+    lines after the command line (``**...``) up to the dump, with the files still open at the
+    dump closed, so that later messages are attributed to the right file."""
+    lines = split_lines(fmt_log)
+    start = next((n + 1 for n, line in enumerate(lines) if line.startswith("**")), None)
+    if start is None:
+        return ""
+    body = []
+    for line in lines[start:]:
+        if line.startswith("Beginning to dump on file"):
+            break
+        body.append(line)
+    text = "".join(body)
+    if text and not text.endswith("\n"):
+        text += "\n"
+    depth = _open_parentheses(text)
+    return text + (")" * depth + "\n" if depth else "")
+
+
+def _with_preamble(head: str, preamble: str) -> str:
+    """``preamble`` inserted after the line that opens the main file (the first line after the
+    command line that starts with ``(``), where a plain run loads the preamble's packages."""
+    if not preamble:
+        return head
+    lines = split_lines(head)
+    command = next((n for n, line in enumerate(lines) if line.startswith("**")), -1)
+    at = next(
+        (n + 1 for n, line in enumerate(lines) if n > command and line.startswith("(")),
+        len(lines),
+    )
+    if at and not lines[at - 1].endswith("\n"):
+        lines[at - 1] += "\n"
+    return "".join(lines[:at]) + preamble + "".join(lines[at:])
+
+
+def compose_log(
+    logs: Mapping[str, str],
+    sources: Sequence[tuple[str, str]],
+    preamble: str = "",
+    output: str | None = None,
+) -> str | None:
+    """One log in the order of a plain pdflatex run (§6.13): the head of the run of the first
+    segment (with ``preamble``, the format build's part, after the main file is opened), each
+    segment's slice from the run that produced it (``sources``: ``(segment, run)`` in document
+    order), the tail of the last segment's run with its ``Output written on`` line replaced by
+    ``output``. None if a run log lacks the markers or a segment's slice."""
+    if not sources:
+        return None
+    parts: dict[str, tuple[str, dict[str, str], str]] = {}
+    for _, run in sources:
+        if run not in parts:
+            split = split_segments(logs.get(run, ""))
+            if split is None:
+                return None
+            parts[run] = split
+    body = []
+    for seg, run in sources:
+        text = parts[run][1].get(seg)
+        if text is None:
+            return None
+        body.append(text)
+    tail = parts[sources[-1][1]][2]
+    if output is not None:
+        tail = _OUTPUT_WRITTEN.sub(lambda _: output, tail, count=1)
+    return _with_preamble(parts[sources[0][1]][0], preamble) + "".join(body) + tail
