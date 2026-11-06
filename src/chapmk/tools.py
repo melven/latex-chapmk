@@ -52,16 +52,22 @@ def makeindex_errors(ilg: Path) -> list[str]:
     ]
 
 
+#: biber's output (stdout and stderr) in its output directory: ``--print-log`` prints it
+BIBER_OUT = "biber.out"
+
+
 def run_biber(
     dist: TexDistribution, job: str, outdir: Path, cwd: Path, env: Mapping[str, str]
 ) -> None:
-    """biber on ``outdir/<job>.bcf`` (cwd: shadow tree, for the data sources). A failure
-    raises :class:`ToolError` with the ``ERROR`` lines of the ``.blg`` (E7)."""
-    r = run(dist.biber(job, outdir), cwd=cwd, env=env, log_path=outdir / "biber.out")
+    """biber on ``outdir/<job>.bcf`` (cwd: shadow tree, for the data sources); its output in
+    :data:`BIBER_OUT`. A failure raises :class:`ToolError` with the ``ERROR`` lines of the
+    ``.blg`` (E7) and the output file as ``log``."""
+    out = outdir / BIBER_OUT
+    r = run(dist.biber(job, outdir), cwd=cwd, env=env, log_path=out)
     if not r.ok:
         blg = outdir / f"{job}.blg"
         found = biber_errors(blg) or [r.output.strip()[-500:]]
-        raise ToolError(f"biber failed (see {blg}):{_shown(found)}")
+        raise ToolError(f"biber failed (see {blg}):{_shown(found)}", log=out)
 
 
 def run_makeindex(

@@ -45,7 +45,12 @@ class AnalysisError(ChapmkError):
 
 
 class ToolError(ChapmkError):
-    """An external tool is missing or failed outside a TeX run (biber, makeindex, ...)."""
+    """An external tool is missing or failed outside a TeX run (biber, makeindex, ...).
+    ``log``: the tool's output, if kept (``--print-log`` prints it)."""
+
+    def __init__(self, message: str, log: Path | None = None):
+        super().__init__(message)
+        self.log = log
 
 
 class ToolTimeoutError(ToolError):

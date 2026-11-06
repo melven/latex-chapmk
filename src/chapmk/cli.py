@@ -17,16 +17,17 @@ from pathlib import Path
 import chapmk
 from chapmk.analysis import Analysis, analyse
 from chapmk.config import Config, load_config
-from chapmk.errors import ChapmkError, ConfigError, InternalError, TexError
+from chapmk.errors import ChapmkError, ConfigError, InternalError, TexError, ToolError
 from chapmk.files import read_raw
 from chapmk.fullbuild import full_build
 from chapmk.incremental import Context, build, load_epoch
 from chapmk.layout import DEFAULT_BUILD_DIR, Layout, build_dir_of, make_layout
 from chapmk.lock import LOCK_FILE, build_lock
-from chapmk.logs import printed_log
+from chapmk.logs import map_paths, printed_log
 from chapmk.proc import Interrupted, allow_runs, terminate_all
 from chapmk.texdist import TexDistribution, detect
 from chapmk.timing import Timings
+from chapmk.tools import BIBER_OUT
 
 #: Marker file proving that a directory is a chapmk build directory (``clean`` safety).
 BUILD_DIR_MARKER = ".chapmk-build-dir"
@@ -180,6 +181,9 @@ def _build_locked(
         (cwd / args.report).write_text(result.to_json(), encoding="utf-8")
     if getattr(args, "print_log", False):
         _print_log(layout.output(".log"))
+        # the state's last biber run (full mode: its own directory), as latexmk prints it
+        biber_dir = layout.full_dir if result.mode == "full" else layout.canon_dir
+        _print_tool_output(biber_dir / BIBER_OUT, layout.path_map())
     if checking:
         return _check(ctx, analysis, layout, dist, epoch)
     return 0
@@ -188,9 +192,20 @@ def _build_locked(
 def _print_log(log: Path) -> None:
     """``--print-log`` (§6.13): the published log on stdout, its bytes unchanged except for the
     repeated banner lines (:func:`printed_log`)."""
-    if not log.is_file():
-        return
-    data = printed_log(read_raw(log)).encode("utf-8", "surrogateescape")
+    if log.is_file():
+        _write_stdout(printed_log(read_raw(log)))
+
+
+def _print_tool_output(out: Path, mapping: Sequence[tuple[str, str]] = ()) -> None:
+    """``--print-log`` (§6.13): a tool's output (biber's: LaTeX Workshop parses its ``INFO``,
+    ``WARN`` and ``ERROR`` lines), paths mapped."""
+    if out.is_file():
+        _write_stdout(map_paths(read_raw(out), mapping))
+
+
+def _write_stdout(text: str) -> None:
+    """``text`` on stdout as UTF-8 with its bytes unchanged (surrogateescape)."""
+    data = text.encode("utf-8", "surrogateescape")
     sys.stdout.flush()
     buffer = getattr(sys.stdout, "buffer", None)
     if buffer is None:  # a text-only stream (e.g. redirected in tests)
@@ -310,6 +325,8 @@ def _main(args: argparse.Namespace, workdir: Path) -> int:
         _say(f"error: {err}")
         if isinstance(err, TexError) and err.log and getattr(args, "print_log", False):
             _print_log(err.log)  # the failing run's log
+        if isinstance(err, ToolError) and err.log and getattr(args, "print_log", False):
+            _print_tool_output(err.log)  # e.g. the failing biber run's output
         if isinstance(err, TexError) and err.first_error:
             print(err.first_error, file=sys.stderr)
             if err.log:
