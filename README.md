@@ -52,7 +52,7 @@ chapmk clean [MAIN]
 - `--report FILE`: JSON with the runs, why each chapter was recompiled, and times.
 - `--print-log`: also write the log and biber's output to stdout (also after an error), for
   editors that parse only the output of the build command.
-- Optional `chapmk.toml` next to the main file: [docs/configuration.md](docs/configuration.md).
+- Optional `chapmk.toml` next to the main file: [docs/configuration.md](https://github.com/melven/latex-chapmk/blob/main/docs/configuration.md).
 
 ## Editor setup
 
@@ -86,7 +86,7 @@ heading is a compilation unit. chapmk records what every unit reads and writes (
 labels, citations, list entries, running heads) and recompiles only the units whose sources
 or inputs changed, several at a time with predicted start states. The pages of all runs are
 merged; any case it cannot handle falls back to a plain full build.
-Details: [docs/design.md](docs/design.md).
+Details: [docs/design.md](https://github.com/melven/latex-chapmk/blob/main/docs/design.md).
 
 ## Document assumptions
 
@@ -103,8 +103,8 @@ Details: [docs/design.md](docs/design.md).
 
 ## Limitations
 
-- pdfLaTeX only. TeX Live is tested in CI on Linux; MiKTeX in a Linux image; Windows only by
-  hand so far; macOS not yet. biblatex with biber only; hyperref needs the `bookmark` package.
+- pdfLaTeX only. Tested in CI: TeX Live on Linux, MiKTeX on Linux and Windows; macOS not yet.
+  biblatex with biber only; hyperref needs the `bookmark` package.
 - Full builds (like latexmk, with a warning): `glossaries`, `imakeidx`/`makeidx`, `minted`,
   `cleveref`, BibTeX, biblatex refsections, primitive `\mark`, an `eqparbox` tag used in
   several chapters whose width changes, and cases chapmk cannot verify.
@@ -120,12 +120,12 @@ Details: [docs/design.md](docs/design.md).
 - `chapmk check` compares the result with a plain full build; `-v` shows why each chapter
   was rebuilt; `chapmk clean` starts over.
 - Bugs: please open an issue with the output of `chapmk check` and `-v`
-  ([CONTRIBUTING.md](CONTRIBUTING.md)). Do not attach private documents.
+  ([CONTRIBUTING.md](https://github.com/melven/latex-chapmk/blob/main/CONTRIBUTING.md)). Do not attach private documents.
 
 ## License
 
-BSD-3-Clause ([LICENSE](LICENSE)).
+BSD-3-Clause ([LICENSE](https://github.com/melven/latex-chapmk/blob/main/LICENSE)).
 
 Exceptions:
-* hgbthesis as a test case in [tests/corpus/hgb/](tests/corpus/hgb/) - [CC BY 4.0](LICENSES/CC-BY-4.0.txt) - copyright Wilhelm Burger and the HagenbergThesis contributors, changes by Melven Roehrig-Zoellner
-* pgf/TIKZ manual as a test case in [tests/corpus/pgfmanual/upstream/](tests/corpus/pgfmanual/upstream/) - [GFDL-1.2-only](LICENSES/GFDL-1.2-only.txt) OR [LPPL-1.3c](LICENSES/LPPL-1.3c.txt) - copyright Till Tantau and the PGF/TikZ contributors
+* hgbthesis as a test case in [tests/corpus/hgb/](https://github.com/melven/latex-chapmk/tree/main/tests/corpus/hgb/) - [CC BY 4.0](https://github.com/melven/latex-chapmk/blob/main/LICENSES/CC-BY-4.0.txt) - copyright Wilhelm Burger and the HagenbergThesis contributors, changes by Melven Roehrig-Zoellner
+* pgf/TIKZ manual as a test case in [tests/corpus/pgfmanual/upstream/](https://github.com/melven/latex-chapmk/tree/main/tests/corpus/pgfmanual/upstream/) - [GFDL-1.2-only](https://github.com/melven/latex-chapmk/blob/main/LICENSES/GFDL-1.2-only.txt) OR [LPPL-1.3c](https://github.com/melven/latex-chapmk/blob/main/LICENSES/LPPL-1.3c.txt) - copyright Till Tantau and the PGF/TikZ contributors
