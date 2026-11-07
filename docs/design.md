@@ -515,6 +515,12 @@ checkpoints, so it is compiled in every run, and when it is dirty itself all lat
 compiled in the same run. Config: `lint.allow`, `lint.verbatim`, `lint.shortverb`. Results are
 cached by file content (`canon/lint-cache.json`).
 
+**At run time:** a unit that changes the page numbering style (`\thepage`) or the page style
+(head and foot macros) while it is compiled, also through a class macro the lint cannot see
+(e.g. a class switching both in `\@chapter` for chapter 1), writes `G <unit> <command>`; it
+becomes global too (`State.runtime_global`), and later units committed from runs without it
+are recompiled.
+
 **Slow glue (hint):** a glue block taking ≥ 0.5 s in every run (`T` records) is reported with
 its line range and whether it could move into an `\include` (a hint, not a warning: it depends
 on the machine).
@@ -973,6 +979,7 @@ Relevant mechanisms: the `.nlo` stream, biblatex renumbering, longtable and eqpa
 | elapsed time | `.frec` | `T <point> <\pdfelapsedtime>`: `load`, `begin`, segment ids, `end`, `picture+`/`picture-` |
 | eqparbox use | `.frec` | `Q <seg> <tag>` |
 | list file | `.frec` | `L <seg> <ext>` per `\@starttoc` (the segment reads that list) |
+| run-time global state | `.frec` | `G <unit> pagenumbering\|pagestyle` when a unit changes it |
 | unit layout | `.frec` | `O <seg> 0\|1` (twoside and openright at the unit start) |
 | mark classes | `.frec` | `K <pseudo register> <class>`; `K primitive <n>` |
 | stream marker | `.nlo`, `.idx` | `%chapmk-seg <seg>` |

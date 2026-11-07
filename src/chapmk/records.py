@@ -196,6 +196,9 @@ class RunRecords:
     layout: dict[str, int] = field(default_factory=dict)
     #: per compiled unit: starts under twoside+openright (``O`` records)
     openright: dict[str, bool] = field(default_factory=dict)
+    #: per unit: state it changed at run time that no checkpoint carries (``G`` records:
+    #: ``pagenumbering``, ``pagestyle``): the unit is global
+    global_effects: dict[str, set[str]] = field(default_factory=dict)
     #: suffixes of the list files read by ``\\@starttoc`` (``L`` records)
     list_suffixes: set[str] = field(default_factory=set)
     #: (segment, suffix) of each ``\\@starttoc`` (``L <seg> <ext>``): the segment reads it
@@ -276,6 +279,11 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
                 raise ValueError(f"L record without a segment: {line.strip()!r}")
             recs.list_suffixes.add("." + ext)
             recs.list_starts.add((seg, "." + ext))
+        elif line.startswith("G "):
+            seg, _, what = line[2:].strip().partition(" ")
+            if not what:
+                raise ValueError(f"G record without a command: {line.strip()!r}")
+            recs.global_effects.setdefault(seg, set()).add(what)
         elif line.startswith("O "):
             seg, _, flag = line[2:].partition(" ")
             recs.openright[seg] = flag.strip() == "1"

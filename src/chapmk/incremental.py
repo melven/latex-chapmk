@@ -336,6 +336,7 @@ class Fixpoint:
             for reg, name in all_recs[0].mark_classes.items():
                 self.register_names[reg] = f"marks {name}"
         t.lap("records")
+        new_global: dict[str, set[str]] = {}  # unit -> units compiled in its run
         with committing(canon, state, [s.name for s in specs]):  # journal (C7)
             for view, recs, compiled in zip(views, all_recs, compiled_by_run, strict=True):
                 commit_run(a, ctx.layout, state, view, compiled)
@@ -343,6 +344,13 @@ class Fixpoint:
                 for seg in compiled:
                     if seg in recs.openright:
                         state.openright[seg] = recs.openright[seg]
+                    effects = recs.global_effects.get(seg)
+                    if effects and seg not in state.runtime_global:
+                        new_global[seg] = compiled
+                    if effects:
+                        state.runtime_global[seg] = sorted(effects)
+                    elif seg in state.runtime_global:
+                        del state.runtime_global[seg]
             exported = self._pictures(views, compiled_by_run, pre)
             t.lap("commit")
             lists_complete = commit_lists(a, ctx.layout, state, views)
@@ -388,6 +396,14 @@ class Fixpoint:
                 )
             if not lists_complete:
                 glue_after = glue_after or "list files without unit markers (rewritten by the glue)"
+            for g, with_g in new_global.items():
+                # later units committed from runs without it miss its page numbering/style
+                what = ", ".join(state.runtime_global[g])
+                for seg in a.unit_segments[a.unit_segments.index(g) + 1 :]:
+                    if seg not in with_g:
+                        dirty_after.setdefault(seg, []).append(
+                            f"after {a.include_of(g).arg}, which changes {what} at run time"
+                        )
             for seg, n in sorted(exported.items()):
                 # the run typeset these pictures inline; embedded, the result equals externalize
                 if is_unit(seg):

@@ -209,6 +209,20 @@
   \protected\def\@stpelt#1{\chapmk@abs@add{#1}\chapmk@orig@stpelt{#1}}%
   \let\chapmk@orig@pagenumbering\pagenumbering
   \protected\def\pagenumbering{\chapmk@abs@add{page}\chapmk@orig@pagenumbering}}
+% "G <unit> pagenumbering|pagestyle": the unit ends with another page numbering style
+% (\thepage) or page style (head and foot macros) than it started with, also through a
+% class macro the lint does not see (tcdthesis switches both in \@chapter for chapter 1):
+% state no checkpoint carries; the driver makes the unit global. Compared at the unit's
+% start and end (a temporary switch, e.g. KOMA's chapter page style, is no change).
+\def\chapmk@gsave{\global\let\chapmk@tp\thepage\global\let\chapmk@oh\@oddhead
+  \global\let\chapmk@eh\@evenhead\global\let\chapmk@of\@oddfoot
+  \global\let\chapmk@ef\@evenfoot}
+\def\chapmk@gcheck{%
+  \ifx\chapmk@tp\thepage\else\chapmk@grec{pagenumbering}\fi
+  \ifx\chapmk@oh\@oddhead\ifx\chapmk@eh\@evenhead\ifx\chapmk@of\@oddfoot
+    \ifx\chapmk@ef\@evenfoot\else\chapmk@grec{pagestyle}\fi\else\chapmk@grec{pagestyle}\fi
+    \else\chapmk@grec{pagestyle}\fi\else\chapmk@grec{pagestyle}\fi}
+\def\chapmk@grec#1{\immediate\write\chapmk@rec{G \chapmk@seg\space#1}}
 
 % segment transitions
 \def\chapmk@glue@end{\chapmk@gexit@rec\chapmk@abs@rec\@mainaux}
@@ -233,12 +247,14 @@
   \ifnum\chapmk@iftrue{twoside}\chapmk@iftrue{openright}=11 1\else0\fi}}
 \AddToHook{include/before}{%
   \chapmk@unit@begin{\CurrentFilePath/\CurrentFile}\gdef\chapmk@absnames{}\chapmk@open@rec
+  \chapmk@gsave
   \immediate\write\@partaux{\string\chapmk@ustart{\chapmk@seg}}}
 % unit end after the final \clearpage, unit aux still open (S3). The checkpoint is the
 % complete vector: the restore of an excluded unit must also undo changes made by the
 % exclusion itself (e.g. calc's \setcounter scratch register during the kernel restore).
 \AddToHook{include/after}{%
   \let\chapmk@pfx\chapmk@all
+  \chapmk@gcheck
   \chapmk@markmap\chapmk@mkrec
   \chapmk@primitive
   \chapmk@mprep
