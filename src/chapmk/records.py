@@ -198,6 +198,8 @@ class RunRecords:
     openright: dict[str, bool] = field(default_factory=dict)
     #: suffixes of the list files read by ``\\@starttoc`` (``L`` records)
     list_suffixes: set[str] = field(default_factory=set)
+    #: (segment, suffix) of each ``\\@starttoc`` (``L <seg> <ext>``): the segment reads it
+    list_starts: set[tuple[str, str]] = field(default_factory=set)
     #: pseudo registers of the kernel's mark classes (running heads) -> class name
     #: (``K <id> <class>``; values: digests of the last mark's text)
     mark_classes: dict[int, str] = field(default_factory=dict)
@@ -269,7 +271,11 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
             seg, _, name = line[2:].partition(" ")
             recs.files.append((seg, name))
         elif line.startswith("L "):
-            recs.list_suffixes.add("." + line[2:].strip())
+            seg, _, ext = line[2:].strip().partition(" ")
+            if not ext:
+                raise ValueError(f"L record without a segment: {line.strip()!r}")
+            recs.list_suffixes.add("." + ext)
+            recs.list_starts.add((seg, "." + ext))
         elif line.startswith("O "):
             seg, _, flag = line[2:].partition(" ")
             recs.openright[seg] = flag.strip() == "1"
