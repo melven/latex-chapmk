@@ -386,10 +386,13 @@ def analyse(config: Config) -> Analysis:
             raise AnalysisError(f"{where}: \\include{{{arg}}} appears twice")
         path = source_dir / f"{arg}.tex"
         if not path.is_file():
-            raise AnalysisError(f"{where}: included file not found: {path}")
+            raise AnalysisError(
+                f"{where}: included file not found: {path} (LaTeX would skip it with a "
+                "warning; create the file or remove the \\include)"
+            )
+        # a nested \include is left to LaTeX ("\include cannot be nested"): the text may
+        # also contain it in \verb or a verbatim environment
         unit_clean = strip_comments(read_source(path))
-        if find_macros(unit_clean, {"include"}):
-            raise AnalysisError(f"{path}: nested \\include is not supported (A2)")
         unit_texts.append(unit_clean)
         first_commands.append(_first_command(unit_clean))
         includes.append(Include(arg, path, lineno, headed=False))

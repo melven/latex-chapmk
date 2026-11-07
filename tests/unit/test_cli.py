@@ -100,7 +100,7 @@ def test_clean_a_document_that_cannot_be_analysed(tmp_path: Path) -> None:
     (tmp_path / "d.tex").write_text(
         "\\documentclass{book}\\begin{document}\\include{a}\\end{document}\n"
     )
-    (tmp_path / "a.tex").write_text("\\include{nested}\n")  # nested \\include: analysis fails
+    # a.tex is missing: the analysis fails
     build = tmp_path / ".chapmk" / "d"
     build.mkdir(parents=True)
     (build / ".chapmk-build-dir").touch()
