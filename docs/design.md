@@ -776,10 +776,11 @@ to a TikZ-externalized build** (S12). Without `\tikzexternalize` pictures stay i
   read or names; a change removes the figure before the next batch or pass. A change of the
   distribution files of the exporting runs empties the cache. `check` uses a fresh cache for
   its reference.
-- **Font descriptors:** pdfTeX writes the descriptor of a font that also occurs in an included
-  PDF with the font file's metrics, otherwise with TFM metrics; runs see only some figures, so
-  the merge normalises descriptors to the whole-document rule (text extraction depends on
-  them).
+- **Font descriptors:** pdfTeX writes the descriptor of a font of the text that also occurs
+  in an included PDF with the font file's metrics (it replaces the figure's copy), otherwise
+  with TFM metrics; runs see only some figures, so the merge normalises descriptors to the
+  whole-document rule (text extraction depends on them). Fonts that occur only in figures
+  keep the figures' descriptors (pdfTeX copies fonts it does not have).
 - `pictures.cache = false` typesets every picture inline.
 
 ---

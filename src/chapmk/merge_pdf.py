@@ -283,14 +283,17 @@ def _font_name(desc: Any) -> str:
 def _normalize_font_descriptors(pdf: pikepdf.Pdf) -> None:
     """Font descriptor metrics as one pdfTeX run of the whole document writes them (§6.17).
 
-    pdfTeX writes one descriptor per font. For a font that also occurs in an included PDF
-    (an embedded figure, ``/PTEX.FileName``), its metrics come from the font file: Ascent and
-    CapHeight = FontBBox top, Descent = FontBBox bottom, no XHeight; otherwise from the TFM.
-    Runs see only some of the figures, so their copies differ; text extraction (§3.3 item 2)
-    uses these metrics.
+    pdfTeX writes one descriptor per font. For a font of the text that also occurs in an
+    included PDF (an embedded figure, ``/PTEX.FileName``), pdfTeX replaces the figure's copy
+    and takes the metrics from the font file: Ascent and CapHeight = FontBBox top, Descent =
+    FontBBox bottom, no XHeight; otherwise from the TFM. Runs see only some of the figures,
+    so their copies differ; text extraction (§3.3 item 2) uses these metrics. A font that
+    occurs only in figures keeps the figure's descriptor (pdfTeX copies fonts it does not
+    have, e.g. a plot's ArialMT): it is left as the runs wrote it.
     """
     descriptors: dict[str, list[Any]] = {}
     in_figures: set[str] = set()
+    in_text: set[str] = set()
     seen: set[tuple[int, int]] = set()
 
     def walk(resources: Any, figure: bool) -> None:
@@ -298,14 +301,13 @@ def _normalize_font_descriptors(pdf: pikepdf.Pdf) -> None:
             return
         for font in resources.get("/Font", Dictionary()).values():
             desc = font.get("/FontDescriptor")
-            if desc is None or desc.objgen in seen:
-                if desc is not None and figure:
-                    in_figures.add(_font_name(desc))
+            if desc is None:
+                continue
+            (in_figures if figure else in_text).add(_font_name(desc))
+            if desc.objgen in seen:
                 continue
             seen.add(desc.objgen)
             descriptors.setdefault(_font_name(desc), []).append(desc)
-            if figure:
-                in_figures.add(_font_name(desc))
         for xobj in resources.get("/XObject", Dictionary()).values():
             if xobj.get("/Subtype") != Name.Form or xobj.objgen in seen:
                 continue
@@ -315,10 +317,12 @@ def _normalize_font_descriptors(pdf: pikepdf.Pdf) -> None:
     for page in pdf.pages:
         walk(page.obj.get("/Resources"), False)
     for name, descs in descriptors.items():
+        if name not in in_text:
+            continue  # only in figures: the figures' own descriptors
         if name in in_figures:
             for d in descs:
                 bbox = d.get("/FontBBox")
-                if bbox is None:
+                if bbox is None or "/FontFile" not in d:  # a figure's other font of that name
                     continue
                 d.Ascent = bbox[3]
                 d.CapHeight = bbox[3]
