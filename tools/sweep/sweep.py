@@ -31,6 +31,7 @@ FONT_LINES = re.compile(
 BIB = re.compile(r"^(\s*)\\bibliography\s*\{([^}]+)\}", re.MULTILINE)
 VARIANT = False
 LATEXMK = False
+PREFILTER = False
 EPOCH = 1700000000
 LATEXMKRC = r"""
 add_cus_dep('nlo', 'nls', 0, 'nlo2nls');
@@ -173,6 +174,31 @@ def variant(root: Path, main: Path) -> list[str]:
     return applied
 
 
+def prefilter(root: Path, main: Path) -> str | None:
+    """One plain pdflatex pass (draft mode) in a copy: None if it compiles, else the first
+    error line. Filters documents that do not build with pdfLaTeX before the slow stages."""
+    import os
+
+    from chapmk.texdist import detect
+
+    copy = root.parent / "pre"
+    shutil.copytree(root, copy, symlinks=True)
+    cwd = copy / main.relative_to(root).parent
+    argv = ["pdflatex", "-interaction=nonstopmode", "-halt-on-error", "-file-line-error",
+            "-draftmode", main.name]
+    try:
+        r = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, errors="replace",
+                           env=detect().environment(EPOCH, os.environ), timeout=300)
+        rc, out = r.returncode, r.stdout
+    except subprocess.TimeoutExpired:
+        rc, out = -1, "pdflatex timeout (300 s)"
+    shutil.rmtree(copy, ignore_errors=True)
+    if rc == 0:
+        return None
+    errors = [ln for ln in out.splitlines() if re.match(r"^(!|\S+:\d+: )", ln)]
+    return re.sub(r"/sweep/work/tmp\w+/(doc|pre)/", "", (errors or out.splitlines()[-1:] or ["?"])[0])[:200]
+
+
 def typo(main: Path) -> str | None:
     """Change one plain text line in the middle \\include'd file; returns file:line."""
     names = INCLUDE.findall(main.read_text(errors="replace"))
@@ -199,6 +225,12 @@ def sweep_one(entry: dict[str, Any]) -> dict[str, Any]:
     res: dict[str, Any] = {"id": entry["id"]}
     if VARIANT:
         res["variant"] = variant(root, main)
+    if PREFILTER:
+        err = prefilter(root, main)
+        if err is not None:
+            res["prefilter"] = err
+            shutil.rmtree(work, ignore_errors=True)
+            return res
     if LATEXMK:
         res["reference"] = latexmk_vs_full(work, main)
     rc, out, rep, sec = chapmk(main.parent, main.name, "--check")
@@ -222,11 +254,12 @@ def sweep_one(entry: dict[str, Any]) -> dict[str, Any]:
 
 
 def main() -> int:
-    global VARIANT, LATEXMK
+    global VARIANT, LATEXMK, PREFILTER
     args = sys.argv[1:]
     while args and args[0].startswith("--"):
         VARIANT |= args[0] == "--variant"
         LATEXMK |= args[0] == "--latexmk"
+        PREFILTER |= args[0] == "--prefilter"
         args = args[1:]
     manifest, results = Path(args[0]), Path(args[1])
     only = set(args[2:])

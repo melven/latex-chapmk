@@ -40,7 +40,9 @@ def status(r: dict) -> tuple[str, str]:
 
 def main() -> None:
     manifest = {e["id"]: e for e in json.load(open(sys.argv[1]))}
-    rows = [json.loads(ln) for ln in open(sys.argv[2]) if ln.strip()]
+    everything = [json.loads(ln) for ln in open(sys.argv[2]) if ln.strip()]
+    rows = [r for r in everything if "prefilter" not in r]
+    skipped = [r for r in everything if "prefilter" in r]
     print("| Document | Licence | Class | Variant | Result | Cold s | Typo s | Note |")
     print("|---|---|---|---|---|---|---|---|")
     for r in rows:
@@ -50,6 +52,15 @@ def main() -> None:
               f"{', '.join(r.get('variant', [])) or '-'} | {st} | "
               f"{r.get('cold', {}).get('seconds', '')} | {(r.get('typo') or {}).get('seconds', '')} | "
               f"{note.replace('|', '/')} |")
+
+    if skipped:
+        print("\n## Not compiling with pdfLaTeX (pre-filter)\n")
+        print("| Document | First error |")
+        print("|---|---|")
+        for r in skipped:
+            repo = r["id"].removeprefix("gh/")
+            link = f"[{repo}](https://github.com/{repo})" if r["id"].startswith("gh/") else repo
+            print(f"| {link} | {r['prefilter'].replace('|', '/')} |")
 
 
 main()

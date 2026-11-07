@@ -16,7 +16,7 @@ the documents themselves are never committed, only their sources and the results
   comparison), cold `--check`, a typo in the middle unit and an incremental `--check`. One
   JSON line per document; work directories of failures are kept.
 - `table.py manifest.json results.jsonl`: Markdown table.
-- `run2.sh`: clone a manifest's repositories and run the sweep (`$SCRATCH`: scratch dir).
+- `run2.sh`, `run3.sh`: clone a manifest's repositories and run the sweep (`$SCRATCH`: scratch dir); `--prefilter` skips documents that do not compile with one plain pdflatex pass (second table: link and first error).
 
 Results: `manifest1.json` (CTAN manuals and the 24 licensed theses with most stars),
 `manifest2.json` (50 random documents of the larger search), `results/*.jsonl` and tables.
