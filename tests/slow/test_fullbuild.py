@@ -41,7 +41,9 @@ def test_full_build_runs_makeindex_for_an_index(tmp_path: Path, capsys) -> None:
         "\\documentclass{article}\n\\usepackage{makeidx}\\makeindex\n\\begin{document}\n"
         "Alpha\\index{alpha} beta\\index{beta}\n\\printindex\n\\end{document}\n"
     )
-    assert main(["build", "d.tex", "-v"], cwd=src) == 0, capsys.readouterr().err
+    # --full: an index alone no longer forces full mode (incremental builds run makeindex
+    # on the canonical .idx)
+    assert main(["build", "d.tex", "--full", "-v"], cwd=src) == 0, capsys.readouterr().err
     ind = src / ".chapmk" / "d" / "full" / "d.ind"
     assert ind.is_file() and "alpha" in ind.read_text()
 

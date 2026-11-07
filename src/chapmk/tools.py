@@ -243,8 +243,9 @@ def with_datalists(bcf: str, blocks: Mapping[str, str]) -> str:
     return "\n".join(out) + "\n"
 
 
-def nomenclature_file(segments: Sequence[str], entries: Mapping[str, list[str]]) -> str:
-    """Canonical ``.nlo``: the entries of each segment in document order, with markers."""
+def marked_file(segments: Sequence[str], entries: Mapping[str, list[str]]) -> str:
+    """Canonical ``.nlo`` or ``.idx``: the entries of each segment in document order, with
+    markers."""
     lines: list[str] = []
     for seg in segments:
         lines.append(f"{NLO_MARKER}{seg}")

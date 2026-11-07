@@ -247,9 +247,8 @@ def _fallback_reasons(text: str) -> list[str]:
         backend = re.search(r"backend\s*=\s*(\w+)", macro.argument or "")
         if backend and backend.group(1) != "biber":
             reasons.append(_backend_reason(backend.group(1)))
-    for name in ("makeindex", "makeglossaries"):
-        if re.search(rf"\\{name}\b", text):
-            reasons.append(f"\\{name} is not supported")
+    if re.search(r"\\makeglossaries\b", text):
+        reasons.append("\\makeglossaries is not supported")
     if re.search(r"\\bibliography\s*\{", text):
         reasons.append("BibTeX (\\bibliography) is not supported; use biblatex with biber")
     # C10: citations outside refsection 0 cannot be patched into the .bcf per run; found

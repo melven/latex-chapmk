@@ -88,7 +88,7 @@ def test_split_by_config_regex_and_by_input_file(tmp_path: Path) -> None:
     a = analyse(cfg)
     assert a.split_line == 2 and "setup.tex" in a.split_reason
     assert a.preamble_inputs == (tmp_path / "setup.tex",)
-    assert any("makeindex" in r for r in a.fallback_reasons)
+    assert not any("makeindex" in r for r in a.fallback_reasons)  # an index is supported
     a2 = analyse(Config(main=cfg.main, split_before=(r"\\usepackage\{foo\}",)))
     assert a2.split_line == 2  # the input file still matches first
 

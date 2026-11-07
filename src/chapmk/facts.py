@@ -10,7 +10,7 @@ from collections.abc import Sequence
 #: ``<name>.sty``, in the ``.fls`` of the format build and of every run (also when a class or
 #: another package loads them).
 UNSUPPORTED_PACKAGES = frozenset(
-    {"glossaries", "glossaries-extra", "imakeidx", "makeidx", "minted", "acronym"}
+    {"glossaries", "glossaries-extra", "imakeidx", "minted", "acronym"}
 )
 
 #: First commands that start a compilation unit (A5, §6.1 step 5). Config adds
@@ -33,8 +33,9 @@ SECTION_HEADINGS: tuple[str, ...] = ("section", "section*", "addsec", "addsec*")
 #: List files every document may have (``\\@starttoc``); a document's own list files (``L``
 #: records, e.g. ``.loa``) are added at runtime (``State.list_suffixes``).
 DEFAULT_LIST_SUFFIXES: tuple[str, ...] = (".toc", ".lof", ".lot", ".loalg", ".lol", ".tdo")
-#: Files written by the tools on the canonical state (biber, makeindex for nomencl).
-TOOL_SUFFIXES: tuple[str, ...] = (".bbl", ".nls")
+#: Files written by the tools on the canonical state (biber, makeindex for nomencl and the
+#: index).
+TOOL_SUFFIXES: tuple[str, ...] = (".bbl", ".nls", ".ind")
 
 #: List commands with a known derived file (other list commands: all list files).
 LIST_COMMANDS: dict[str, str] = {
@@ -46,6 +47,7 @@ LIST_COMMANDS: dict[str, str] = {
     "printbibliography": ".bbl",
     "bibliography": ".bbl",
     "printnomenclature": ".nls",
+    "printindex": ".ind",
 }
 
 
