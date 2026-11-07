@@ -88,6 +88,19 @@ def test_synctex_records_are_independent_of_tags_paths_and_offsets(tmp_path: Pat
     assert check.synctex_records(moved, src).records != a.records
 
 
+def test_synctex_form_numbers_are_not_compared(tmp_path: Path) -> None:
+    """A form reference names the run's form number (a clipped image; a run that excludes
+    units creates fewer forms: sweep CatoMaior f833 vs f422); its position still counts."""
+    src = tmp_path / "s"
+    inputs = {"1": f"{src}/main.tex"}
+    ref = _synctex(tmp_path / "ref.synctex.gz", inputs, "[1,3:0,0:1,1,0\nf833:5,6\n]\n", 10)
+    got = _synctex(tmp_path / "got.synctex.gz", inputs, "[1,3:0,0:1,1,0\nf422:5,6\n]\n", 10)
+    moved = _synctex(tmp_path / "m.synctex.gz", inputs, "[1,3:0,0:1,1,0\nf422:5,7\n]\n", 10)
+    a = check.synctex_records(ref, src).records
+    assert a == check.synctex_records(got, src).records and "1|f:5,6" in a
+    assert check.synctex_records(moved, src).records != a
+
+
 def test_input_key(tmp_path: Path) -> None:
     assert check.input_key("chapters/ch1.tex", tmp_path) == ("chapters/ch1.tex", True)
     assert check.input_key(f"{tmp_path}/./chapters/ch1.tex", tmp_path) == ("chapters/ch1.tex", True)
