@@ -106,7 +106,7 @@ Details: [docs/design.md](https://github.com/melven/latex-chapmk/blob/main/docs/
 - pdfLaTeX only. Tested in CI: TeX Live on Linux, MiKTeX on Linux and Windows; macOS not yet.
 - Full builds (like latexmk, with a warning), most common first: BibTeX (biblatex with biber
   only), hyperref without the `bookmark` package, `glossaries`, `acronym`, `minted`,
-  `imakeidx`/`makeidx`, biblatex refsections, primitive `\mark`, an `eqparbox` tag used in
+  `imakeidx`, biblatex refsections, primitive `\mark`, an `eqparbox` tag used in
   several chapters whose width changes, and cases chapmk cannot verify.
 - TikZ externalize: chapmk keeps `\tikzexternalize` but makes the figures itself (no shell
   escape); the result equals an externalized build. References hidden in macros inside

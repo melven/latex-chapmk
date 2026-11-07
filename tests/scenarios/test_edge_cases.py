@@ -461,3 +461,31 @@ def test_page_colour_set_in_a_unit(tmp_path: Path, capsys: pytest.CaptureFixture
     rep = checked(src, capsys)  # files are attributed (and linted) after the first run
     assert rep["mode"] == "incremental" and rep["compiled"] == ["a", "b"], rep
     assert any("a.tex:2: \\pagecolor" in w for w in rep["warnings"]), rep
+
+
+@pytest.mark.parametrize("jobs", ["1", "4"])
+def test_index_with_makeidx(tmp_path: Path, capsys: pytest.CaptureFixture[str], jobs: str) -> None:
+    """makeidx: \\index entries carry page numbers; like nomencl, the canonical .idx holds
+    each segment's entries from its committing run and makeindex runs in canon/. A typo
+    compiles one unit; a new entry and a page shift change the index the glue prints."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage{makeidx}\n\\makeindex\n\\usepackage{lipsum}\n"
+        "\\begin{document}\n\\include{a}\n\\include{b}\n\\include{c}\n\\printindex\n"
+        "\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}Alpha\\index{alpha}. Text a.\n\\lipsum[1-2]\n")
+    (src / "b.tex").write_text("\\chapter{B}Beta\\index{beta} and alpha\\index{alpha}. Text b.\n")
+    (src / "c.tex").write_text("\\chapter{C}Gamma\\index{gamma!sub}. Text c.\n")
+    assert checked(src, capsys, "-j", jobs)["mode"] == "cold"
+    edit(src / "c.tex", "Text c.", "Txet c.")
+    rep = checked(src, capsys, "-j", jobs)
+    assert rep["mode"] == "incremental" and rep["compiled"] == ["c"], rep
+    edit(src / "b.tex", "Text b.", "Delta\\index{delta}. Text b.")
+    rep = checked(src, capsys, "-j", jobs)
+    assert rep["mode"] == "incremental" and rep["compiled"] == ["b"], rep
+    assert "delta" in (src / ".chapmk" / "main" / "canon" / "main.ind").read_text()
+    edit(src / "a.tex", "\\lipsum[1-2]", "\\lipsum[1-30]")  # b and c move by pages
+    rep = checked(src, capsys, "-j", jobs)
+    assert rep["mode"] == "incremental" and "a" in rep["compiled"], rep

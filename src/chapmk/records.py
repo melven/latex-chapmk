@@ -184,6 +184,7 @@ class RunRecords:
     pages: list[PageRecord] = field(default_factory=list)
     files: list[tuple[str, str]] = field(default_factory=list)
     nomenclature: dict[str, list[str]] = field(default_factory=dict)
+    index: dict[str, list[str]] = field(default_factory=dict)  # .idx entries (makeidx)
     #: counter name -> (register index, names of the counters it resets)
     counters: dict[str, tuple[int, tuple[str, ...]]] = field(default_factory=dict)
     #: elapsed TeX time in seconds at points of the run (``load``, ``begin``, segment ids,
@@ -279,8 +280,9 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
             recs.mark_classes[int(reg)] = name.strip()
 
 
-def read_nomenclature(path: Path) -> dict[str, list[str]]:
-    """``.nlo`` entries per segment, split at the ``%chapmk-seg`` markers (§6.4.2 item 5)."""
+def read_marked(path: Path) -> dict[str, list[str]]:
+    """Entries of a ``.nlo`` or ``.idx`` file per segment, split at the ``%chapmk-seg``
+    markers (§6.4.2 item 5)."""
     entries: dict[str, list[str]] = {}
     seg: str | None = None
     for line in text_lines(read_log(path)):
@@ -290,7 +292,7 @@ def read_nomenclature(path: Path) -> dict[str, list[str]]:
         elif seg is not None:
             entries[seg].append(line)
         elif line.strip():
-            raise RecordError(f"{path}: nomenclature entry before the first segment marker")
+            raise RecordError(f"{path}: entry before the first segment marker")
     return entries
 
 
@@ -321,9 +323,11 @@ def _read_run_records(run_dir: Path, analysis: Analysis) -> RunRecords:
     if not frec.is_file():
         raise RecordError(f"missing {frec}")
     _read_frec(frec, recs)
-    nlo = run_dir / f"{job}.nlo"
+    nlo, idx = run_dir / f"{job}.nlo", run_dir / f"{job}.idx"
     if nlo.is_file():
-        recs.nomenclature = read_nomenclature(nlo)
+        recs.nomenclature = read_marked(nlo)
+    if idx.is_file():
+        recs.index = read_marked(idx)
     if glue_id(0) not in recs.entries:
         raise RecordError(f"{main_aux}: no baseline/entry records (chapmk.sty not loaded?)")
     for k, inc in enumerate(analysis.includes, start=1):

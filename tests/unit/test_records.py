@@ -195,3 +195,26 @@ def test_run_view_parses_each_file_once(tmp_path: Path) -> None:
     assert view.slices["U1"][0].startswith("\\chapmk@entry{U1}")
     assert view.log == "Grüße\n" and view.bcf is None
     assert view.loaded == {"hyperref.sty", "a.tex"}
+
+
+def test_read_marked_index_entries(tmp_path: Path) -> None:
+    """makeidx: .idx entries per segment at the %chapmk-seg markers; the canonical file
+    puts them back in document order (tools.marked_file)."""
+    from chapmk.records import read_marked
+    from chapmk.tools import marked_file
+
+    idx = tmp_path / "main.idx"
+    idx.write_text(
+        "%chapmk-seg G0\n%chapmk-seg U1\n\\indexentry{alpha}{3}\n\\indexentry{beta}{4}\n"
+        "%chapmk-seg G1\n"
+    )
+    entries = read_marked(idx)
+    assert entries == {
+        "G0": [],
+        "U1": ["\\indexentry{alpha}{3}", "\\indexentry{beta}{4}"],
+        "G1": [],
+    }
+    assert marked_file(["G0", "U1", "G1"], entries) == idx.read_text()
+    idx.write_text("\\indexentry{early}{1}\n%chapmk-seg G0\n")
+    with pytest.raises(RecordError, match="before the first segment marker"):
+        read_marked(idx)

@@ -186,9 +186,11 @@
   \chapmk@main{\string\chapmk@entry{\chapmk@seg}{\chapmk@vec}}}
 \def\chapmk@gexit@rec{\chapmk@mprep\def\chapmk@pfx{chapmk@b}%
   \chapmk@main{\string\chapmk@gexit{\chapmk@seg}{\chapmk@vec}}}
-% segment marker in the nomenclature stream (delayed, like nomencl's own writes; S2b)
-\def\chapmk@mark{\ifdefined\@nomenclaturefile
-  \edef\chapmk@tmp{\noexpand\protected@write\noexpand\@nomenclaturefile{}%
+% segment markers in the nomenclature and index streams (delayed, like their own writes;
+% S2b): \makenomenclature's .nlo, \makeindex's .idx
+\def\chapmk@mark{\chapmk@mark@in\@nomenclaturefile\chapmk@mark@in\@indexfile}
+\def\chapmk@mark@in#1{\ifdefined#1%
+  \edef\chapmk@tmp{\noexpand\protected@write\noexpand#1{}%
     {\@percentchar chapmk-seg \chapmk@seg}}\chapmk@tmp\fi}
 % absolute assignments of the current segment (counter names), for prediction (§6.9.3)
 \def\chapmk@absnames{}

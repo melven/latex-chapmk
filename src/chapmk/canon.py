@@ -33,7 +33,7 @@ from chapmk.facts import DEFAULT_LIST_SUFFIXES, derived_suffixes
 from chapmk.files import copy_atomic, digest, read_raw, write_atomic, write_if_changed
 from chapmk.layout import Layout
 from chapmk.predict import SegmentVectors, normalized
-from chapmk.records import RunView, read_nomenclature
+from chapmk.records import RunView, read_marked
 from chapmk.segment import is_glue, is_unit, position, unit_id
 from chapmk.state import SegmentArtifact, State, save_state
 from chapmk.texdist import TexDistribution
@@ -43,7 +43,7 @@ from chapmk.tools import (
     citations_by_segment,
     citekey_lines,
     datalists,
-    nomenclature_file,
+    marked_file,
     patch_bcf,
     run_biber,
     run_makeindex,
@@ -214,16 +214,18 @@ def commit_run(
         by_seg = citations_by_segment(run_main, run.bcf)
         for seg in taken:
             state.citations[seg] = by_seg.get(seg, [])
-    nlo = canon / f"{job}.nlo"
-    if recs.nomenclature or nlo.is_file():
-        entries = read_nomenclature(nlo) if nlo.is_file() else {}
-        for seg in taken:
-            entries[seg] = recs.nomenclature.get(seg, [])
-        if write_if_changed(nlo, nomenclature_file(order, entries)):
-            (canon / _NLO_CHANGED).touch()
+    for suffix, found in ((".nlo", recs.nomenclature), (".idx", recs.index)):
+        path = canon / f"{job}{suffix}"
+        if found or path.is_file():
+            entries = read_marked(path) if path.is_file() else {}
+            for seg in taken:
+                entries[seg] = found.get(seg, [])
+            if write_if_changed(path, marked_file(order, entries)):
+                (canon / f"{suffix}{_CHANGED}").touch()
 
 
-_NLO_CHANGED = ".nlo-changed"
+#: suffix of the flag files: the canonical .nlo/.idx changed since makeindex last ran on it
+_CHANGED = "-changed"
 
 
 _LMARK = re.compile(r"^\\chapmk@lmark\s*\{(/?)([UG]\d+)\}\s*$")
@@ -348,7 +350,8 @@ def run_tools(
 ) -> list[str]:
     """biber on the patched ``.bcf`` (S5: the last run's ``.bcf`` with the canonical
     citations of all segments) if it changed or there is no ``.bbl``; makeindex if the
-    canonical ``.nlo`` changed or there is no ``.nls``. Returns the tool runs.
+    canonical ``.nlo`` changed or there is no ``.nls``, and on the canonical ``.idx`` (default
+    style, like latexmk) for ``.ind``. Returns the tool runs.
 
     Datalists are declared where ``\\printbibliography`` runs: the ``.bcf`` gets those of
     all runs of the ``batch`` and, unless a run of the batch compiled all units, those
@@ -379,9 +382,14 @@ def run_tools(
                 target.unlink()  # retried next time
                 raise
             tools.append("biber")
-    nlo = canon / f"{job}.nlo"
-    if nlo.is_file() and ((canon / _NLO_CHANGED).is_file() or not (canon / f"{job}.nls").is_file()):
-        run_makeindex(dist, nlo.name, f"{job}.nls", NOMENCL_STYLE, canon, env)
-        (canon / _NLO_CHANGED).unlink(missing_ok=True)
-        tools.append("makeindex")
+    for src, out, style, name in (
+        (".nlo", ".nls", NOMENCL_STYLE, "makeindex"),
+        (".idx", ".ind", None, "makeindex (index)"),
+    ):
+        path, flag = canon / f"{job}{src}", canon / f"{src}{_CHANGED}"
+        if path.is_file() and (flag.is_file() or not (canon / f"{job}{out}").is_file()):
+            log = "makeindex.out" if src == ".nlo" else "makeindex-idx.out"
+            run_makeindex(dist, path.name, f"{job}{out}", style, canon, env, log)
+            flag.unlink(missing_ok=True)
+            tools.append(name)
     return tools

@@ -40,7 +40,7 @@ a plain full build (§6.14). `chapmk check` compares a build with a plain full b
   `\tikzexternalize` but makes the figures itself (§6.4.3, §6.17).
 - Byte-identical PDFs.
 - Packages that write their own index or glossary files or need shell escape: `glossaries`,
-  `imakeidx`/`makeidx`, `minted`, and packages that keep document-wide state in macros the
+  `imakeidx` (runs makeindex itself through shell escape), `minted`, and packages that keep document-wide state in macros the
   state vector does not carry: `acronym` (first use of an acronym, S17) (full builds with a
   warning; one table, `facts.UNSUPPORTED_PACKAGES`, for the preamble scan and the runtime
   check). `cleveref` is supported (S16).
@@ -74,7 +74,7 @@ chapmk relies on these rules and checks them where it can (README "Document assu
 - **F3** Cold builds (no state) are correct and use parallel runs after the first one.
 - **F4** SyncTeX forward and inverse search across the merged PDF, including the glue.
 - **F5** Internal links, outline, page labels and document info work in the merged PDF.
-- **F6** biblatex with biber, nomencl with makeindex.
+- **F6** biblatex with biber, nomencl and an index (`\makeindex`, makeidx) with makeindex.
 - **F7** Errors with paths and line numbers of the user's sources; on an error the previous
   `main.pdf` is kept.
 - **F8** `chapmk watch` (future).
@@ -246,7 +246,8 @@ options are part of `pre` (`draft` freezes `\ifdraft`).
 |---|---|
 | `\tikzexternalize` | Redirected at runtime (§6.4.3); keeps the format independent of it. |
 | Code that creates PDF images or form xobjects (`analysis.DENY_SPLIT`) | Not dumped by pdfTeX (§6.3.3). |
-| `\makeindex`, `\makeglossaries`, `minted` | Unsupported (full mode). |
+| `\makeindex` | Opens the `.idx` the runs write (segment markers, §6.4.2). |
+| `\makeglossaries`, `minted` | Unsupported (full mode). |
 | `format.split_before` | User patterns. |
 
 #### 6.3.3 State a format does not keep (S13)
@@ -303,7 +304,7 @@ Loaded at the split point of incremental runs.
 4. **Records file `\jobname.frec`** (one write stream for all): page map (`P`), file
    attribution (`F`, from `file/before` and the graphics inclusion), elapsed TeX time (`T`),
    eqparbox tag uses (`Q`), list files (`L`), per-unit layout (`O`), mark classes (`K`).
-5. **Markers in shared files:** `%chapmk-seg <seg>` lines in the `.nlo` stream; list-file
+5. **Markers in shared files:** `%chapmk-seg <seg>` lines in the `.nlo` and `.idx` streams; list-file
    markers `\chapmk@lmark{U<k>}` / `{/<seg>}` (no-ops) written while the aux files are read at
    `\end{document}`, which delimit each unit's list entries (§6.7.1).
 6. **Aux handlers:** the chapmk aux statements are no-ops except the checkpoint store.
@@ -340,9 +341,9 @@ the privilege): hardlinks, else copies. Limitation: paths leaving the source tre
 (`\input{../x}`) do not resolve.
 
 **Run directory** `runs/<r>/`: the canonical main and unit aux files, the derived files (list
-files, `.bbl`, `.nls`), the include subdirectories and the run main. Excluded units of a
+files, `.bbl`, `.nls`, `.ind`), the include subdirectories and the run main. Excluded units of a
 parallel run get predicted checkpoints (§6.9.3). Outputs: `.pdf`, `.synctex.gz`, `.log`,
-`.fls`, aux files, `.frec`, `.nlo`, `.bcf`, list files.
+`.fls`, aux files, `.frec`, `.nlo`, `.idx`, `.bcf`, list files.
 
 A run compiles the glue plus its selection: all units (full run), some, or none (glue-only
 run). Runs execute in a thread pool that waits on subprocesses (no fork); each process runs
@@ -364,7 +365,7 @@ both cases, so they never enter the unit's list-file section or main-aux slice (
 ### 6.6 Canonical state and commit
 
 `canon/` holds the committed state: unit aux files, the canonical main aux, the list files,
-`.bcf`/`.bbl`, `.nlo`/`.nls`, and `state.json`, which stores (`state.py`):
+`.bcf`/`.bbl`, `.nlo`/`.nls`, `.idx`/`.ind`, and `state.json`, which stores (`state.py`):
 
 - the epoch, fingerprints, format stamp and include list of the state;
 - per segment: the run that committed it and its page indices; its attributed source files
@@ -464,7 +465,8 @@ backrefs, unclassified statements, glue self data), and its sources.
 
 Exit state → successors' entries; exports → importers; list contributions → list files →
 readers; citations → `.bcf` → biber → `.bbl` → importers; nomenclature entries → `.nlo` →
-makeindex → `.nls` → readers; outline records → merge only.
+makeindex → `.nls` → readers; index entries → `.idx` → makeindex → `.ind` → readers
+(`\printindex`); outline records → merge only.
 
 #### 6.8.4 Lint (A1)
 
@@ -578,9 +580,12 @@ sequence of full passes.
   partial `.bcf`. A run that compiled all units checks the patch against its own `.bcf`
   (§6.14). biber errors are shown with the `.blg` lines.
 
-**makeindex** (nomencl): the canonical `.nlo` is the concatenation of the segments' entries
-(split at the `%chapmk-seg` markers); makeindex runs when it changed. Full mode also runs
-makeindex for a generic `.idx`, like latexmk.
+**makeindex** (nomencl, index): the canonical `.nlo` and `.idx` are the concatenation of the
+segments' entries from their committing runs (split at the `%chapmk-seg` markers; entries carry
+page numbers, so a page shift changes them); makeindex runs in `canon/` when one changed
+(`.nlo` with `nomencl.ist`, `.idx` with the default style, like latexmk). Full mode runs
+makeindex on the run's `.nlo` and `.idx`. `imakeidx` calls makeindex itself and stays
+unsupported.
 
 ### 6.11 PDF merge
 
@@ -938,7 +943,7 @@ Relevant mechanisms: the `.nlo` stream, biblatex renumbering, longtable and eqpa
 | list file | `.frec` | `L <ext>` per `\@starttoc` |
 | unit layout | `.frec` | `O <seg> 0\|1` (twoside and openright at the unit start) |
 | mark classes | `.frec` | `K <pseudo register> <class>`; `K primitive <n>` |
-| stream marker | `.nlo` | `%chapmk-seg <seg>` |
+| stream marker | `.nlo`, `.idx` | `%chapmk-seg <seg>` |
 | list-file markers | list files | `\chapmk@lmark{U<k>}`, `\chapmk@lmark{/<seg>}` |
 
 Segment ids: `G0..Gn` for glue, `U1..Un` for units (`segment.py`). The driver checks the
