@@ -409,3 +409,37 @@ def test_biblatex_with_the_bibtex_backend(
     rep = checked(src, capsys)
     assert rep["mode"] == "full" and "BibTeX in use" in rep["reason"], rep
     assert "\\entry{knuth}" in (src / ".chapmk" / "main" / "full" / "main.bbl").read_text()
+
+
+@pytest.mark.parametrize("jobs", ["1", "4"])
+def test_mparhack_margin_notes(
+    copy_corpus,  # type: ignore[no-untyped-def]
+    capsys: pytest.CaptureFixture[str],
+    jobs: str,
+) -> None:
+    """S17: mparhack counts margin notes document-wide (a macro, not in the state vector) and
+    records the count per page; a run compares its count only with its own records, so as
+    self data the result equals a full build. Typos compile only their unit."""
+    src = copy_corpus("minimal/S17-mparhack-acronym/mparhack")
+    assert checked(src, capsys, "-j", jobs)["mode"] == "cold"
+    edit(src / "a.tex", "Text a.", "Text a. \\marginpar{Extra 1}\\marginpar{Extra 2}")
+    rep = checked(src, capsys, "-j", jobs)
+    assert rep["mode"] == "incremental" and rep["compiled"] == ["a"], rep
+    edit(src / "b.tex", "Text b.", "Txet b.")
+    rep = checked(src, capsys, "-j", jobs)
+    assert rep["mode"] == "incremental" and rep["compiled"] == ["b"], rep
+
+
+def test_acronym_gives_full_builds(
+    copy_corpus,  # type: ignore[no-untyped-def]
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """S17: acronym keeps the first use of each acronym in global macros, which a run that
+    excludes the unit with the first use does not see (it printed the long form again):
+    full builds with the reason."""
+    src = copy_corpus("minimal/S17-mparhack-acronym/acronym")
+    rep = checked(src, capsys)
+    assert rep["mode"] == "full" and "acronym" in rep["reason"], rep
+    edit(src / "b.tex", "Text b.", "Txet b.")
+    rep = checked(src, capsys)
+    assert rep["mode"] == "full" and "acronym" in rep["reason"], rep

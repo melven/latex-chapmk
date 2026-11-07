@@ -90,7 +90,7 @@ CITE = "cite"  # \abx@aux@cite/segm: citation (-> .bcf)
 BACKREF = "backref"  # \abx@aux@backref: citing page (read by the bibliography)
 BIBDATA = "bibdata"  # other keyed biblatex data: merged per key
 BOOKMARK = "bookmark"  # \BKM@entry: merge only
-SELF = "self"  # data the writing segment reads back (pgf marks, longtable widths)
+SELF = "self"  # data the writing segment reads back (pgf marks, longtable widths, mparhack)
 EQP = "eqp"  # eqparbox widths per tag (end of document)
 AGGREGATE = "aggregate"  # OR over typeset segments (KOMA autodot)
 LISTDATA = "listdata"  # written while typesetting lists (KOMA tocbasic widths)
@@ -113,7 +113,13 @@ _CLASSES: list[tuple[str, re.Pattern[str]]] = [
     (BACKREF, re.compile(r"^\\abx@aux@backref\{")),
     (BIBDATA, re.compile(r"^\\abx@aux@")),
     (BOOKMARK, re.compile(r"^\\BKM@entry\{")),
-    (SELF, re.compile(r"^\\(pgfsyspdfmark\s*\{|gdef\s*\\LT@[ivxlcdm]+\s*\{)")),
+    (
+        SELF,  # mparhack: margin-note count per page, end page, its rerun warning (S17)
+        re.compile(
+            r"^\\(pgfsyspdfmark\s*\{|gdef\s*\\LT@[ivxlcdm]+\s*\{|mph@setcol\{|def\\mph@nr\{"
+            r"|gdef\\mph@lastpage\{|csname mph@do@warn\\endcsname)"
+        ),
+    ),
     (EQP, re.compile(r"^\\expandafter\\gdef\\csname eqp@")),
     (AGGREGATE, re.compile(r"^\\global\\csname @altsecnumformattrue\\endcsname")),
     (LISTDATA, re.compile(r"^\\global\\@namedef\{scr@dte@[A-Za-z]+@lastmaxnumwidth\}")),

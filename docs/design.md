@@ -40,9 +40,10 @@ a plain full build (§6.14). `chapmk check` compares a build with a plain full b
   `\tikzexternalize` but makes the figures itself (§6.4.3, §6.17).
 - Byte-identical PDFs.
 - Packages that write their own index or glossary files or need shell escape: `glossaries`,
-  `imakeidx`/`makeidx`, `minted` (full builds with a warning; one table,
-  `facts.UNSUPPORTED_PACKAGES`, for the preamble scan and the runtime check). `cleveref` is
-  supported (S16).
+  `imakeidx`/`makeidx`, `minted`, and packages that keep document-wide state in macros the
+  state vector does not carry: `acronym` (first use of an acronym, S17) (full builds with a
+  warning; one table, `facts.UNSUPPORTED_PACKAGES`, for the preamble scan and the runtime
+  check). `cleveref` is supported (S16).
 - biblatex with another backend than biber, classic BibTeX, biblatex refsections.
 - hyperref without the `bookmark` package (the outline comes from bookmark's records).
 
@@ -420,7 +421,7 @@ Aux files are parsed as brace-balanced statements (S8). Classes (`auxfile.classi
 | `\abx@aux@cite`, `\abx@aux@segm` | citation (set and order; one line per key and citation command, S5) |
 | `\abx@aux@backref`, other `\abx@aux@*` in a unit slice | unit content |
 | keyed `\abx@aux@*` outside unit slices (`refcontext`, `number`, …) | biblatex data, merged per key without the run-local instcount; part of the citation value |
-| `\gdef\LT@…` (longtable), `\pgfsyspdfmark` | *self* |
+| `\gdef\LT@…` (longtable), `\pgfsyspdfmark`, mparhack's `\mph@…` (S17) | *self* |
 | eqparbox `\eqp@…@<tag>` | *self* per tag, owners from `Q` records (§6.9.1) |
 | KOMA `@altsecnumformattrue` | aggregate (OR over the typeset segments) |
 | `\BKM@entry`, `\chapmk@bkmlevels` | outline, merge only |

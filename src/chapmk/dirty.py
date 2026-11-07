@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections import Counter
 from collections.abc import Callable, Sequence
 
 from chapmk.analysis import Analysis
@@ -88,7 +89,7 @@ class DirtyRules:
 
         g_pre, g_post = pre.of_class(GLOBAL), post.of_class(GLOBAL)
         if g_pre != g_post:
-            names = sorted({command_name(s) for s in set(g_pre) ^ set(g_post)})
+            names = _changed_names(g_pre, g_post)
             msg = f"unclassified aux data changed ({short_list(names)})"
             self.warn(f"{msg}: all units are recompiled; please report these macros")
             for seg in self.units:
@@ -171,3 +172,13 @@ class DirtyRules:
                     "box) changed, and a partial run sees only its own boxes (use the tag in one "
                     "chapter only, or one tag per chapter, to build incrementally)"
                 )
+
+
+def _changed_names(old: list[str], new: list[str]) -> list[str]:
+    """Commands of the statements that differ between two statement lists: added or removed,
+    also repeated statements (counted), else the reordered ones."""
+    a, b = Counter(old), Counter(new)
+    changed = set((a - b) | (b - a))
+    if not changed:  # same statements in another order
+        changed = {x for x, y in zip(old, new, strict=True) if x != y}
+    return sorted({command_name(s) for s in changed})
