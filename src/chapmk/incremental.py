@@ -40,11 +40,11 @@ from chapmk.auxfile import (
     statements,
 )
 from chapmk.canon import (
-    JOURNAL_FILE,
     CanonView,
     commit_lists,
     commit_run,
     committing,
+    journal_reason,
     read_canon,
     run_tools,
 )
@@ -526,8 +526,9 @@ def _full(ctx: Context, epoch: int, reason: str, start: float) -> BuildReport:
 
 
 def _cold_reason(ctx: Context, state: State | None, stamp: str) -> str | None:
-    if (ctx.layout.canon_dir / JOURNAL_FILE).exists():
-        return "the previous build was interrupted while committing"
+    stopped = journal_reason(ctx.layout.canon_dir)
+    if stopped is not None:
+        return stopped
     if state is None:
         return "no previous state"
     if state.format_stamp != stamp:

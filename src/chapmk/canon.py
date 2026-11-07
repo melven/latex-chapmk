@@ -28,7 +28,7 @@ from chapmk.auxfile import (
     statements,
 )
 from chapmk.deps import cite_values, label_values, short_hash
-from chapmk.errors import SelfCheckError, ToolError
+from chapmk.errors import ChapmkError, SelfCheckError, ToolError
 from chapmk.facts import DEFAULT_LIST_SUFFIXES, derived_suffixes
 from chapmk.files import copy_atomic, digest, read_raw, write_atomic, write_if_changed
 from chapmk.layout import Layout
@@ -53,6 +53,7 @@ from chapmk.tools import (
 #: present in ``canon/`` while a batch commits (C7): from the first write of a canonical file
 #: until the state is saved; a build that finds it starts cold
 JOURNAL_FILE = ".in-progress"
+_STOPPED = "stopped: "  # journal content after a chapmk error (fallback, tool) in the block
 
 
 @contextmanager
@@ -60,12 +61,28 @@ def committing(canon: Path, state: State, runs: Sequence[str]) -> Iterator[None]
     """The commit of a batch (C7, D2: the one place that persists the canonical state): the
     journal is written before the block changes ``canon/`` and ``state``; when the block
     ends normally, the state is saved and the journal removed. An exception (a tool error, a
-    failed self-check, an interrupt) leaves the journal: the next build starts cold."""
+    failed self-check, an interrupt) leaves the journal: the next build starts cold. A chapmk
+    error is noted in it (``journal_reason``)."""
     canon.mkdir(parents=True, exist_ok=True)
     write_atomic(canon / JOURNAL_FILE, " ".join(runs))
-    yield
+    try:
+        yield
+    except ChapmkError as err:
+        write_atomic(canon / JOURNAL_FILE, _STOPPED + str(err).split("\n", 1)[0][:200])
+        raise
     save_state(state, canon)
     (canon / JOURNAL_FILE).unlink()
+
+
+def journal_reason(canon: Path) -> str | None:
+    """Why the canonical state is incomplete (a journal left by ``committing``), or None."""
+    try:
+        text = read_raw(canon / JOURNAL_FILE)
+    except FileNotFoundError:
+        return None
+    if text.startswith(_STOPPED):
+        return f"the previous build stopped while committing ({text[len(_STOPPED) :]})"
+    return "the previous build was interrupted while committing"
 
 
 def _digest(path: Path) -> str | None:
