@@ -37,6 +37,7 @@ from chapmk.pictures import (
 from chapmk.proc import run
 from chapmk.publish import copy_bytes, publish, publish_all, text_writer
 from chapmk.recorder import dist_signatures, read_inputs
+from chapmk.shadow import mirror_subdirectories
 from chapmk.synctex import rewrite_paths
 from chapmk.texdist import TexDistribution
 from chapmk.tools import NOMENCL_STYLE, bibtex_inputs, run_biber, run_bibtex, run_makeindex
@@ -205,6 +206,7 @@ def full_build(
     write_atomic(journal, "")
     for inc in analysis.includes:  # \include writes <arg>.aux into the output directory (S2)
         (out / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
+    mirror_subdirectories(layout.shadow_dir, out)  # includes the analysis does not see
     argv = dist.pdflatex(full_mode_input(analysis), job, out)
     fig_dir = (fig_dir or layout.full_fig_dir) if picture_cache else None
     stamp = picture_stamp(format_stamp(analysis, dist.version), asdict(analysis.fingerprints))

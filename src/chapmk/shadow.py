@@ -178,6 +178,16 @@ def sync_shadow(
     return ShadowStats(created, removed, len(wanted_files))
 
 
+def mirror_subdirectories(shadow_dir: Path, out: Path) -> None:
+    """Create the shadow tree's subdirectories in the output directory ``out``: ``\\include``
+    writes ``<dir>/<name>.aux`` there, and TeX does not create directories (S2). The analysis
+    knows the main file's includes; one in an ``\\input`` file or a class is not known."""
+    for root, dirs, _ in os.walk(shadow_dir):
+        rel = Path(root).relative_to(shadow_dir)
+        for d in dirs:
+            (out / rel / d).mkdir(parents=True, exist_ok=True)
+
+
 def sync_project_shadow(
     analysis: Analysis, shadow_dir: Path, build_dir: Path, list_suffixes: Sequence[str] = ()
 ) -> ShadowStats:
