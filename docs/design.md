@@ -196,7 +196,9 @@ Input: the main file (argument or `main` in `chapmk.toml`). Done without TeX (`a
    moves it to the `\input` line (S1).
 3. **Includes:** top-level `\include{…}` in the body, in order (`U1..Un`); the glue
    `G0..Gn` lies between them. Arguments that are absolute, contain `..` or spaces are
-   errors (the unit aux would leave the run directory).
+   errors (the unit aux would leave the run directory). A unit's file, aux file and records
+   use the normalised name (`./ch/a` and `ch/a.tex` are `ch/a`, as LaTeX reads them); the
+   runs' `\includeonly` names a unit as written.
 4. **Fingerprints** (sha256): `pre` (lines `1..s-1` and inlined files), `post` (lines
    `s..b-1`), `body` (from `b` to the end).
 5. **Compilation units** (A5, S7): an include whose first command is a chapter-level heading
