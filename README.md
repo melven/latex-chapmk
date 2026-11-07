@@ -104,9 +104,9 @@ Details: [docs/design.md](https://github.com/melven/latex-chapmk/blob/main/docs/
 ## Limitations
 
 - pdfLaTeX only. Tested in CI: TeX Live on Linux, MiKTeX on Linux and Windows; macOS not yet.
-  biblatex with biber only; hyperref needs the `bookmark` package.
-- Full builds (like latexmk, with a warning): `glossaries`, `imakeidx`/`makeidx`, `minted`,
-  `cleveref`, BibTeX, biblatex refsections, primitive `\mark`, an `eqparbox` tag used in
+- Full builds (like latexmk, with a warning), most common first: BibTeX (biblatex with biber
+  only), `cleveref`, hyperref without the `bookmark` package, `glossaries`, `minted`,
+  `imakeidx`/`makeidx`, biblatex refsections, primitive `\mark`, an `eqparbox` tag used in
   several chapters whose width changes, and cases chapmk cannot verify.
 - TikZ externalize: chapmk keeps `\tikzexternalize` but makes the figures itself (no shell
   escape); the result equals an externalized build. References hidden in macros inside

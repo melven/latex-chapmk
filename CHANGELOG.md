@@ -51,9 +51,9 @@ First test release (formerly developed as `fastinc`).
 
 - pdfLaTeX only. Tested with TeX Live on Linux and MiKTeX on Linux and Windows; macOS is not
   tested yet.
-- Full builds (with a warning) for:
-  - the packages `glossaries`, `imakeidx`/`makeidx`, `minted`, `cleveref`;
+- Full builds (with a warning) for (most common first):
   - BibTeX and biblatex backends other than biber;
+  - the packages `cleveref`, `glossaries`, `minted`, `imakeidx`/`makeidx`;
   - hyperref without `bookmark`;
   - primitive `\mark`;
   - cases chapmk cannot verify.
