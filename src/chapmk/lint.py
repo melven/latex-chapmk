@@ -61,6 +61,8 @@ GLOBAL_COMMANDS = frozenset(
         "counterwithout",
         "pagenumbering",
         "pagestyle",
+        "pagecolor",  # xcolor/color: the page colour is set globally (S18)
+        "nopagecolor",
         "appendix",
         "frontmatter",
         "mainmatter",
