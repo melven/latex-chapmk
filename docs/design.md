@@ -476,7 +476,8 @@ beyond the unit (`lint.py`):
   environment, `\begingroup…\endgroup`, or a brace group that is not a macro argument (a `{`
   directly after a control word, `}` or `]` counts as an argument);
 - **global-effect commands** (`\gdef`, `\global`, `\newcounter`, `\pagenumbering`,
-  `\appendix`, `\selectlanguage`, `\hypersetup`, `\usetikzlibrary`, …) are always a hit.
+  `\appendix`, `\selectlanguage`, `\pagecolor`, `\hypersetup`, `\usetikzlibrary`, …) are
+  always a hit.
 
 A hit is a warning with `file:line`; the unit becomes *global*: its state is not in the
 checkpoints, so it is compiled in every run, and when it is dirty itself all later units are

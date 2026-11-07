@@ -443,3 +443,21 @@ def test_acronym_gives_full_builds(
     edit(src / "b.tex", "Text b.", "Txet b.")
     rep = checked(src, capsys)
     assert rep["mode"] == "full" and "acronym" in rep["reason"], rep
+
+
+def test_page_colour_set_in_a_unit(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """S18: \\pagecolor sets the page colour globally; a run that excludes the unit that set
+    it gave later pages the default colour. The lint makes the unit global."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage{xcolor}\n\\begin{document}\n"
+        "\\include{a}\n\\include{b}\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}Text a.\n\\pagecolor{yellow}\n")
+    (src / "b.tex").write_text("\\chapter{B}Text b.\n")
+    assert checked(src, capsys)["mode"] == "cold"
+    edit(src / "b.tex", "Text b.", "Txet b.")
+    rep = checked(src, capsys)  # files are attributed (and linted) after the first run
+    assert rep["mode"] == "incremental" and rep["compiled"] == ["a", "b"], rep
+    assert any("a.tex:2: \\pagecolor" in w for w in rep["warnings"]), rep

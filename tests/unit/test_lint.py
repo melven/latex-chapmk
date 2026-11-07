@@ -27,6 +27,11 @@ def test_lint_global_commands_comments_verbatim_allow() -> None:
     assert _cmds("{\\global\\def\\x{1}}") == [(1, "\\global\\def", True)]
     assert _cmds("\\begin{table}\\newcounter{c}\\end{table}") == [(1, "\\newcounter", True)]
     assert _cmds("% \\def\\x{1}\ntext 50\\% \\pagestyle{empty}") == [(2, "\\pagestyle", True)]
+    # the page colour is set globally (S18), also inside a group
+    assert _cmds("{\\pagecolor{yellow}}\\nopagecolor") == [
+        (1, "\\pagecolor", True),
+        (1, "\\nopagecolor", True),
+    ]
     assert _cmds("\\begin{verbatim}\n\\def\\x{1}\n\\end{verbatim}\n\\verb|\\def| x") == []
     assert _cmds("\\setlength{\\a}{1pt}", allow=("\\setlength",)) == []
     # configured verbatim environments and short verbatim characters (pgf manual)
