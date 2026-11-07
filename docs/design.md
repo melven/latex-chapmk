@@ -609,7 +609,8 @@ unsupported.
    `\chapmk@bkmlevels`: parent = nearest previous entry of lower level (bookmark's rule),
    `/Count` from the open state.
 5. **Page labels** from the page map (`\c@page` and `\thepage`), styles inferred (arabic,
-   roman, Roman, alph, Alph, else a prefix).
+   roman, Roman, alph, Alph, else a prefix); only if the runs' PDFs have page labels
+   (hyperref): a plain build without them leaves the viewer's numbering 1, 2, …
 6. **Catalog and info:** all catalog entries except those rebuilt above, with page
    references mapped (`/OpenAction`, `\pdfcatalog` entries, S13), and the document info,
    from the run of the first merged page (`G0` has no pages when the document starts with an
