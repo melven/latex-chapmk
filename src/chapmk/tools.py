@@ -1,8 +1,9 @@
-"""biber and makeindex (design §6.10): ``.bcf`` patch, nomenclature, and the one runner of
+"""biber, BibTeX and makeindex (design §6.10): ``.bcf`` patch, nomenclature, and the one runner of
 both tools for the full and the incremental builder (D6) with their errors (E7)."""
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -16,6 +17,11 @@ from chapmk.texsource import text_lines
 
 #: makeindex style of nomencl
 NOMENCL_STYLE = "nomencl.ist"
+#: BibTeX's output in the output directory
+BIBTEX_OUT = "bibtex.out"
+_BLG_ERROR = re.compile(
+    r"^(I couldn't open|I found no|Sorry---|Illegal, another \\bib|.*---line \d+ of file)"
+)
 #: at most this many error lines of a tool are shown
 MAX_ERRORS = 5
 
@@ -38,6 +44,43 @@ def biber_errors(blg: Path) -> list[str]:
         return []
     lines = text_lines(blg.read_text(encoding="utf-8", errors="replace"))
     return [line.split("> ERROR - ", 1)[1] for line in lines if "> ERROR - " in line]
+
+
+def bibtex_errors(blg: Path) -> list[str]:
+    """The error lines of a BibTeX log (``.blg``): missing files, data and style errors."""
+    if not blg.is_file():
+        return []
+    lines = text_lines(blg.read_text(encoding="utf-8", errors="replace"))
+    return [line.strip() for line in lines if _BLG_ERROR.match(line)]
+
+
+def bibtex_inputs(outdir: Path) -> str | None:
+    """Digest of what BibTeX reads from the aux files of ``outdir`` (``\\citation``,
+    ``\\bibdata``, ``\\bibstyle`` lines); None if no aux file names a database
+    (``\\bibdata``: BibTeX, or biblatex with ``backend=bibtex``)."""
+    lines = sorted(
+        (p.relative_to(outdir).as_posix(), line)
+        for p in outdir.rglob("*.aux")
+        for line in text_lines(p.read_text(encoding="utf-8", errors="surrogateescape"))
+        if line.startswith(("\\citation{", "\\bibdata{", "\\bibstyle{"))
+    )
+    if not any(line.startswith("\\bibdata{") for _, line in lines):
+        return None
+    return hashlib.sha256(repr(lines).encode("utf-8", "surrogateescape")).hexdigest()
+
+
+def run_bibtex(
+    dist: TexDistribution, job: str, outdir: Path, inputs: Path, env: Mapping[str, str]
+) -> None:
+    """BibTeX on ``outdir/<job>.aux`` (``inputs``: the shadow tree with the ``.bib`` files); its
+    output in :data:`BIBTEX_OUT`. Exit code 1 means warnings (as for latexmk, no failure);
+    higher raises :class:`ToolError` with the error lines of the ``.blg`` (E7)."""
+    out = outdir / BIBTEX_OUT
+    r = run(dist.bibtex(job), cwd=outdir, env=dist.bibtex_env(env, inputs), log_path=out)
+    if r.returncode > 1:
+        blg = outdir / f"{job}.blg"
+        found = bibtex_errors(blg) or [r.output.strip()[-500:]]
+        raise ToolError(f"bibtex failed (see {blg}):{_shown(found)}", log=out)
 
 
 def makeindex_errors(ilg: Path) -> list[str]:

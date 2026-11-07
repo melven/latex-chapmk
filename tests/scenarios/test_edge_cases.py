@@ -385,3 +385,27 @@ def test_cleveref_across_units(
     edit(src / "c.tex", "\\label[lemma]{thm:alias}", "\\label[theorem]{thm:alias}")
     rep = checked(src, capsys, "-j", jobs)
     assert rep["mode"] == "incremental" and set(rep["compiled"]) == {"a", "c"}, rep
+
+
+def test_biblatex_with_the_bibtex_backend(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """biblatex with backend=bibtex passed in a configuration file (classicthesis does this):
+    the preamble scan sees \\usepackage[backend=biber]{biblatex}, the run's aux names a BibTeX
+    database (\\bibdata). Full build with the reason; full mode runs bibtex (latexmk does)."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "config.tex").write_text("\\PassOptionsToPackage{backend=bibtex}{biblatex}\n")
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\input{config}\n\\usepackage[backend=biber]{biblatex}\n"
+        "\\addbibresource{refs.bib}\n\\begin{document}\n\\include{a}\n\\include{b}\n"
+        "\\printbibliography\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}See \\cite{knuth}.\n")
+    (src / "b.tex").write_text("\\chapter{B}Text b.\n")
+    (src / "refs.bib").write_text(
+        "@book{knuth, author={Donald Knuth}, title={The TeXbook}, year={1984}, publisher={AW}}\n"
+    )
+    rep = checked(src, capsys)
+    assert rep["mode"] == "full" and "BibTeX in use" in rep["reason"], rep
+    assert "\\entry{knuth}" in (src / ".chapmk" / "main" / "full" / "main.bbl").read_text()

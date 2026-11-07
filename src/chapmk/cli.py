@@ -27,7 +27,7 @@ from chapmk.logs import map_paths, printed_log
 from chapmk.proc import Interrupted, allow_runs, terminate_all
 from chapmk.texdist import TexDistribution, detect
 from chapmk.timing import Timings
-from chapmk.tools import BIBER_OUT
+from chapmk.tools import BIBER_OUT, BIBTEX_OUT
 
 #: Marker file proving that a directory is a chapmk build directory (``clean`` safety).
 BUILD_DIR_MARKER = ".chapmk-build-dir"
@@ -184,6 +184,8 @@ def _build_locked(
         # the state's last biber run (full mode: its own directory), as latexmk prints it
         biber_dir = layout.full_dir if result.mode == "full" else layout.canon_dir
         _print_tool_output(biber_dir / BIBER_OUT, layout.path_map())
+        if result.mode == "full":  # BibTeX runs in full mode only
+            _print_tool_output(layout.full_dir / BIBTEX_OUT, layout.path_map())
     if checking:
         return _check(ctx, analysis, layout, dist, epoch)
     return 0

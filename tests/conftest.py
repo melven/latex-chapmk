@@ -38,6 +38,7 @@ FULL_MODE_CODE = tuple(
         "pictures.py",
         "synctex.py",
         "publish.py",
+        "tools.py",
         "tex/chapmk-ini.sty",
     )
 )

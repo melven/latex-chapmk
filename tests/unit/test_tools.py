@@ -97,3 +97,35 @@ def test_tool_error_lines(tmp_path: Path) -> None:
         "!! Input index error (file = main.nlo, line = 3): -- Extra `@' at position 12 of first"
         " argument."
     ]
+
+
+def test_bibtex_errors_and_inputs(tmp_path: Path) -> None:
+    """E7: BibTeX's error lines; the inputs that decide whether it runs again (full mode)."""
+    from chapmk.tools import bibtex_errors, bibtex_inputs
+
+    blg = tmp_path / "main.blg"
+    blg.write_text(
+        "This is BibTeX, Version 0.99d\nThe top-level auxiliary file: main.aux\n"
+        "I couldn't open database file nosuch.bib\n"
+        "---line 3 of file main.aux\nWarning--empty journal in knuth84\n"
+        "(There was 1 error message)\n"
+    )
+    assert bibtex_errors(blg) == [
+        "I couldn't open database file nosuch.bib",
+        "---line 3 of file main.aux",
+    ]
+    assert bibtex_errors(tmp_path / "missing.blg") == []
+    out = tmp_path / "full"
+    (out / "ch").mkdir(parents=True)
+    (out / "main.aux").write_text("\\relax\n\\@input{ch/a.aux}\n\\bibstyle{plain}\n")
+    (out / "ch" / "a.aux").write_text("\\relax\n\\citation{k1}\n")
+    assert bibtex_inputs(out) is None  # no database: no BibTeX
+    (out / "main.aux").write_text(
+        "\\relax\n\\@input{ch/a.aux}\n\\bibstyle{plain}\n\\bibdata{refs}\n"
+    )
+    first = bibtex_inputs(out)
+    assert first is not None
+    (out / "ch" / "a.aux").write_text("\\relax\n\\citation{k1}\n\\newlabel{x}{{1}{1}}\n")
+    assert bibtex_inputs(out) == first  # labels do not matter
+    (out / "ch" / "a.aux").write_text("\\relax\n\\citation{k1}\n\\citation{k2}\n")
+    assert bibtex_inputs(out) != first
