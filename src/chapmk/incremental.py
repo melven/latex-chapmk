@@ -357,7 +357,8 @@ class Fixpoint:
             for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
                 for seg in compiled:
                     scan = self.sources.scan(seg)
-                    # the list files it typesets (by command) and reads (F records)
+                    # the list files it typesets (by command), reads (F records) and starts
+                    # (L records: also \@starttoc in a class macro, e.g. a preface command)
                     reads = scan.list_reads()
                     if reads is not None:
                         reads |= {
@@ -365,6 +366,7 @@ class Fixpoint:
                             for s, f in recs.files
                             if s == seg and f.endswith(derived)
                         }
+                        reads |= {ext for s, ext in recs.list_starts if s == seg}
                     state.units[seg] = UnitInputs(
                         entry=recs.entry_state(seg),
                         imports=imports(scan, pre.values),
