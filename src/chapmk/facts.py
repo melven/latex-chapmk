@@ -10,7 +10,7 @@ from collections.abc import Sequence
 #: ``<name>.sty``, in the ``.fls`` of the format build and of every run (also when a class or
 #: another package loads them).
 UNSUPPORTED_PACKAGES = frozenset(
-    {"glossaries", "glossaries-extra", "imakeidx", "minted", "acronym"}
+    {"glossaries", "glossaries-extra", "imakeidx", "minted", "acronym", "perpage"}
 )
 
 #: First commands that start a compilation unit (A5, §6.1 step 5). Config adds

@@ -314,12 +314,12 @@ class Fixpoint:
                 raise failed_run(a, ctx.layout, r.directory, err)
         views = [RunView(r.directory, a) for r in results]
         self.views.update((v.name, v) for v in views)
+        for view in views:  # before the records: an unsupported package can break them
+            _check_runtime_support(view, self.fmt)
         all_recs = [v.records for v in views]
         for recs in all_recs:  # list files with other extensions: stored and spliced from now on
             for suffix in sorted(recs.list_suffixes - set(state.list_suffixes)):
                 state.list_suffixes.append(suffix)
-        for view in views:
-            _check_runtime_support(view, self.fmt)
         for recs in all_recs:
             if recs.primitive_marks:
                 regs = ", ".join(f"\\marks{n}" for n in sorted(recs.primitive_marks))

@@ -41,7 +41,9 @@ a plain full build (§6.14). `chapmk check` compares a build with a plain full b
 - Byte-identical PDFs.
 - Packages that write their own index or glossary files or need shell escape: `glossaries`,
   `imakeidx` (runs makeindex itself through shell escape), `minted`, and packages that keep document-wide state in macros the
-  state vector does not carry: `acronym` (first use of an acronym, S17) (full builds with a
+  state vector does not carry: `acronym` (first use of an acronym, S17), `perpage`
+  (counters reset per page through aux data and a macro posing as a counter; loaded by
+  `footmisc`'s `perpage` option and `bigfoot`) (full builds with a
   warning; one table, `facts.UNSUPPORTED_PACKAGES`, for the preamble scan and the runtime
   check). `cleveref` is supported (S16).
 - biblatex with another backend than biber, classic BibTeX, biblatex refsections.
