@@ -236,3 +236,19 @@ def test_split_before_pdf_object_creators(tmp_path: Path) -> None:
     )
     a = analyse(Config(main=main))
     assert a.split_line == 3 and "fadings" in a.split_reason
+
+
+def test_include_arguments_with_dot_slash_and_extension(tmp_path: Path) -> None:
+    """LaTeX accepts \\include{./ch/a} and \\include{ch/a.tex}; the unit's file and aux name
+    use the normalised name, \\includeonly the argument as written."""
+    from chapmk.analysis import include_name
+
+    assert [include_name(a) for a in ("./ch/a", "ch/a.tex", "./ch/a.tex", "ch/a")] == ["ch/a"] * 4
+    body = BODY.replace("\\include{ch/a}", "\\include{./ch/a}").replace("{ch/a2}", "{ch/a2.tex}")
+    a = analyse(make(tmp_path, body=body))
+    assert [(i.arg, i.name, i.aux_name) for i in a.includes] == [
+        ("./ch/a", "ch/a", "ch/a.aux"),
+        ("ch/a2.tex", "ch/a2", "ch/a2.aux"),
+        ("ch/b", "ch/b", "ch/b.aux"),
+    ]
+    assert a.includes[1].path == tmp_path / "ch" / "a2.tex"

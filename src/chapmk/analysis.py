@@ -7,6 +7,7 @@ configuration. Reasons that force full-build mode (§6.14) are collected, not ra
 from __future__ import annotations
 
 import hashlib
+import posixpath
 import re
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
@@ -74,9 +75,22 @@ class Include:
         return self.heading if self.heading in ("part", "chapter", "section") else None
 
     @property
+    def name(self) -> str:
+        """The unit's file name without ``.tex``, normalised: ``./ch/a`` and ``ch/a.tex`` are
+        ``ch/a`` (LaTeX accepts both forms). ``arg`` stays as written: ``\\includeonly``
+        must name the unit the same way."""
+        return include_name(self.arg)
+
+    @property
     def aux_name(self) -> str:
         """Name of the unit's aux file relative to the output directory (``ch/a.aux``)."""
-        return f"{self.arg}.aux"
+        return f"{self.name}.aux"
+
+
+def include_name(arg: str) -> str:
+    """:attr:`Include.name` of an ``\\include`` argument or a recorded file name."""
+    name = posixpath.normpath(arg)
+    return name[: -len(".tex")] if name.endswith(".tex") else name
 
 
 @dataclass(frozen=True)
@@ -381,9 +395,9 @@ def analyse(config: Config) -> Analysis:
             reasons += [] if reason in reasons else [reason]
             continue
         arg = _validate_include_arg(macro.argument, where)
-        if any(inc.arg == arg for inc in includes):
+        if any(inc.name == include_name(arg) for inc in includes):
             raise AnalysisError(f"{where}: \\include{{{arg}}} appears twice")
-        path = source_dir / f"{arg}.tex"
+        path = source_dir / f"{include_name(arg)}.tex"
         if not path.is_file():
             raise AnalysisError(
                 f"{where}: included file not found: {path} (LaTeX would skip it with a "

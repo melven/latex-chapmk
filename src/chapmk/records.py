@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
 
-from chapmk.analysis import Analysis
+from chapmk.analysis import Analysis, include_name
 from chapmk.auxfile import read_lines, segment_slices, statements
 from chapmk.errors import FallbackError
 from chapmk.files import read_log, read_raw, recorded_name
@@ -334,19 +334,13 @@ def _read_run_records(run_dir: Path, analysis: Analysis) -> RunRecords:
         name = recs.units.get(unit_id(k))
         if name is None:
             raise RecordError(f"{main_aux}: no record for include {k} ({inc.arg})")
-        if name and _unit_name(name) != inc.arg:
+        if name and include_name(recorded_name(name)) != inc.name:
             raise RecordError(f"{main_aux}: include {k} is {name!r}, expected {inc.arg!r}")
     known = set(analysis.segments)
     for page in recs.pages:
         if page.segment not in known:
             raise RecordError(f"{frec}: page {page.index} has no known segment ({page.segment!r})")
     return recs
-
-
-def _unit_name(recorded: str) -> str:
-    """Normalise a recorded unit name (``/ch1.tex``, ``chapters/ch1.tex``, ``ch1``)."""
-    name = recorded_name(recorded)
-    return name[:-4] if name.endswith(".tex") else name
 
 
 class RunView:

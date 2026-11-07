@@ -243,7 +243,7 @@ def _check(
     rep = compare_pdfs(ref, got)
     # in the form synctex view matches for this distribution (MiKTeX: absolute, S11; relative
     # names would find nothing on both sides and compare equal)
-    names = [analysis.main.name] + [f"{inc.arg}.tex" for inc in analysis.includes]
+    names = [analysis.main.name] + [f"{inc.name}.tex" for inc in analysis.includes]
     sources = [dist.synctex_query(analysis.source_dir, name) for name in names]
     compare_synctex(ref, got, sources, analysis.source_dir, report=rep)
     print(rep.summary())
