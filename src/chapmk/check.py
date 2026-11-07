@@ -407,6 +407,9 @@ def _first(result: list[str], key: str) -> str:
 
 #: a record with an input tag: type, tag, line (the rest of the line is compared as it is)
 _RECORD = re.compile(r"^([\[(hgkx$vrf])(\d+),(\d+)")
+#: a form reference: ``f<form number>:h,v``; the number counts the run's forms (a clipped
+#: image, ...) and refers to no record, so it is not compared (like input tags)
+_FORM = re.compile(r"^f\d+:")
 
 
 def input_key(name: str, cwd: Path) -> tuple[str, bool]:
@@ -435,7 +438,8 @@ class SyncTexRecords:
 
 def synctex_records(path: Path, cwd: Path) -> SyncTexRecords:
     """§3.3 item 4: the normalised records of a ``.synctex.gz`` file; ``!`` offsets,
-    ``Input:`` lines, header and postamble are left out (:func:`chapmk.synctex.parse`)."""
+    ``Input:`` lines, header and postamble are left out (:func:`chapmk.synctex.parse`), form
+    numbers of form references too."""
     parsed = parse_synctex(path)
     keys = {tag: input_key(name, cwd) for tag, name in parsed.inputs.items()}
     out = SyncTexRecords([], {})
@@ -448,6 +452,8 @@ def synctex_records(path: Path, cwd: Path) -> SyncTexRecords:
                     out.lines.setdefault(key, set()).add(int(m.group(3)))
                 number = m.group(3) if numbered else "*"
                 line = f"{m.group(1)}{key},{number}{line[m.end() :]}"
+            else:
+                line = _FORM.sub("f:", line)
             out.records.append(f"{page}|{line}")
     return out
 

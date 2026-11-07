@@ -123,7 +123,8 @@ reference in:
    annotations (rectangle, target page and position, or URI); document info and catalog
    entries (S13);
 4. SyncTeX: every record of every page is the same after normalisation: input tags replaced
-   by their files (sources relative to the source directory, other files by name), `!` offsets
+   by their files (sources relative to the source directory, other files by name), the form
+   numbers of form references (`f<n>`: the run's count of forms) left out, `!` offsets
    and the header and postamble left out, and the line numbers of generated files (`.toc`,
    `.bbl`, …, which chapmk assembles differently) not compared. In addition, `synctex view` at
    one line with records of every source file returns the same page and position, and
