@@ -41,7 +41,7 @@ jobs:
         id: refs
         run: |
           echo "image=$(docker image inspect -f '{{.Id}}' chapmk-miktex | cut -d: -f2 | cut -c1-16)" >> "$GITHUB_OUTPUT"
-          echo "code=${{ hashFiles('tests/conftest.py', 'src/chapmk/fullbuild.py', 'src/chapmk/gensrc.py', 'src/chapmk/texdist.py', 'src/chapmk/pictures.py', 'src/chapmk/synctex.py', 'src/chapmk/publish.py', 'src/chapmk/tex/chapmk-ini.sty') }}" >> "$GITHUB_OUTPUT"
+          echo "code=${{ hashFiles('tests/conftest.py', 'src/chapmk/fullbuild.py', 'src/chapmk/gensrc.py', 'src/chapmk/texdist.py', 'src/chapmk/pictures.py', 'src/chapmk/synctex.py', 'src/chapmk/publish.py', 'src/chapmk/tools.py', 'src/chapmk/tex/chapmk-ini.sty') }}" >> "$GITHUB_OUTPUT"
       - name: Reference cache
         # .test-cache: --full and latexmk references, restored from the latest run with the same
         # image and code (as in ci.yml); writable for the container's users

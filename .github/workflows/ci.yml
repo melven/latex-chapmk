@@ -50,7 +50,7 @@ jobs:
         # what the references depend on besides the sources (each entry is keyed by a hash of
         # its sources, tests/conftest.py): the TeX image and the full-mode code
         id: refs
-        run: echo "deps=${{ hashFiles('Dockerfile', 'requirements-dev.txt', 'tests/conftest.py', 'src/chapmk/fullbuild.py', 'src/chapmk/gensrc.py', 'src/chapmk/texdist.py', 'src/chapmk/pictures.py', 'src/chapmk/synctex.py', 'src/chapmk/publish.py', 'src/chapmk/tex/chapmk-ini.sty') }}" >> "$GITHUB_OUTPUT"
+        run: echo "deps=${{ hashFiles('Dockerfile', 'requirements-dev.txt', 'tests/conftest.py', 'src/chapmk/fullbuild.py', 'src/chapmk/gensrc.py', 'src/chapmk/texdist.py', 'src/chapmk/pictures.py', 'src/chapmk/synctex.py', 'src/chapmk/publish.py', 'src/chapmk/tools.py', 'src/chapmk/tex/chapmk-ini.sty') }}" >> "$GITHUB_OUTPUT"
       - name: Reference cache
         # .test-cache: --full and latexmk references. Restored from the latest run with the
         # same dependencies and saved again under a new key, so references of changed corpus
