@@ -1,0 +1,702 @@
+[
+ {
+  "id": "gh/danieldf01/TFG-decision-trees-sim",
+  "root": "/sweep/gh5/danieldf01__TFG-decision-trees-sim",
+  "main": "doc/Latex/anexos.tex",
+  "license": null,
+  "class": "memoir"
+ },
+ {
+  "id": "gh/bohm/thesis",
+  "root": "/sweep/gh5/bohm__thesis",
+  "main": "thesis.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/martinle068/bc-thesis",
+  "root": "/sweep/gh5/martinle068__bc-thesis",
+  "main": "thesis.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/Agda78/APC-appunti",
+  "root": "/sweep/gh5/Agda78__APC-appunti",
+  "main": "main.tex",
+  "license": "NOASSERTION",
+  "class": "extbook"
+ },
+ {
+  "id": "gh/njg4ne/PhD-Dissertation",
+  "root": "/sweep/gh5/njg4ne__PhD-Dissertation",
+  "main": "dissertation.tex",
+  "license": "NOASSERTION",
+  "class": "typesetting/njg4ne"
+ },
+ {
+  "id": "gh/arielgg46/Thesis",
+  "root": "/sweep/gh5/arielgg46__Thesis",
+  "main": "docs/Thesis.tex",
+  "license": null,
+  "class": "uhthesis"
+ },
+ {
+  "id": "gh/andyhu4023/Quant-Interview-Question-Bank",
+  "root": "/sweep/gh5/andyhu4023__Quant-Interview-Question-Bank",
+  "main": "Main.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/Dandelight/scuthesis2022",
+  "root": "/sweep/gh5/Dandelight__scuthesis2022",
+  "main": "thesis.tex",
+  "license": "Apache-2.0",
+  "class": "scuthesis2020"
+ },
+ {
+  "id": "gh/mquezada/thesis",
+  "root": "/sweep/gh5/mquezada__thesis",
+  "main": "memoria.tex",
+  "license": null,
+  "class": "umemoria"
+ },
+ {
+  "id": "gh/emc031/thesis",
+  "root": "/sweep/gh5/emc031__thesis",
+  "main": "Thesis.tex",
+  "license": null,
+  "class": "ThesisStyle"
+ },
+ {
+  "id": "gh/duongngdeptrai/DoAnTotNghiep_Working",
+  "root": "/sweep/gh5/duongngdeptrai__DoAnTotNghiep_Working",
+  "main": "thesis/main.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/IshinSolarc/AssinadorDigital",
+  "root": "/sweep/gh5/IshinSolarc__AssinadorDigital",
+  "main": "texto_assinador.tex",
+  "license": null,
+  "class": "utfpr_estilo"
+ },
+ {
+  "id": "gh/SanderP99/Evasive-and-Efficient-Adversarial-Attacks",
+  "root": "/sweep/gh5/SanderP99__Evasive-and-Efficient-Adversarial-Attacks",
+  "main": "Thesis/thesis.tex",
+  "license": null,
+  "class": "kulemt"
+ },
+ {
+  "id": "gh/Nerlci/BUPTBachelorThesis",
+  "root": "/sweep/gh5/Nerlci__BUPTBachelorThesis",
+  "main": "bare_thesis.tex",
+  "license": null,
+  "class": "BUPTthesis"
+ },
+ {
+  "id": "gh/Gweno/MDE",
+  "root": "/sweep/gh5/Gweno__MDE",
+  "main": "doc/latex/refman.tex",
+  "license": "MIT",
+  "class": "book"
+ },
+ {
+  "id": "gh/BernhardMarconato/computer-vision-exercises",
+  "root": "/sweep/gh5/BernhardMarconato__computer-vision-exercises",
+  "main": "project_1_scanner/documentation/document.tex",
+  "license": null,
+  "class": "scrbook"
+ },
+ {
+  "id": "gh/rohitagarwal003/btp-report-latex-template",
+  "root": "/sweep/gh5/rohitagarwal003__btp-report-latex-template",
+  "main": "main.tex",
+  "license": "Apache-2.0",
+  "class": "report"
+ },
+ {
+  "id": "gh/Li-Wenhui/HeuThesis",
+  "root": "/sweep/gh5/Li-Wenhui__HeuThesis",
+  "main": "examples/book/master/main.tex",
+  "license": null,
+  "class": "heuthesisbook"
+ },
+ {
+  "id": "gh/pbailis/thesis",
+  "root": "/sweep/gh5/pbailis__thesis",
+  "main": "thesis.tex",
+  "license": null,
+  "class": "myucthesis"
+ },
+ {
+  "id": "gh/songlh/thesis",
+  "root": "/sweep/gh5/songlh__thesis",
+  "main": "dissertation.tex",
+  "license": null,
+  "class": "memoir"
+ },
+ {
+  "id": "gh/Jens-2404/knowledge-transfer-for-dummies",
+  "root": "/sweep/gh5/Jens-2404__knowledge-transfer-for-dummies",
+  "main": "main.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/gradippp/duq",
+  "root": "/sweep/gh5/gradippp__duq",
+  "main": "docs/main.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/tzaiyang/NEUBachelorThesis",
+  "root": "/sweep/gh5/tzaiyang__NEUBachelorThesis",
+  "main": "main.tex",
+  "license": null,
+  "class": "NEUBachelorThesis"
+ },
+ {
+  "id": "gh/lababidi/gmu-dissertation",
+  "root": "/sweep/gh5/lababidi__gmu-dissertation",
+  "main": "dissertation.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/peterlefanulumsdaine/pllthesis",
+  "root": "/sweep/gh5/peterlefanulumsdaine__pllthesis",
+  "main": "summer-version/old-pll-thesis.tex",
+  "license": null,
+  "class": "amsbook"
+ },
+ {
+  "id": "gh/j4kub0k/bakalarka",
+  "root": "/sweep/gh5/j4kub0k__bakalarka",
+  "main": "thesis.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/5kg/zju-bachelor-thesis",
+  "root": "/sweep/gh5/5kg__zju-bachelor-thesis",
+  "main": "report/main.tex",
+  "license": null,
+  "class": "csbachelor"
+ },
+ {
+  "id": "gh/daniela-rodga/media_soft-doc",
+  "root": "/sweep/gh5/daniela-rodga__media_soft-doc",
+  "main": "doc1_Analisis/main.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/dwassing/visualization-docs",
+  "root": "/sweep/gh5/dwassing__visualization-docs",
+  "main": "bachelor/daniel_wassing/demo_student_thesis.tex",
+  "license": null,
+  "class": "liuthesis"
+ },
+ {
+  "id": "gh/thomasbonenfant/Thesis",
+  "root": "/sweep/gh5/thomasbonenfant__Thesis",
+  "main": "Thesis.tex",
+  "license": null,
+  "class": "Configuration_Files/PoliMi3i_thesis"
+ },
+ {
+  "id": "gh/aaronpo97/notes-on-collision-detection",
+  "root": "/sweep/gh5/aaronpo97__notes-on-collision-detection",
+  "main": "main.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/ritvje/phd-thesis-template",
+  "root": "/sweep/gh5/ritvje__phd-thesis-template",
+  "main": "thesis_main.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/Maeur1/ENGR489",
+  "root": "/sweep/gh5/Maeur1__ENGR489",
+  "main": "Report/Final/proj_report_outline.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/Shaco74/4CID-Adaptive-Python-Tutor",
+  "root": "/sweep/gh5/Shaco74__4CID-Adaptive-Python-Tutor",
+  "main": "thesis/000report.tex",
+  "license": "MIT",
+  "class": "scrreprt"
+ },
+ {
+  "id": "gh/nealey/Horrors2",
+  "root": "/sweep/gh5/nealey__Horrors2",
+  "main": "horrors2.ltx",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/viktormiok/PhD-thesis",
+  "root": "/sweep/gh5/viktormiok__PhD-thesis",
+  "main": "thesis.tex",
+  "license": "GPL-3.0",
+  "class": "Classes/PhDThesisPSnPDF"
+ },
+ {
+  "id": "gh/CernaSam/bachelor-thesis",
+  "root": "/sweep/gh5/CernaSam__bachelor-thesis",
+  "main": "ctufit-thesis.tex",
+  "license": "LPPL-1.3c",
+  "class": "ctufit-thesis"
+ },
+ {
+  "id": "gh/sbgn/activity-flow",
+  "root": "/sweep/gh5/sbgn__activity-flow",
+  "main": "src/main.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/amhiggin/Dissertation",
+  "root": "/sweep/gh5/amhiggin__Dissertation",
+  "main": "thesis.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/sameershaikh55/Seminar",
+  "root": "/sweep/gh5/sameershaikh55__Seminar",
+  "main": "main.tex",
+  "license": null,
+  "class": "scrreprt"
+ },
+ {
+  "id": "gh/DSarceno/DMRG",
+  "root": "/sweep/gh5/DSarceno__DMRG",
+  "main": "Informe/Modelo.tex",
+  "license": "MIT",
+  "class": "thesisECFM"
+ },
+ {
+  "id": "gh/cthadeufaria/dual-stage-attention",
+  "root": "/sweep/gh5/cthadeufaria__dual-stage-attention",
+  "main": "dissertation/meec_thesis.tex",
+  "license": "MIT",
+  "class": "report"
+ },
+ {
+  "id": "gh/zielbinho/doc-tcc-latex",
+  "root": "/sweep/gh5/zielbinho__doc-tcc-latex",
+  "main": "tcc.tex",
+  "license": null,
+  "class": "abntex2-uepg"
+ },
+ {
+  "id": "gh/babeheim/phd-dissertation",
+  "root": "/sweep/gh5/babeheim__phd-dissertation",
+  "main": "dissertation.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/ShijieLu222/SDE_SEG",
+  "root": "/sweep/gh5/ShijieLu222__SDE_SEG",
+  "main": "dissertation/Dissertation.tex",
+  "license": null,
+  "class": "dissertation"
+ },
+ {
+  "id": "gh/raktim-mondol/neural-operator",
+  "root": "/sweep/gh5/raktim-mondol__neural-operator",
+  "main": "Neural_Operator_Book.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/louisvu69/arduino-libs",
+  "root": "/sweep/gh5/louisvu69__arduino-libs",
+  "main": "Modbus-Master-Slave-for-Arduino-master/documentation/latex/refman.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/yabol02/memoria_TFM",
+  "root": "/sweep/gh5/yabol02__memoria_TFM",
+  "main": "main.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/Puneeth-n/master_thesis",
+  "root": "/sweep/gh5/Puneeth-n__master_thesis",
+  "main": "master_thesis.tex",
+  "license": "GPL-2.0",
+  "class": "scrbook"
+ },
+ {
+  "id": "gh/malteschmitz/latex",
+  "root": "/sweep/gh5/malteschmitz__latex",
+  "main": "advanced/livecoding/first/thesis.tex",
+  "license": null,
+  "class": "scrbook"
+ },
+ {
+  "id": "gh/walterwar92/Samurai",
+  "root": "/sweep/gh5/walterwar92__Samurai",
+  "main": "latex_doc/control_theory/main.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/someonecantcode/cs-210",
+  "root": "/sweep/gh5/someonecantcode__cs-210",
+  "main": "Assignment2/main.tex",
+  "license": "MIT",
+  "class": "article"
+ },
+ {
+  "id": "gh/Bilel-Amri/SmartClub_Analytics",
+  "root": "/sweep/gh5/Bilel-Amri__SmartClub_Analytics",
+  "main": "SmartClub_Analytics_Report/main.tex",
+  "license": "NOASSERTION",
+  "class": "modificopy"
+ },
+ {
+  "id": "gh/langsci/88",
+  "root": "/sweep/gh5/langsci__88",
+  "main": "skeleton/lsp-skeleton.tex",
+  "license": null,
+  "class": "LSP/langsci"
+ },
+ {
+  "id": "gh/cyberlytics/reforge",
+  "root": "/sweep/gh5/cyberlytics__reforge",
+  "main": "sys-doc/BT_2024_Stricker_Natalie_Thesis/master.tex",
+  "license": "NOASSERTION",
+  "class": "report"
+ },
+ {
+  "id": "gh/rikrun/XSYUThesis",
+  "root": "/sweep/gh5/rikrun__XSYUThesis",
+  "main": "templet.tex",
+  "license": "GPL-3.0",
+  "class": "XSYUthesis"
+ },
+ {
+  "id": "gh/tulip-lab/templatex",
+  "root": "/sweep/gh5/tulip-lab__templatex",
+  "main": "thesistemplatex/thesis.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/ruuda/bscthesis",
+  "root": "/sweep/gh5/ruuda__bscthesis",
+  "main": "thesis.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/anilshanbhag/btp-report",
+  "root": "/sweep/gh5/anilshanbhag__btp-report",
+  "main": "main.tex",
+  "license": "Apache-2.0",
+  "class": "report"
+ },
+ {
+  "id": "gh/hcaula/immediate-audio-prediction",
+  "root": "/sweep/gh5/hcaula__immediate-audio-prediction",
+  "main": "thesis/index.tex",
+  "license": null,
+  "class": "UFPEThesis/ufpethesis"
+ },
+ {
+  "id": "gh/krevetka159/bc",
+  "root": "/sweep/gh5/krevetka159__bc",
+  "main": "en/thesis.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/PhillipKP/dissertation",
+  "root": "/sweep/gh5/PhillipKP__dissertation",
+  "main": "Dissertation.tex",
+  "license": null,
+  "class": "uathesis"
+ },
+ {
+  "id": "gh/illogic-al/masters-thesis-latex",
+  "root": "/sweep/gh5/illogic-al__masters-thesis-latex",
+  "main": "Orville Bennett Master's Thesis.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/rohith-0099/nemotron3-super-seminar-report",
+  "root": "/sweep/gh5/rohith-0099__nemotron3-super-seminar-report",
+  "main": "report/main.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/OneHealthThesis/HCVetDocument",
+  "root": "/sweep/gh5/OneHealthThesis__HCVetDocument",
+  "main": "document/Thesis.tex",
+  "license": "MIT",
+  "class": "uhthesis"
+ },
+ {
+  "id": "gh/stephenswat/phd-thesis",
+  "root": "/sweep/gh5/stephenswat__phd-thesis",
+  "main": "Main.tex",
+  "license": null,
+  "class": "scrbook"
+ },
+ {
+  "id": "gh/saarangp/template-dissertation",
+  "root": "/sweep/gh5/saarangp__template-dissertation",
+  "main": "PhD/dissertation.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/pl4ds/pl4ds-shonan-meeting-2019-book",
+  "root": "/sweep/gh5/pl4ds__pl4ds-shonan-meeting-2019-book",
+  "main": "editor.tex",
+  "license": null,
+  "class": "svmult"
+ },
+ {
+  "id": "gh/aawaskita/triac",
+  "root": "/sweep/gh5/aawaskita__triac",
+  "main": "TRIACReport.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/gonsie/rpi-thesis-template",
+  "root": "/sweep/gh5/gonsie__rpi-thesis-template",
+  "main": "thesis.tex",
+  "license": null,
+  "class": "thesis"
+ },
+ {
+  "id": "gh/pyccel/pygyro",
+  "root": "/sweep/gh5/pyccel__pygyro",
+  "main": "doc/ThesisPaper/Thesis.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/aeimer/latex-template-hsrm-bachelorthesis",
+  "root": "/sweep/gh5/aeimer__latex-template-hsrm-bachelorthesis",
+  "main": "bachelorthesis.tex",
+  "license": "MIT",
+  "class": "report"
+ },
+ {
+  "id": "gh/BartlomiejKufel/projekt-bazy-danych",
+  "root": "/sweep/gh5/BartlomiejKufel__projekt-bazy-danych",
+  "main": "documentation/documentation-code/praca.tex",
+  "license": null,
+  "class": "urdpl"
+ },
+ {
+  "id": "gh/reamat/AnaliseMatematica",
+  "root": "/sweep/gh5/reamat__AnaliseMatematica",
+  "main": "AFVV/main.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/moikelaff/thesis-latex",
+  "root": "/sweep/gh5/moikelaff__thesis-latex",
+  "main": "thesis.tex",
+  "license": "NOASSERTION",
+  "class": "report"
+ },
+ {
+  "id": "gh/binaricat/Dufe-Thesis-Latex",
+  "root": "/sweep/gh5/binaricat__Dufe-Thesis-Latex",
+  "main": "main.tex",
+  "license": "MIT",
+  "class": "dufethesis"
+ },
+ {
+  "id": "gh/cosmos-way/Lee-algorithm-on-hexagon-grid",
+  "root": "/sweep/gh5/cosmos-way__Lee-algorithm-on-hexagon-grid",
+  "main": "tex/0-main.tex",
+  "license": null,
+  "class": "G7-32"
+ },
+ {
+  "id": "gh/abhijeetsharma200/thesis2",
+  "root": "/sweep/gh5/abhijeetsharma200__thesis2",
+  "main": "thesis/main.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/Campostrini/thesis_deep_learning",
+  "root": "/sweep/gh5/Campostrini__thesis_deep_learning",
+  "main": "thesis.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/emtxt/itis-latex-thesis-template",
+  "root": "/sweep/gh5/emtxt__itis-latex-thesis-template",
+  "main": "thesis/thesis.tex",
+  "license": null,
+  "class": "ruthesis"
+ },
+ {
+  "id": "gh/simon-mettler/latex-thesis",
+  "root": "/sweep/gh5/simon-mettler__latex-thesis",
+  "main": "thesis.tex",
+  "license": "Unlicense",
+  "class": "scrartcl"
+ },
+ {
+  "id": "gh/Juan-escobar94/fuzzing-rdma",
+  "root": "/sweep/gh5/Juan-escobar94__fuzzing-rdma",
+  "main": "TeX/main.tex",
+  "license": null,
+  "class": "article"
+ },
+ {
+  "id": "gh/maxipesfix/iwaki",
+  "root": "/sweep/gh5/maxipesfix__iwaki",
+  "main": "doc/src/ClassicThesis.tex",
+  "license": null,
+  "class": "scrreprt"
+ },
+ {
+  "id": "gh/laymonage/bachelor-thesis",
+  "root": "/sweep/gh5/laymonage__bachelor-thesis",
+  "main": "thesis.tex",
+  "license": "NOASSERTION",
+  "class": "report"
+ },
+ {
+  "id": "gh/stastnypremysl/bac-thesis",
+  "root": "/sweep/gh5/stastnypremysl__bac-thesis",
+  "main": "en/thesis.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/Faust-Wang/XDUthesis_xelatex-master-2019",
+  "root": "/sweep/gh5/Faust-Wang__XDUthesis_xelatex-master-2019",
+  "main": "templet.tex",
+  "license": "GPL-3.0",
+  "class": "XDUthesis"
+ },
+ {
+  "id": "gh/omailson/monografia",
+  "root": "/sweep/gh5/omailson__monografia",
+  "main": "monografia.tex",
+  "license": null,
+  "class": "ufpethesis/ufpethesis"
+ },
+ {
+  "id": "gh/se-tuebingen/thesis-template",
+  "root": "/sweep/gh5/se-tuebingen__thesis-template",
+  "main": "thesis.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/BlueFisher/shuthesis",
+  "root": "/sweep/gh5/BlueFisher__shuthesis",
+  "main": "main.tex",
+  "license": null,
+  "class": "shuthesis"
+ },
+ {
+  "id": "gh/nutcracker-78/funky-t",
+  "root": "/sweep/gh5/nutcracker-78__funky-t",
+  "main": "latex/main.tex",
+  "license": "MIT",
+  "class": "article"
+ },
+ {
+  "id": "gh/Oktogazh/style",
+  "root": "/sweep/gh5/Oktogazh__style",
+  "main": "LaTeX/main.tex",
+  "license": null,
+  "class": "style"
+ },
+ {
+  "id": "gh/bhavik-knight/5580-dm-a2-classification",
+  "root": "/sweep/gh5/bhavik-knight__5580-dm-a2-classification",
+  "main": "report/main.tex",
+  "license": "MIT",
+  "class": "article"
+ },
+ {
+  "id": "gh/watermelonripeness-thesis/-Bagotsay-et-al.-Thesis-Manuscript",
+  "root": "/sweep/gh5/watermelonripeness-thesis__-Bagotsay-et-al.-Thesis-Manuscript",
+  "main": "thesis.TEX",
+  "license": null,
+  "class": "maththesis"
+ },
+ {
+  "id": "gh/sprakash1612/triage-learning-medical",
+  "root": "/sweep/gh5/sprakash1612__triage-learning-medical",
+  "main": "final_report/main.tex",
+  "license": null,
+  "class": "report"
+ },
+ {
+  "id": "gh/wenliangsun/XDUthesis",
+  "root": "/sweep/gh5/wenliangsun__XDUthesis",
+  "main": "templet.tex",
+  "license": null,
+  "class": "XDUthesis"
+ },
+ {
+  "id": "gh/bong0/thesis",
+  "root": "/sweep/gh5/bong0__thesis",
+  "main": "src/main.tex",
+  "license": "MIT",
+  "class": "MastersDoctoralThesis"
+ },
+ {
+  "id": "gh/tomdjong/MGS-domain-theory",
+  "root": "/sweep/gh5/tomdjong__MGS-domain-theory",
+  "main": "main.tex",
+  "license": null,
+  "class": "book"
+ },
+ {
+  "id": "gh/GarhinZhou/HmHex",
+  "root": "/sweep/gh5/GarhinZhou__HmHex",
+  "main": "ImHex-1.38.1/lib/external/libwolv/libs/utils/lib/jthread/jthread/tex/std.tex",
+  "license": "GPL-2.0",
+  "class": "memoir"
+ },
+ {
+  "id": "gh/TemplierPaul/Mid-thesis-beamer",
+  "root": "/sweep/gh5/TemplierPaul__Mid-thesis-beamer",
+  "main": "mid-thesis.tex",
+  "license": null,
+  "class": "beamer"
+ },
+ {
+  "id": "gh/amunn/msu-thesis",
+  "root": "/sweep/gh5/amunn__msu-thesis",
+  "main": "samples/MSU-thesis-chapterbib-testfile.tex",
+  "license": null,
+  "class": "msu-thesis"
+ }
+]

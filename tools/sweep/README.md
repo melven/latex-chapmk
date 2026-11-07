@@ -16,7 +16,15 @@ the documents themselves are never committed, only their sources and the results
   comparison), cold `--check`, a typo in the middle unit and an incremental `--check`. One
   JSON line per document; work directories of failures are kept.
 - `table.py manifest.json results.jsonl`: Markdown table.
-- `run2.sh`, `run3.sh`: clone a manifest's repositories and run the sweep (`$SCRATCH`: scratch dir); `--prefilter` skips documents that do not compile with one plain pdflatex pass (second table: link and first error).
+- `cases.py SCRATCH`: correctness cases (cold `--check` failures, differences to latexmk) of
+  the re-runs `cases3.jsonl`/`cases4.jsonl` (and `lm4.jsonl`) under `SCRATCH/sweep/` as
+  Markdown: `results/correctness-cases.md`.
+- `run2.sh` … `run5.sh`: clone a manifest's repositories and run the sweep (`$SCRATCH`: scratch dir); `--prefilter` skips documents that do not compile with one plain pdflatex pass (second table: link and first error).
 
 Results: `manifest1.json` (CTAN manuals and the 24 licensed theses with most stars),
-`manifest2.json` (50 random documents of the larger search), `results/*.jsonl` and tables.
+`manifest2.json` (50 random documents of the larger search), `manifest3.json` …
+`manifest5.json` (100 random documents each, disjoint), `results/*.jsonl` and tables.
+Open correctness cases: `results/correctness-cases.md`.
+
+The latexmk reference runs with `-norc` (since sweep 5): a repository's own `latexmkrc`
+(e.g. LuaLaTeX) is not a pdfLaTeX reference.

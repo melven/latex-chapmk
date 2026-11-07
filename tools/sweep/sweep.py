@@ -60,7 +60,7 @@ def latexmk_vs_full(work: Path, main: Path) -> dict[str, Any]:
     dist = detect()
     rc_file = work / "latexmkrc"
     rc_file.write_text(LATEXMKRC)
-    argv = ["latexmk", "-pdf", "-shell-escape", "-synctex=1", "-interaction=nonstopmode",
+    argv = ["latexmk", "-norc", "-pdf", "-shell-escape", "-synctex=1", "-interaction=nonstopmode",
             "-halt-on-error", "-file-line-error", "-r", str(rc_file), main.name]
     t = time.monotonic()
     try:
@@ -80,9 +80,10 @@ def latexmk_vs_full(work: Path, main: Path) -> dict[str, Any]:
     shutil.copy(pdf, ref / pdf.name)
     if syn.is_file():
         shutil.copy(syn, ref / syn.name)
-    for p in main.parent.glob(f"{stem}.*"):  # latexmk's files must not be the next inputs
-        if p.suffix not in (".tex",) and p.is_file():
-            p.unlink()
+    from chapmk.shadow import BUILD_OUTPUT_SUFFIXES
+
+    for suffix in BUILD_OUTPUT_SUFFIXES:  # latexmk's outputs (not <job>.bib, .cls, ...)
+        (main.parent / f"{stem}{suffix}").unlink(missing_ok=True)
     rc2, out2, rep2, sec2 = chapmk(main.parent, main.name, "--full", "--out-dir", str(work / "fi"))
     res["full"] = {**summary(rc2, out2, rep2), "seconds": round(sec2)}
     ours = work / "fi" / f"{stem}.pdf"
@@ -94,7 +95,8 @@ def latexmk_vs_full(work: Path, main: Path) -> dict[str, Any]:
         compare_synctex(ref / pdf.name, ours, [dist.synctex_query(main.parent, n) for n in names],
                         main.parent, report=report)
         res["vs_latexmk"] = "PASS" if report.ok else "FAIL"
-        res["vs_latexmk_summary"] = report.summary().splitlines()[:12]
+        lines = report.summary().splitlines()
+        res["vs_latexmk_summary"] = lines[:1] + [x for x in lines if "DIFFER" in x][:6]
     except Exception as err:  # noqa: BLE001 - recorded, the sweep goes on
         res["vs_latexmk"] = f"error: {err}"[:200]
     return res
@@ -119,7 +121,8 @@ def chapmk(cwd: Path, *args: str) -> tuple[int, str, dict[str, Any], float]:
 def summary(rc: int, out: str, rep: dict[str, Any]) -> dict[str, Any]:
     lines = [ln for ln in out.splitlines() if ln.strip()]
     keep = [ln for ln in lines if re.search(
-        r"warning|full build|cold build|self-check|PASS|FAIL|differ|rror|Traceback|timeout", ln)]
+        r"warning|full build|cold build|self-check|PASS|FAIL|DIFFER|differ|rror|Traceback|timeout",
+        ln)]
     return {
         "rc": rc,
         "mode": rep.get("mode"),
