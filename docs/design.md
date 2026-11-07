@@ -109,7 +109,12 @@ only `chapmk-ini.sty` injected (externalize redirection, §6.4.3) and the same e
 reference in:
 
 1. page count; every page rendered at 150 dpi (`pdftoppm`), pixel-identical;
-2. extracted text per page (`pdftotext -layout`);
+2. extracted text per page (`pdftotext -layout`); texts that agree once every font descriptor's
+   Ascent, CapHeight and Descent are set from its FontBBox (no XHeight) pass with a note:
+   pdfTeX takes these metrics from the TFM of one instance of a font, chosen by the fonts a
+   run uses, so merged runs can differ; they are not visible (rendering uses the font
+   program and `/Widths`), only the boxes of text extraction (user decision; item 1 still
+   compares the pixels);
 3. page labels; outline (titles, levels, open state, target page and position); link
    annotations (rectangle, target page and position, or URI); document info and catalog
    entries (S13);
