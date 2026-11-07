@@ -1,0 +1,222 @@
+[
+ {
+  "id": "ctan/lshort",
+  "root": "/sweep/docs/lshort",
+  "main": "lshort.tex",
+  "source": "CTAN info/lshort/english 6.4 (includified: \\input inlined)",
+  "license": "GPL-2.0"
+ },
+ {
+  "id": "ctan/koma-scrguide",
+  "root": "/sweep/docs/koma",
+  "main": "scrguide-en.tex",
+  "source": "CTAN macros/latex/contrib/koma-script/doc (includified: \\linclude, \\input inlined)",
+  "license": "LPPL-1.3c"
+ },
+ {
+  "id": "gh/josephwright/beamer",
+  "root": "/man/beamer/doc",
+  "main": "beameruserguide.tex",
+  "source": "github josephwright/beamer doc/",
+  "license": "LPPL-1.3c/GPL-2.0"
+ },
+ {
+  "id": "gh/T-F-S/tcolorbox",
+  "root": "/man/tcolorbox/doc/latex/tcolorbox",
+  "main": "tcolorbox.tex",
+  "source": "github T-F-S/tcolorbox",
+  "license": "LPPL-1.3c"
+ },
+ {
+  "id": "gh/AndreyAkinshin/Russian-Phd-LaTeX-Dissertation-Template",
+  "root": "/sweep/gh/AndreyAkinshin__Russian-Phd-LaTeX-Dissertation-Template",
+  "main": "dissertation.tex",
+  "source": "github AndreyAkinshin/Russian-Phd-LaTeX-Dissertation-Template",
+  "license": "CC-BY-4.0",
+  "class": "memoir"
+ },
+ {
+  "id": "gh/hal3/ciml",
+  "root": "/sweep/gh/hal3__ciml",
+  "main": "book/courseml.tex",
+  "source": "github hal3/ciml",
+  "license": "GPL-2.0",
+  "class": "tufte-book"
+ },
+ {
+  "id": "gh/mengchaoheng/SCUT_thesis",
+  "root": "/sweep/gh/mengchaoheng__SCUT_thesis",
+  "main": "scutthesis.tex",
+  "source": "github mengchaoheng/SCUT_thesis",
+  "license": "GPL-3.0",
+  "class": "scutthesis"
+ },
+ {
+  "id": "gh/jdujava/TeXtured",
+  "root": "/sweep/gh/jdujava__TeXtured",
+  "main": "thesis.tex",
+  "source": "github jdujava/TeXtured",
+  "license": "CC0-1.0",
+  "class": "report"
+ },
+ {
+  "id": "gh/kumar-shridhar/Master-Thesis-BayesianCNN",
+  "root": "/sweep/gh/kumar-shridhar__Master-Thesis-BayesianCNN",
+  "main": "thesis.tex",
+  "source": "github kumar-shridhar/Master-Thesis-BayesianCNN",
+  "license": "MIT",
+  "class": "Classes/PhDThesisPSnPDF"
+ },
+ {
+  "id": "gh/ilyasergey/pnp",
+  "root": "/sweep/gh/ilyasergey__pnp",
+  "main": "latex/pnp.tex",
+  "source": "github ilyasergey/pnp",
+  "license": "BSD-2-Clause",
+  "class": "scrbook"
+ },
+ {
+  "id": "gh/Gjacquenot/Puma-EM",
+  "root": "/sweep/gh/Gjacquenot__Puma-EM",
+  "main": "doc/EMtheory.tex",
+  "source": "github Gjacquenot/Puma-EM",
+  "license": "GPL-3.0",
+  "class": "book"
+ },
+ {
+  "id": "gh/mikinty/Understanding-Analysis-Abbott-Solutions",
+  "root": "/sweep/gh/mikinty__Understanding-Analysis-Abbott-Solutions",
+  "main": "main.tex",
+  "source": "github mikinty/Understanding-Analysis-Abbott-Solutions",
+  "license": "MIT",
+  "class": "book"
+ },
+ {
+  "id": "gh/OmegaAndre/TJUThesis-2026-Graduation-Bachelor",
+  "root": "/sweep/gh/OmegaAndre__TJUThesis-2026-Graduation-Bachelor",
+  "main": "tjumian.tex",
+  "source": "github OmegaAndre/TJUThesis-2026-Graduation-Bachelor",
+  "license": "GPL-3.0",
+  "class": "tjuthesis-Bachelor"
+ },
+ {
+  "id": "gh/fatestigma/scuthesis",
+  "root": "/sweep/gh/fatestigma__scuthesis",
+  "main": "main.tex",
+  "source": "github fatestigma/scuthesis",
+  "license": "LPPL-1.3c",
+  "class": "scuthesis"
+ },
+ {
+  "id": "gh/Gankra/thesis",
+  "root": "/sweep/gh/Gankra__thesis",
+  "main": "thesis.tex",
+  "source": "github Gankra/thesis",
+  "license": "GPL-2.0",
+  "class": "scrreprt"
+ },
+ {
+  "id": "gh/jiandahao/BIT-thesis-LaTex",
+  "root": "/sweep/gh/jiandahao__BIT-thesis-LaTex",
+  "main": "demo.tex",
+  "source": "github jiandahao/BIT-thesis-LaTex",
+  "license": "MIT",
+  "class": "BIT-thesis-grd-jdh"
+ },
+ {
+  "id": "gh/FrankSFLYS/usstthesis",
+  "root": "/sweep/gh/FrankSFLYS__usstthesis",
+  "main": "main.tex",
+  "source": "github FrankSFLYS/usstthesis",
+  "license": "Apache-2.0",
+  "class": "usstthesis"
+ },
+ {
+  "id": "gh/mpip/pfft",
+  "root": "/sweep/gh/mpip__pfft",
+  "main": "doc/manual.tex",
+  "source": "github mpip/pfft",
+  "license": "GPL-3.0",
+  "class": "scrreprt"
+ },
+ {
+  "id": "gh/Tepexic/Tesis-UNAM",
+  "root": "/sweep/gh/Tepexic__Tesis-UNAM",
+  "main": "tesis.tex",
+  "source": "github Tepexic/Tesis-UNAM",
+  "license": "GPL-3.0",
+  "class": "Latex/Classes/PhDthesisPSnPDF"
+ },
+ {
+  "id": "gh/qiuzhu/BITthesis",
+  "root": "/sweep/gh/qiuzhu__BITthesis",
+  "main": "main.tex",
+  "source": "github qiuzhu/BITthesis",
+  "license": "GPL-3.0",
+  "class": "BITthesis"
+ },
+ {
+  "id": "gh/bibekanandadatta/JHU-Dissertation-Template",
+  "root": "/sweep/gh/bibekanandadatta__JHU-Dissertation-Template",
+  "main": "00-main.tex",
+  "source": "github bibekanandadatta/JHU-Dissertation-Template",
+  "license": "MIT",
+  "class": "report"
+ },
+ {
+  "id": "gh/GOS-Book/GOS-Book.github.io",
+  "root": "/sweep/gh/GOS-Book__GOS-Book.github.io",
+  "main": "GOS-Book.tex",
+  "source": "github GOS-Book/GOS-Book.github.io",
+  "license": "MIT",
+  "class": "extbook"
+ },
+ {
+  "id": "gh/anabioticsoul/BJTU-thesis-template",
+  "root": "/sweep/gh/anabioticsoul__BJTU-thesis-template",
+  "main": "main.tex",
+  "source": "github anabioticsoul/BJTU-thesis-template",
+  "license": "MIT",
+  "class": "BJTU-thesis"
+ },
+ {
+  "id": "gh/thescrivener/PursuingStacks",
+  "root": "/sweep/gh/thescrivener__PursuingStacks",
+  "main": "main.tex",
+  "source": "github thescrivener/PursuingStacks",
+  "license": "CC0-1.0",
+  "class": "memoir"
+ },
+ {
+  "id": "gh/houluy/bupTemplate",
+  "root": "/sweep/gh/houluy__bupTemplate",
+  "main": "main.tex",
+  "source": "github houluy/bupTemplate",
+  "license": "GPL-3.0",
+  "class": "buptthesis"
+ },
+ {
+  "id": "gh/Joi/phd-dissertation",
+  "root": "/sweep/gh/Joi__phd-dissertation",
+  "main": "main.tex",
+  "source": "github Joi/phd-dissertation",
+  "license": "CC-BY-4.0",
+  "class": "scrreprt"
+ },
+ {
+  "id": "gh/Ronchy2000/Xidian-LaTeX-Template-for-macOS",
+  "root": "/sweep/gh/Ronchy2000__Xidian-LaTeX-Template-for-macOS",
+  "main": "main.tex",
+  "source": "github Ronchy2000/Xidian-LaTeX-Template-for-macOS",
+  "license": "LPPL-1.3c",
+  "class": "xdupgthesis"
+ },
+ {
+  "id": "gh/ilivans/attention-sentiment",
+  "root": "/sweep/gh/ilivans__attention-sentiment",
+  "main": "doc/ivanov-diploma/dissertation.tex",
+  "source": "github ilivans/attention-sentiment",
+  "license": "MIT",
+  "class": "extreport"
+ }
+]
