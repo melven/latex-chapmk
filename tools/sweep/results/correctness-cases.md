@@ -226,6 +226,55 @@ commented out, `bookmark` added, BibTeX replaced by biblatex). Reproduce with
   - `DIFFERS outline items: #46: reference (0, 'REFERENCES', 0, (123, '/XYZ', (108.0, 393.755, None))) != (0, 'REFERENCES', 0, (115, '/XYZ', (108.0, 684.0, None)))`
 - full build vs latexmk: PASS
 
+## From `manifest7.json`
+
+### [wvianna/argus-simulador-defeito-maquina-rotativa](https://github.com/wvianna/argus-simulador-defeito-maquina-rotativa) `5e45d0f87449`
+
+- main file: `monografia/main.tex`, class `book`, variant: biblatex
+- cold build: cold / FAIL (reason: no previous state)
+  - `DIFFERS raster pages: #17: reference '5a90cf52da272e55206c15f452307de786ca6d1ba84b3d5c92590e08c31b60e8' != '7f74052d4684970d3545c848372d665c962f61cd44c43dffbc8d80a9d1a4d46b'`
+- full build vs latexmk: PASS
+
+### [ascalva/mind-palace](https://github.com/ascalva/mind-palace) `079f87cdd6d2`
+
+- main file: `docs/book/main.tex`, class `book`, variant: bookmark, biblatex
+- cold build: cold / FAIL (reason: no previous state)
+  - `DIFFERS text pages: #14: reference 'CHAPTER 2. ARCHITECTURE: THE ZONES AND THEIR BOUNDARIES                                            13\n\nrepository, its own home, and the report lane. “That is the`
+  - `DIFFERS synctex records: #13664: reference '10|(figures/trust-zones.tex,29:8683964,7306030:0,0,0' != '10|gfigures/trust-zones.tex,29:8683964,7306030'`
+- full build vs latexmk: PASS
+
+### [Joaszek/Praca-dyplomowa](https://github.com/Joaszek/Praca-dyplomowa) `ee68b53f2d1b`
+
+- main file: `Dyplom/Dyplom.tex`, class `memoir`, variant: bookmark, biblatex
+- cold build: cold / FAIL (reason: no previous state)
+  - `DIFFERS catalog entries: #0: reference ('/Metadata', ('stream', '929e986c50c7bb6079932679d58e32c59b93b78ad073bca77d5858e267d765db')) != ('/Metadata', ('stream', 'aec42c5ddf33c1d96de1ceafb0621945bcfc31`
+- full build vs latexmk: PASS
+
+### [KubeCloud/thesis](https://github.com/KubeCloud/thesis) `e7c13e859524`
+
+- main file: `master.tex`, class `memoir`, variant: bookmark, biblatex
+- cold build: cold / FAIL (reason: no previous state)
+  - `DIFFERS text pages: #29: reference 'preferences. For instance, this is achieved through a combination of presenting the topics in the form of\nfacts and data, and then having the students experiment i`
+- full build vs latexmk: PASS
+
+### [JulianVidal/AGDA_HTML](https://github.com/JulianVidal/AGDA_HTML) `2bed678e5315`
+
+- main file: `reports/Final_Report/Dissertation.tex`, class `report`, variant: bookmark, biblatex
+- cold build: cold / PASS (reason: no previous state)
+- typo build: incremental / PASS
+- full build vs latexmk: FAIL
+  - `DIFFERS page count: #0: reference 55 != 57`
+  - `DIFFERS raster pages: #3: reference '8c5cd07233427f828ee61969a90c60e5dbc5d5549f5d85fafd997a8c2f173446' != '97d9e8300ccc97218f296f0763328ae669ad68418293e1416530ace731d5bdd3'`
+  - `DIFFERS text pages: #3: reference '                                                                       Contents\n\n\n\n\nAbstract                                                                    `
+
+### [CodingLangur/Finch.ai](https://github.com/CodingLangur/Finch.ai) `867ed60809a7`
+
+- main file: `docs/main.tex`, class `report`, variant: bookmark
+- cold build: full / PASS (reason: format build failed: the preamble before line 146 creates PDF form xobjects or images (40/0), which a format cannot keep; move that code after the split point (chapmk.toml: format.split_before))
+- typo build: full / PASS
+- full build vs latexmk: FAIL
+  - `DIFFERS synctex edit: #0: reference ['Input:/sweep/work/tmp_6pgz6fe/doc/docs/./main.toc', 'Line:36', 'Column:-1'] != ['Input:/sweep/work/tmp_6pgz6fe/doc/docs/.chapmk/main/full/main.toc', 'Line:36', 'C`
+
 ## Full-mode fallbacks worth a look (sweep 5, correct output)
 
 - [BernhardMarconato/computer-vision-exercises](https://github.com/BernhardMarconato/computer-vision-exercises) (`project_1_scanner/documentation`): `unreadable records (invalid literal for int() with base 10: 'er {abspage}\pp@cl@end ')`: perpage (`footmisc[perpage]`, `\c@pabs@page` is a macro); perpage unsupported now (PR).
