@@ -358,7 +358,9 @@ the privilege): hardlinks, else copies. Limitation: paths leaving the source tre
 (`\input{../x}`) do not resolve.
 
 **Run directory** `runs/<r>/`: the canonical main and unit aux files, the derived files (list
-files, `.bbl`, `.nls`, `.ind`), the include subdirectories and the run main. Excluded units of a
+files, `.bbl`, `.nls`, `.ind`), the source tree's subdirectories (`\include` writes
+`<dir>/<name>.aux` into the output directory, which TeX does not create; also for an
+`\include` in an `\input` file; likewise in `full/`) and the run main. Excluded units of a
 parallel run get predicted checkpoints (§6.9.3). Outputs: `.pdf`, `.synctex.gz`, `.log`,
 `.fls`, aux files, `.frec`, `.nlo`, `.idx`, `.bcf`, list files.
 
