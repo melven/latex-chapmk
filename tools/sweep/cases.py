@@ -24,9 +24,14 @@ NOTES = {
     " (`docs/glossary.tex:5`), full mode, `--check` passes.",
     "gh/sprakash1612/triage-learning-medical": "the same document as"
     " ary1002/triage-learning-medical-diagnosis (same differences).",
-    "gh/Agda78/APC-appunti": "incremental build after a typo differs from the full build.",
-    "gh/se-tuebingen/thesis-template": "incremental build after a typo differs from the full"
-    " build; `title.tex` is a global unit (`\\pagestyle`, `\\hypersetup` in its body).",
+    "gh/Agda78/APC-appunti": "font descriptor metrics (see se-tuebingen); here the full build"
+    " itself has zeros for `LMRoman12-Italic` and other values for `LMRoman12-Bold`.",
+    "gh/se-tuebingen/thesis-template": "font descriptor metrics: pdfTeX takes Ascent, CapHeight,"
+    " Descent from one instance of the font (apparently the one first used last: LIFO font"
+    " list); run r4 (ch1 excluded) used a TS1-like instance (zeros), the full build a T1 one"
+    " (471/653/-3). The merge copies the first page's run values. Rendering identical, only"
+    " pdftotext's word boxes differ. A fallback on disagreement made the hgb corpus full on"
+    " every edit; left open (user decision).",
     "gh/bryancrisso/partiiproject": "latexmk's List of Figures shows the unresolved key `[ddg]`"
     " of a citation in a caption, chapmk's `[1]`; 79 vs 81 pages. Possibly latexmk stopping"
     " one run early; not checked.",
@@ -92,11 +97,12 @@ for manifest, results in runs:
 print("## Full-mode fallbacks worth a look (sweep 5, correct output)\n")
 print("- [BernhardMarconato/computer-vision-exercises](https://github.com/BernhardMarconato/"
       "computer-vision-exercises) (`project_1_scanner/documentation`): `unreadable records"
-      " (invalid literal for int() with base 10: 'er {abspage}\\pp@cl@end ')` in the `.frec`.")
+      " (invalid literal for int() with base 10: 'er {abspage}\\pp@cl@end ')`: perpage"
+      " (`footmisc[perpage]`, `\\c@pabs@page` is a macro); perpage unsupported now (PR).")
 print("- [BartlomiejKufel/projekt-bazy-danych](https://github.com/BartlomiejKufel/"
       "projekt-bazy-danych): `.bcf has 1 citekeys, the aux 0 citations`; the next build then"
       " reports `the previous build was interrupted while committing` (the journal a fallback"
-      " inside the commit leaves, C7), which reads like a crash.")
+      " inside the commit leaves, C7), which reads like a crash; message fixed (PR).")
 print()
 print("## Earlier cases\n")
 print("- [rimrim/thesis](https://github.com/rimrim/thesis) (`manifest2.json`): full build vs")

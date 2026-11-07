@@ -178,7 +178,7 @@ commented out, `bookmark` added, BibTeX replaced by biblatex). Reproduce with
 - typo build: incremental / FAIL
   - `DIFFERS text pages: #74: reference 'Ovvero, la somma tra il tempo di esecuzione di una parte del programma che è stretta-\nmente seriale e il tempo di esecuzione della parte del programma che è parall`
 - full build vs latexmk: PASS
-- note: incremental build after a typo differs from the full build.
+- note: font descriptor metrics (see se-tuebingen); here the full build itself has zeros for `LMRoman12-Italic` and other values for `LMRoman12-Bold`.
 
 ### [raktim-mondol/neural-operator](https://github.com/raktim-mondol/neural-operator) `95c283781499`
 
@@ -203,7 +203,7 @@ commented out, `bookmark` added, BibTeX replaced by biblatex). Reproduce with
 - typo build: incremental / FAIL
   - `DIFFERS text pages: #10: reference 'Chapter 1\n\nImportant first chapter                                                               Replace this placeholder title\n                                 `
 - full build vs latexmk: PASS
-- note: incremental build after a typo differs from the full build; `title.tex` is a global unit (`\pagestyle`, `\hypersetup` in its body).
+- note: font descriptor metrics: pdfTeX takes Ascent, CapHeight, Descent from one instance of the font (apparently the one first used last: LIFO font list); run r4 (ch1 excluded) used a TS1-like instance (zeros), the full build a T1 one (471/653/-3). The merge copies the first page's run values. Rendering identical, only pdftotext's word boxes differ. A fallback on disagreement made the hgb corpus full on every edit; left open (user decision).
 
 ### [sprakash1612/triage-learning-medical](https://github.com/sprakash1612/triage-learning-medical) `55c7795a555e`
 
@@ -217,8 +217,8 @@ commented out, `bookmark` added, BibTeX replaced by biblatex). Reproduce with
 
 ## Full-mode fallbacks worth a look (sweep 5, correct output)
 
-- [BernhardMarconato/computer-vision-exercises](https://github.com/BernhardMarconato/computer-vision-exercises) (`project_1_scanner/documentation`): `unreadable records (invalid literal for int() with base 10: 'er {abspage}\pp@cl@end ')` in the `.frec`.
-- [BartlomiejKufel/projekt-bazy-danych](https://github.com/BartlomiejKufel/projekt-bazy-danych): `.bcf has 1 citekeys, the aux 0 citations`; the next build then reports `the previous build was interrupted while committing` (the journal a fallback inside the commit leaves, C7), which reads like a crash.
+- [BernhardMarconato/computer-vision-exercises](https://github.com/BernhardMarconato/computer-vision-exercises) (`project_1_scanner/documentation`): `unreadable records (invalid literal for int() with base 10: 'er {abspage}\pp@cl@end ')`: perpage (`footmisc[perpage]`, `\c@pabs@page` is a macro); perpage unsupported now (PR).
+- [BartlomiejKufel/projekt-bazy-danych](https://github.com/BartlomiejKufel/projekt-bazy-danych): `.bcf has 1 citekeys, the aux 0 citations`; the next build then reports `the previous build was interrupted while committing` (the journal a fallback inside the commit leaves, C7), which reads like a crash; message fixed (PR).
 
 ## Earlier cases
 
