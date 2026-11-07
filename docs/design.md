@@ -56,7 +56,7 @@ chapmk relies on these rules and checks them where it can (README "Document assu
 | # | Assumption | Check / consequence if violated |
 |---|---|---|
 | A1 | Macro definitions and settings are in the preamble. Unit bodies change only counters, labels, citations, list entries, nomenclature entries and bookmarks. | Lint (§6.8.4): a unit with a hit is *global* and compiled in every run. |
-| A2 | Units are the files given to `\include` in the top-level body of the main file. | Analysis (§6.1). `\begin{document}` not in the main file, or an `\include` inside a group: full builds. |
+| A2 | Units are the files given to `\include` in the top-level body of the main file. | Analysis (§6.1). `\begin{document}` not in the main file, or an `\include` inside a group: full builds; an `\include` outside the main file's body (a class or macro calls it) is found in the run's records: full builds from then on. |
 | A3 | The main-file body between the includes (glue: title page, lists, `\appendix`, bibliography, …) may change macros. | The glue is compiled in every run (`\includeonly` semantics). An edit of the main-file body is a cold build. |
 | A4 | No footnote is split across an `\include` boundary. | Acceptance tests. |
 | A5 | Every compilation unit starts with a chapter-level heading. | An include that does not start with one joins the preceding compilation unit (§6.1; S7: running heads). |
@@ -682,7 +682,8 @@ the PDF, SyncTeX file and log. Triggers:
 - missing, truncated or inconsistent records; merge errors;
 - no fixpoint after 8 iterations;
 - runtime self-checks (C14), which compare chapmk's results with what TeX wrote: a batch with
-  a run of all units has the same `.bcf` citations and datalists as the patch; a unit no run
+  a run of all units has the same `.bcf` citations (keys, order and grouping; TeX's numbers may
+  start later) and datalists as the patch; a unit no run
   compiled keeps its list entries; each merged page's label equals its label in its run;
 - `--full`.
 
