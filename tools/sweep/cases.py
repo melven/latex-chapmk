@@ -14,7 +14,7 @@ from pathlib import Path
 scratch = Path(sys.argv[1])
 sweep = scratch / "sweep"
 runs = [("manifest3.json", "cases3.jsonl"), ("manifest4.json", "cases4.jsonl"),
-        ("manifest5.json", "results5.jsonl")]
+        ("manifest5.json", "results5.jsonl"), ("manifest6.json", "results6.jsonl")]
 # latexmk comparisons re-run with all DIFFERS lines (lm4.jsonl) and notes from a first look
 relm = {json.loads(ln)["id"]: json.loads(ln) for ln in open(sweep / "lm4.jsonl")} \
     if (sweep / "lm4.jsonl").is_file() else {}

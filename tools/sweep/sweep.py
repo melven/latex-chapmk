@@ -220,6 +220,10 @@ def typo(main: Path) -> str | None:
 
 
 def sweep_one(entry: dict[str, Any]) -> dict[str, Any]:
+    if not Path(entry["root"]).is_dir():
+        return {"id": entry["id"], "prefilter": "not cloned (clone failed or larger than 300 MB)"}
+    if not (Path(entry["root"]) / entry["main"]).is_file():
+        return {"id": entry["id"], "prefilter": "main file not in the clone (moved since the search)"}
     work = Path(tempfile.mkdtemp(dir="/sweep/work"))
     root = work / "doc"
     shutil.copytree(entry["root"], root, symlinks=True,

@@ -215,6 +215,17 @@ commented out, `bookmark` added, BibTeX replaced by biblatex). Reproduce with
 - full build vs latexmk: PASS
 - note: the same document as ary1002/triage-learning-medical-diagnosis (same differences).
 
+## From `manifest6.json`
+
+### [alorenzo175/dissertation](https://github.com/alorenzo175/dissertation) `bd0a7840750e`
+
+- main file: `dissertation/dissertation.tex`, class `uathesis`, variant: bookmark, biblatex
+- cold build: cold / FAIL (reason: no previous state)
+  - `DIFFERS raster pages: #0: reference 'acf2c6d6e3d3ea93fa391c627e0df14527c7a763bfc56b3b83655139153cbd27' != '1773eff3a8f7df26ae26deae8efc46ded288dbaacb3e4f14b2c61b29c5d37e26'`
+  - `DIFFERS text pages: #19: reference '                                                                                            20\n\n\n                          Forecast Horizon for Various Forecast `
+  - `DIFFERS outline items: #46: reference (0, 'REFERENCES', 0, (123, '/XYZ', (108.0, 393.755, None))) != (0, 'REFERENCES', 0, (115, '/XYZ', (108.0, 684.0, None)))`
+- full build vs latexmk: PASS
+
 ## Full-mode fallbacks worth a look (sweep 5, correct output)
 
 - [BernhardMarconato/computer-vision-exercises](https://github.com/BernhardMarconato/computer-vision-exercises) (`project_1_scanner/documentation`): `unreadable records (invalid literal for int() with base 10: 'er {abspage}\pp@cl@end ')`: perpage (`footmisc[perpage]`, `\c@pabs@page` is a macro); perpage unsupported now (PR).
