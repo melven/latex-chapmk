@@ -269,7 +269,11 @@ options are part of `pre` (`draft` freezes `\ifdraft`).
 - Nodes left on the main vertical list by the format part (e.g. xcolor's unmatched
   `\pdfcolorstack 0 push`) are not dumped; without them a colour left open across a page
   break would end on its page. The format source moves them into a dumped box with a local
-  output routine; `chapmk.sty` puts them back at the split point.
+  output routine; `chapmk.sty` puts them back at the split point. `\prevdepth` is not dumped
+  either (a run starts with -1000pt): its value at that point is stored and assigned there
+  too (a `\vspace*` right after `\begin{document}` restores it, and the next line's
+  interline glue depends on it). The capture is called by `\csname`: mylatexformat reads
+  the preamble with `@` a letter, and a preamble may end with `\makeatother`.
 - Detected and rejected (format build fails → full mode with the reason): immediate PDF
   objects (pdfTeX's `dangling objects discarded`, e.g. `cmap`), colour stacks
   (`\pdfcolorstackinit`), catalog calls without a braced argument, form xobjects and images.

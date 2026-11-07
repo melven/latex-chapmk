@@ -159,10 +159,14 @@
 % (gensrc.format_source), \chapmk@capturemvl moves them into a box register, which is
 % dumped: an empty box ends the page, a local output routine keeps the page without that
 % box and its \topskip glue. chapmk.sty puts them back at the split point of every run.
+% \prevdepth is not dumped either (a run starts with -1000pt, "ignore depth"): its value goes
+% into \chapmk@mvlpd, which chapmk.sty assigns (a \vspace* right after \begin{document}
+% restores it, and the interline glue of the next line depends on it).
 \ifcsname chapmk@formatbuild\endcsname
   \newbox\chapmk@mvlbox
   \def\chapmk@capturemvl{\ifvmode
     \edef\chapmk@pd{\the\prevdepth}\edef\chapmk@op{\the\outputpenalty}%
+    \global\let\chapmk@mvlpd\chapmk@pd
     \begingroup
       \output{\global\setbox\chapmk@mvlbox\vbox{\unvbox255 \setbox0\lastbox\unskip}}%
       \hbox{}\penalty-10000
