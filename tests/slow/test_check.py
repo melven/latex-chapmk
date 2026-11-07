@@ -85,3 +85,31 @@ def test_font_descriptor_metrics_are_tolerated(
     assert "NOTE text pages: equal up to font descriptor metrics" in rep.summary()
     rep = compare_pdfs(a, c)
     assert "text pages" in {d.item for d in rep.differences} and not rep.notes
+
+
+def test_widths_rounding_is_tolerated(tmp_path: Path) -> None:
+    """pdfTeX rounds a font's /Widths from the size whose font object it created first, which
+    depends on the fonts a run used: merged runs can differ by 0.1 per 1000 em, which moves
+    later glyphs of a string by antialiased pixels (sweep: LuckeeDev, tintando, wvianna).
+    Tolerated with a note; a larger change still differs."""
+    import pikepdf
+
+    src = tmp_path / "s"
+    src.mkdir()
+    body = ("{\\Huge " + "abcdefghijklmnopqrstuvwxyz" * 2 + "}\\par ") * 6
+    a = build(src, body, "a")
+
+    def shifted(out: str, delta: float) -> Path:
+        pdf = build(src, body, out)
+        with pikepdf.open(pdf, allow_overwriting_input=True) as doc:
+            for obj in doc.objects:
+                if isinstance(obj, pikepdf.Dictionary) and "/Widths" in obj:
+                    obj.Widths = pikepdf.Array([float(w) + delta for w in obj.Widths])
+            doc.save(pdf)
+        return pdf
+
+    b = shifted("b", 0.1)
+    rep = compare_pdfs(a, b)
+    assert rep.ok and "equal up to /Widths rounding" in rep.summary(), rep.summary()
+    rep = compare_pdfs(a, shifted("c", 0.5))
+    assert "raster pages" in {d.item for d in rep.differences}, rep.summary()

@@ -108,7 +108,11 @@ only `chapmk-ini.sty` injected (externalize redirection, §6.4.3) and the same e
 (N4). The acceptance tests also compare `--full` with latexmk. A build must match the
 reference in:
 
-1. page count; every page rendered at 150 dpi (`pdftoppm`), pixel-identical;
+1. page count; every page rendered at 150 dpi (`pdftoppm`), pixel-identical; pages that
+   become identical once each `/Widths` entry within 0.11 (per 1000 em) of the reference's
+   value for the same font and code takes that value pass with a note: pdfTeX rounds a
+   font's widths from the size whose font object it created first, which depends on the
+   fonts a run used (glyphs move by about 0.001 pt; user decision);
 2. extracted text per page (`pdftotext -layout`); texts that agree once every font descriptor's
    Ascent, CapHeight and Descent are set from its FontBBox (no XHeight) pass with a note:
    pdfTeX takes these metrics from the TFM of one instance of a font, chosen by the fonts a
