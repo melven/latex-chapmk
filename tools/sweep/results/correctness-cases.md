@@ -169,6 +169,57 @@ commented out, `bookmark` added, BibTeX replaced by biblatex). Reproduce with
   - `DIFFERS outline items: #5: reference (0, 'I Theoretical Foundations', -2, (11, '/XYZ', (70.866, 319.087, None))) != (0, 'I Theoretical Foundations', -2, (11, '/XYZ', (70.866, 304.193, None)))`
 - note: latexmk used the repository's `.latexmkrc` (LuaLaTeX): harness error, `sweep.py` now passes `-norc`; chapmk's format build fails (`docs/glossary.tex:5`), full mode, `--check` passes.
 
+## From `manifest5.json`
+
+### [Agda78/APC-appunti](https://github.com/Agda78/APC-appunti) `d18fd38cb077`
+
+- main file: `main.tex`, class `extbook`, variant: bookmark
+- cold build: cold / PASS (reason: no previous state)
+- typo build: incremental / FAIL
+  - `DIFFERS text pages: #74: reference 'Ovvero, la somma tra il tempo di esecuzione di una parte del programma che è stretta-\nmente seriale e il tempo di esecuzione della parte del programma che è parall`
+- full build vs latexmk: PASS
+- note: incremental build after a typo differs from the full build.
+
+### [raktim-mondol/neural-operator](https://github.com/raktim-mondol/neural-operator) `95c283781499`
+
+- main file: `Neural_Operator_Book.tex`, class `book`, variant: bookmark, biblatex
+- cold build: cold / FAIL (reason: no previous state)
+  - `DIFFERS raster pages: #39: reference '22169fa865b293a0d36f3b0c09f14e28da77002791f5628f02ec55db711c7897' != '6c52b1f7940bdc110d2ca9cdcf1dff129b7cb6298f55b0e8e4cdc009c5d5342e'`
+  - `DIFFERS text pages: #69: reference 'The Fourier Neural Operator: Spectral Theory and Convergence\n\n\nThe middle step uses |k| ≥ maxi |k i | > kmax for every discarded mode k ∈\n                      `
+  - `DIFFERS links: #616: reference (36, (313.426, 305.412, 329.055, 317.583), (79, '/XYZ', (166.537, 160.069, None))) != (36, (313.426, 305.412, 329.055, 317.583), (79, '/XYZ', (166.715, 160.069, None)))`
+- full build vs latexmk: PASS
+
+### [rohith-0099/nemotron3-super-seminar-report](https://github.com/rohith-0099/nemotron3-super-seminar-report) `96bfa77ba1c0`
+
+- main file: `report/main.tex`, class `report`, variant: bookmark, biblatex
+- cold build: cold / FAIL (reason: no previous state)
+  - `DIFFERS text pages: #13: reference ' 2.2                 Hybrid Mamba–Transformer Models\nIf Mamba is efficient but forgetful and attention is precise but expensive, the natural step is to\nmix them. `
+- full build vs latexmk: PASS
+
+### [se-tuebingen/thesis-template](https://github.com/se-tuebingen/thesis-template) `de35a5f25ac3`
+
+- main file: `thesis.tex`, class `report`, variant: bookmark
+- cold build: cold / PASS (reason: no previous state)
+- typo build: incremental / FAIL
+  - `DIFFERS text pages: #10: reference 'Chapter 1\n\nImportant first chapter                                                               Replace this placeholder title\n                                 `
+- full build vs latexmk: PASS
+- note: incremental build after a typo differs from the full build; `title.tex` is a global unit (`\pagestyle`, `\hypersetup` in its body).
+
+### [sprakash1612/triage-learning-medical](https://github.com/sprakash1612/triage-learning-medical) `55c7795a555e`
+
+- main file: `final_report/main.tex`, class `report`, variant: bookmark
+- cold build: cold / FAIL (reason: no previous state)
+  - `DIFFERS raster pages: #0: reference '365d1bf457dd6db81164c899308400cacb712f343abae5070a35324e1df6180d' != '79d349e9d5fcdde07aa16f50f1c57ac4b4cfaad9fb23d5c9715928321feae547'`
+  - `DIFFERS text pages: #29: reference '                                                Chapter 2. REVIEW OF LITERATURE\n\n\n2.4     Model Interpretability and Explainability\n\n2.4.1    Gradient-Based Sa`
+  - `DIFFERS synctex records: #22: reference '1|(main.tex,127:7104430,9892238:27317560,929307,264291' != '1|(main.tex,127:7104430,9642260:27317560,929307,264291'`
+- full build vs latexmk: PASS
+- note: the same document as ary1002/triage-learning-medical-diagnosis (same differences).
+
+## Full-mode fallbacks worth a look (sweep 5, correct output)
+
+- [BernhardMarconato/computer-vision-exercises](https://github.com/BernhardMarconato/computer-vision-exercises) (`project_1_scanner/documentation`): `unreadable records (invalid literal for int() with base 10: 'er {abspage}\pp@cl@end ')` in the `.frec`.
+- [BartlomiejKufel/projekt-bazy-danych](https://github.com/BartlomiejKufel/projekt-bazy-danych): `.bcf has 1 citekeys, the aux 0 citations`; the next build then reports `the previous build was interrupted while committing` (the journal a fallback inside the commit leaves, C7), which reads like a crash.
+
 ## Earlier cases
 
 - [rimrim/thesis](https://github.com/rimrim/thesis) (`manifest2.json`): full build vs

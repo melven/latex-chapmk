@@ -13,7 +13,8 @@ from pathlib import Path
 
 scratch = Path(sys.argv[1])
 sweep = scratch / "sweep"
-runs = [("manifest3.json", "cases3.jsonl"), ("manifest4.json", "cases4.jsonl")]
+runs = [("manifest3.json", "cases3.jsonl"), ("manifest4.json", "cases4.jsonl"),
+        ("manifest5.json", "results5.jsonl")]
 # latexmk comparisons re-run with all DIFFERS lines (lm4.jsonl) and notes from a first look
 relm = {json.loads(ln)["id"]: json.loads(ln) for ln in open(sweep / "lm4.jsonl")} \
     if (sweep / "lm4.jsonl").is_file() else {}
@@ -21,6 +22,11 @@ NOTES = {
     "gh/albertopasqualetto/Master-thesis": "latexmk used the repository's `.latexmkrc` (LuaLaTeX):"
     " harness error, `sweep.py` now passes `-norc`; chapmk's format build fails"
     " (`docs/glossary.tex:5`), full mode, `--check` passes.",
+    "gh/sprakash1612/triage-learning-medical": "the same document as"
+    " ary1002/triage-learning-medical-diagnosis (same differences).",
+    "gh/Agda78/APC-appunti": "incremental build after a typo differs from the full build.",
+    "gh/se-tuebingen/thesis-template": "incremental build after a typo differs from the full"
+    " build; `title.tex` is a global unit (`\\pagestyle`, `\\hypersetup` in its body).",
     "gh/bryancrisso/partiiproject": "latexmk's List of Figures shows the unresolved key `[ddg]`"
     " of a citation in a caption, chapmk's `[1]`; 79 vs 81 pages. Possibly latexmk stopping"
     " one run early; not checked.",
@@ -36,7 +42,7 @@ def commit(root: str) -> str:
 
 def diffs(messages: list[str]) -> list[str]:
     out = [re.sub(r"/sweep/work/tmp\w+/doc/", "", m.strip()) for m in messages if "DIFFER" in m]
-    return [d[:200] for d in out[:3]]
+    return [d[:200] for d in list(dict.fromkeys(out))[:3]]
 
 
 print("# Correctness cases (corpus sweeps)\n")
@@ -53,6 +59,10 @@ for manifest, results in runs:
     print(f"## From `{manifest}`\n")
     for line in open(sweep / results):
         r = json.loads(line)
+        failed = any((r.get(k) or {}).get("check") == "FAIL" for k in ("cold", "typo")) or \
+            (r.get("reference") or {}).get("vs_latexmk") == "FAIL"
+        if results.startswith("results") and not failed:
+            continue  # a whole sweep: only its cases
         e = man[r["id"]]
         repo = r["id"].removeprefix("gh/")
         if r["id"] in relm:
@@ -79,6 +89,15 @@ for manifest, results in runs:
         if r["id"] in NOTES:
             print(f"- note: {NOTES[r['id']]}")
         print()
+print("## Full-mode fallbacks worth a look (sweep 5, correct output)\n")
+print("- [BernhardMarconato/computer-vision-exercises](https://github.com/BernhardMarconato/"
+      "computer-vision-exercises) (`project_1_scanner/documentation`): `unreadable records"
+      " (invalid literal for int() with base 10: 'er {abspage}\\pp@cl@end ')` in the `.frec`.")
+print("- [BartlomiejKufel/projekt-bazy-danych](https://github.com/BartlomiejKufel/"
+      "projekt-bazy-danych): `.bcf has 1 citekeys, the aux 0 citations`; the next build then"
+      " reports `the previous build was interrupted while committing` (the journal a fallback"
+      " inside the commit leaves, C7), which reads like a crash.")
+print()
 print("## Earlier cases\n")
 print("- [rimrim/thesis](https://github.com/rimrim/thesis) (`manifest2.json`): full build vs")
 print("  latexmk differs in one SyncTeX record (page 50, a `description` item box in")
