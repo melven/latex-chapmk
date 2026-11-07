@@ -61,3 +61,13 @@ def test_glue_inputs_and_unstable_self_data(tmp_path: Path) -> None:
     dirty, glue = rules.after_run(recs, {"U1"}, view, other)
     assert dirty == {"U1": ["self data unstable (rerun)"]}
     assert glue == "glue inputs changed (lists)"
+
+
+def test_changed_names_of_unclassified_statements() -> None:
+    """The warning names the changed commands also when only repeated statements (acronym's
+    \\acronymused, once per use) or the order changed."""
+    from chapmk.dirty import _changed_names
+
+    assert _changed_names(["\\a{1}", "\\b{2}"], ["\\a{1}", "\\c{3}"]) == ["\\b", "\\c"]
+    assert _changed_names(["\\u{x}", "\\u{x}"], ["\\u{x}"]) == ["\\u"]
+    assert _changed_names(["\\a{1}", "\\b{2}"], ["\\b{2}", "\\a{1}"]) == ["\\a", "\\b"]

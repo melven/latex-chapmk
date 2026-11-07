@@ -82,6 +82,10 @@ def test_statements_join_multiline_records() -> None:
         ("\\abx@aux@segm{0}{0}{ref01}", CITE),
         ("\\abx@aux@defaultrefcontext{0}{ref01}{nty/global//global/global/global}", BIBDATA),
         ("\\pgfsyspdfmark {pgfid3}{22496944}{10432976}", SELF),
+        ("\\mph@setcol{ii:vi}{\\mph@nr}", SELF),  # mparhack (S17)
+        ("\\def\\mph@nr{3}", SELF),
+        ("\\gdef\\mph@lastpage{12}", SELF),
+        ("\\csname mph@do@warn\\endcsname", SELF),
         ("\\expandafter\\gdef\\csname eqp@this@C1.1\\endcsname{77.988pt}", EQP),
         ("\\global\\csname @altsecnumformattrue\\endcsname", AGGREGATE),
         ("\\global\\@namedef{scr@dte@chapter@lastmaxnumwidth}{12.8pt}", LISTDATA),
