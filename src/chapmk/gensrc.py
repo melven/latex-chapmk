@@ -43,8 +43,10 @@ def format_source(analysis: Analysis) -> str:
         "\\the\\numexpr\\pdfcolorstackinit direct{}\\relax}\\fi"
         "\\ifcsname chapmk@pdfunrecorded\\endcsname\\typeout{chapmk-pdf-unrecorded:"
         "\\csname chapmk@pdfunrecorded\\endcsname}\\fi"
-        # S13: nodes left on the main vertical list go into a dumped box (chapmk-ini.sty)
-        "\\ifdefined\\chapmk@capturemvl\\chapmk@capturemvl\\fi"
+        # S13: nodes left on the main vertical list go into a dumped box (chapmk-ini.sty);
+        # \csname: the preamble may end with \makeatother (mylatexformat reads it with @ a
+        # letter), and \chapmk@capturemvl would be \chapmk followed by text
+        "\\ifcsname chapmk@capturemvl\\endcsname\\csname chapmk@capturemvl\\endcsname\\fi"
     )
     return "".join(lines) + check + "\\endofdump" + nl
 
