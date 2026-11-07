@@ -418,7 +418,10 @@ it empties `full/`.
 
 List files (`.toc`, `.lof`, …) are written by TeX, not by chapmk: TeX expands their content
 while writing, and aux macros like `\babel@aux` add entries, so a Python linker is not exact.
-Every run reads all aux files at `\end{document}` and writes complete list files.
+Every run reads all aux files at `\end{document}` and writes complete list files. A list typeset
+inside a unit (`\tableofcontents` in a front-matter unit, a class's preface command) is opened
+by `\@starttoc` only when that unit is compiled; `chapmk.sty` opens each of the document's list
+files (those in `canon/`) that no `\@starttoc` opened before the aux files are read.
 
 In a parallel batch no run reads all new contributions. The canonical list files are the last
 run's, with each unit's section (between its list-file markers) taken from the run that
@@ -472,7 +475,8 @@ citations of its excluded units (biblatex would treat them as removed and drop e
    value is its `.bbl` block, position and keyed biblatex aux data.
 5. Self data: its *self* statements must be the same before and after the compile.
 6. The list files it typesets (`\tableofcontents` → `.toc`, `\printbibliography` → `.bbl`,
-   …; an unknown list command counts all list files) or reads (`F` records).
+   …; an unknown list command counts all list files), starts (`L <seg> <ext>`: `\@starttoc` in
+   that segment, also through a macro the source scan does not see) or reads (`F` records).
 
 #### 6.8.2 Inputs of the glue
 
@@ -968,7 +972,7 @@ Relevant mechanisms: the `.nlo` stream, biblatex renumbering, longtable and eqpa
 | file attribution | `.frec` | `F <seg> <path>` |
 | elapsed time | `.frec` | `T <point> <\pdfelapsedtime>`: `load`, `begin`, segment ids, `end`, `picture+`/`picture-` |
 | eqparbox use | `.frec` | `Q <seg> <tag>` |
-| list file | `.frec` | `L <ext>` per `\@starttoc` |
+| list file | `.frec` | `L <seg> <ext>` per `\@starttoc` (the segment reads that list) |
 | unit layout | `.frec` | `O <seg> 0\|1` (twoside and openright at the unit start) |
 | mark classes | `.frec` | `K <pseudo register> <class>`; `K primitive <n>` |
 | stream marker | `.nlo`, `.idx` | `%chapmk-seg <seg>` |
