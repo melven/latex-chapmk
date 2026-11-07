@@ -96,7 +96,8 @@ class UnitSources:
         return self._lint[seg]
 
     def is_global(self, seg: str) -> bool:
-        return bool(self.lint(seg))
+        """Global unit (§6.8.4): a lint hit, or state it changed at run time (``G`` records)."""
+        return seg in self.state.runtime_global or bool(self.lint(seg))
 
     def forget(self, segs: Iterable[str]) -> None:
         """Drop the scans and lint hits of ``segs`` and the glue scan (sources re-attributed)."""

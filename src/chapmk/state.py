@@ -12,7 +12,7 @@ from chapmk.facts import DEFAULT_LIST_SUFFIXES
 from chapmk.files import write_atomic
 from chapmk.predict import SegmentVectors
 
-STATE_VERSION = 6
+STATE_VERSION = 7
 STATE_FILE = "state.json"
 
 
@@ -79,6 +79,8 @@ class State:
     eqp_tags: dict[str, list[str]] = field(default_factory=dict)
     pictures: dict[str, list[str]] = field(default_factory=dict)  # figure keys per segment
     openright: dict[str, bool] = field(default_factory=dict)  # unit starts on an odd page
+    # units that changed page numbering or page style at run time (G records): global
+    runtime_global: dict[str, list[str]] = field(default_factory=dict)
     # list files of the document: the defaults plus those recorded (L records)
     list_suffixes: list[str] = field(default_factory=lambda: list(DEFAULT_LIST_SUFFIXES))
     dist_files: dict[str, str] = field(default_factory=dict)  # path -> "size:mtime_ns"
@@ -166,6 +168,7 @@ def load_state(canon_dir: Path) -> State | None:
             eqp_tags={k: list(v) for k, v in data["eqp_tags"].items()},
             pictures={k: list(v) for k, v in data["pictures"].items()},
             openright={k: bool(v) for k, v in data["openright"].items()},
+            runtime_global={k: list(v) for k, v in data["runtime_global"].items()},
             list_suffixes=list(data["list_suffixes"]),
             dist_files={str(k): str(v) for k, v in data["dist_files"].items()},
         )

@@ -32,6 +32,7 @@ def test_state_round_trip(tmp_path: Path) -> None:
         glue_inputs={"lists": "a", "labels": "b", "aux": "c"},
         pending={"U1": ["imports changed (L:a)"]},
         glue_pending="glue inputs changed (lists)",
+        runtime_global={"U1": ["pagenumbering", "pagestyle"]},
         dist_files={"/texmf/tex/latex/pgf.sty": "120:1700000000000000000"},
     )
     save_state(s, tmp_path)

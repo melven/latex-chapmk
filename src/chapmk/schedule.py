@@ -69,7 +69,9 @@ class Schedule:
                     ks.add(k)
         for k in range(1, n + 1):
             if k not in ks and self.is_global(unit_id(k)):
-                reasons[unit_id(k)] = ["global unit (lint): compiled in every run for its state"]
+                reasons[unit_id(k)] = [
+                    "global unit (lint or run-time state): compiled in every run for its state"
+                ]
                 ks.update(self.group[k])
         return (None if len(ks) == n else sorted(ks)), reasons
 
