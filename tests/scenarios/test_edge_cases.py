@@ -489,3 +489,31 @@ def test_index_with_makeidx(tmp_path: Path, capsys: pytest.CaptureFixture[str], 
     edit(src / "a.tex", "\\lipsum[1-2]", "\\lipsum[1-30]")  # b and c move by pages
     rep = checked(src, capsys, "-j", jobs)
     assert rep["mode"] == "incremental" and "a" in rep["compiled"], rep
+
+
+@pytest.mark.parametrize(
+    "switch",
+    [
+        "\\color{red}",
+        "\\pdfrender{TextRenderingMode=Invisible}",
+        "\\bfseries",
+        "\\small",
+        "\\raggedright",
+        "\\linespread{1.6}\\selectfont",
+    ],
+)
+def test_state_left_open_at_the_end_of_a_unit(
+    copy_corpus,  # type: ignore[no-untyped-def]
+    capsys: pytest.CaptureFixture[str],
+    switch: str,
+) -> None:
+    """S18: a state switch at the top level of a unit stays in effect for the next units; a
+    run that excludes the unit started them in the default state (wrong output). The lint
+    warns and makes the unit global: it is compiled with the later units."""
+    src = copy_corpus("minimal/S18-unit-state")
+    edit(src / "a.tex", "% end of a", switch)
+    assert checked(src, capsys)["mode"] == "cold"
+    edit(src / "b.tex", "Text b.", "Txet b.")
+    rep = checked(src, capsys)  # files are attributed (and linted) after the first run
+    assert rep["mode"] == "incremental" and rep["compiled"] == ["a", "b"], rep
+    assert any("a.tex:3:" in w and "stays in effect" in w for w in rep["warnings"]), rep

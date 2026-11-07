@@ -96,3 +96,26 @@ def test_glue_hints() -> None:
     stateful = ["\\begin{document}\n", "\\chapter{X}\\pagestyle{empty}\n", "\\include{a}\n"]
     [hint] = glue_hints("m.tex", stateful, 1, [3], {"G0": 1.0}, ["chapter"])
     assert "contains \\pagestyle" in hint
+
+
+def test_lint_state_switches_at_the_top_level() -> None:
+    """S18: colour, render mode, font, size and paragraph switches at the top level of a unit
+    stay in effect for the following units; inside any group (also a macro argument) not."""
+    hits = lint_text("\\chapter{A}\nText.\n\\color{red}\n\\small x \\pdfrender{a=b}\n", "u.tex")
+    assert [(h.line, h.command, h.is_global, h.stays) for h in hits] == [
+        (3, "\\color", False, True),
+        (4, "\\small", False, True),
+        (4, "\\pdfrender", False, True),
+    ]
+    assert "stays in effect for the following units" in hits[0].message()
+    grouped = [
+        "{\\color{red}x}",
+        "\\begin{figure}\\centering x\\end{figure}",
+        "\\parbox{6em}{\\centering x}",
+        "\\centerline{\\itshape x}",
+        "\\vspace{1pt}{\\centering x\\par}",
+        "\\begingroup\\bfseries x\\endgroup",
+        "\\textcolor{red}{x}",
+    ]
+    for text in grouped:
+        assert lint_text(text, "u.tex") == [], text
