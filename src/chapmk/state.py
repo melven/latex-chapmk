@@ -12,7 +12,7 @@ from chapmk.facts import DEFAULT_LIST_SUFFIXES
 from chapmk.files import write_atomic
 from chapmk.predict import SegmentVectors
 
-STATE_VERSION = 5
+STATE_VERSION = 6
 STATE_FILE = "state.json"
 
 

@@ -363,3 +363,25 @@ def test_include_in_a_unit(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -
     rc, _ = build(src)
     err = capsys.readouterr().err
     assert rc == 1 and "b.tex:1: LaTeX Error: \\include cannot be nested" in err, err
+
+
+@pytest.mark.parametrize("jobs", ["1", "4"])
+def test_cleveref_across_units(
+    copy_corpus,  # type: ignore[no-untyped-def]
+    capsys: pytest.CaptureFixture[str],
+    jobs: str,
+) -> None:
+    """S16: \\cref, \\crefrange and \\cpageref across units; a changed number recompiles
+    the referencing units; a change of only the cleveref type (\\label[type]{key}: key@cref)
+    too (the reference prints "Theorem" instead of "Lemma")."""
+    src = copy_corpus("minimal/S16-cleveref")
+    assert checked(src, capsys, "-j", jobs)["mode"] == "cold"
+    edit(src / "c.tex", "Text c.", "Txet c.")
+    rep = checked(src, capsys, "-j", jobs)
+    assert rep["mode"] == "incremental" and rep["compiled"] == ["c"], rep
+    edit(src / "b.tex", "Text b.", "Text b.\n\\begin{figure}[htb]B0\\caption{New}\\end{figure}")
+    rep = checked(src, capsys, "-j", jobs)
+    assert rep["mode"] == "incremental" and rep["compiled"] == ["a", "b", "c"], rep
+    edit(src / "c.tex", "\\label[lemma]{thm:alias}", "\\label[theorem]{thm:alias}")
+    rep = checked(src, capsys, "-j", jobs)
+    assert rep["mode"] == "incremental" and set(rep["compiled"]) == {"a", "c"}, rep

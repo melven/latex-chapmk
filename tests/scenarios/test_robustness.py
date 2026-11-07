@@ -126,9 +126,9 @@ def test_fallback_uses_the_state_epoch(
     edit(src / "a.tex", "Alpha,", "Alpha (\\today),")
     assert checked(src, capsys)["mode"] == "cold"
     monkeypatch.setenv("SOURCE_DATE_EPOCH", str(int(EPOCH) + 5 * 86400))
-    edit(src / "main.tex", "\\begin{document}", "\\usepackage{cleveref}\n\\begin{document}")
+    edit(src / "main.tex", "\\begin{document}", "\\usepackage{imakeidx}\n\\begin{document}")
     rep = checked(src, capsys)
-    assert rep["mode"] == "full" and "cleveref" in rep["reason"], rep
+    assert rep["mode"] == "full" and "imakeidx" in rep["reason"], rep
 
 
 @pytest.mark.parametrize("mode", [(), ("--full",)])
