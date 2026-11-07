@@ -5,10 +5,27 @@ from pathlib import Path
 from chapmk.deps import TokenScan, changed_imports, cite_values, imports, label_values
 
 
-def test_label_and_cite_values(tmp_path: Path) -> None:
+def test_label_values() -> None:
     v = label_values([["\\newlabel{a}{{1}{2}}", "\\newlabel{b:c}{{2}{", "5}}"]])
     assert set(v) == {"L:a", "L:b:c"}
     assert v != label_values([["\\newlabel{a}{{1}{3}}", "\\newlabel{b:c}{{2}{5}}"]])
+
+
+def test_companion_labels_belong_to_the_key() -> None:
+    """S16: \\cref{a} prints the type from a@cref; a change of a@cref alone changes a."""
+    lemma = label_values(
+        [["\\newlabel{a}{{3.2}{11}}", "\\newlabel{a@cref}{{[lemma][2][3]3.2}{11}}"]]
+    )
+    theorem = label_values(
+        [["\\newlabel{a}{{3.2}{11}}", "\\newlabel{a@cref}{{[theorem][2][3]3.2}{11}}"]]
+    )
+    assert lemma["L:a"] != theorem["L:a"]
+    assert lemma["L:a"] != label_values([["\\newlabel{a}{{3.2}{11}}"]])["L:a"]
+    # without its key, a companion label is a label of its own
+    assert set(label_values([["\\newlabel{b@cref}{{x}{1}}"]])) == {"L:b@cref"}
+
+
+def test_cite_values(tmp_path: Path) -> None:
     bbl = tmp_path / "x.bbl"
     bbl.write_text(
         "\\entry{k1}{article}{}\n\\field{year}{2000}\n\\endentry\n"

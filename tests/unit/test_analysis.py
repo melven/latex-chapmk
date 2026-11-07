@@ -121,7 +121,7 @@ def test_crlf_lines_are_kept(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("preamble", "reason"),
     [
-        ("\\usepackage{cleveref,amsmath}\n", "cleveref"),
+        ("\\usepackage{imakeidx,amsmath}\n", "imakeidx"),
         ("\\usepackage[backend=bibtex]{biblatex}\n", "only biber"),
         ("\\ExecuteBibliographyOptions{backend = bibtex8}\n", "only biber"),
         ("\\makeglossaries\n", "makeglossaries"),

@@ -46,15 +46,27 @@ def short_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8", "surrogateescape")).hexdigest()[:16]
 
 
+#: suffixes of companion labels a package writes next to ``\\newlabel{key}``, read through
+#: ``key`` (cleveref: type and counter for ``\\cref{key}``, S16)
+COMPANION_LABELS = ("@cref",)
+
+
 def label_values(aux_lines: Iterable[list[str]]) -> dict[str, str]:
     """``L:key`` → value hash of the ``\\newlabel`` statements in the given aux files (later
-    definitions win, as in LaTeX)."""
-    values: dict[str, str] = {}
+    definitions win, as in LaTeX). The value of ``key`` includes its companion labels
+    (``key@cref``): a reference names only ``key``, its text also depends on them (S16)."""
+    raw: dict[str, str] = {}
     for lines in aux_lines:
         for stmt in statements(lines):
             m = _NEWLABEL.match(stmt)
             if m:
-                values[f"L:{m.group(1)}"] = short_hash(m.group(2))
+                raw[m.group(1)] = m.group(2)
+    values = {f"L:{key}": short_hash(value) for key, value in raw.items()}
+    for key, value in raw.items():
+        for suffix in COMPANION_LABELS:
+            base = key.removesuffix(suffix)
+            if base != key and base in raw:
+                values[f"L:{base}"] = short_hash(f"{raw[base]}\0{suffix}\0{value}")
     return values
 
 
