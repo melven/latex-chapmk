@@ -642,19 +642,24 @@ Measured: 319 pages from 5 runs in about 0.35 s.
   build command (VS Code LaTeX Workshop) need it; LaTeX Workshop keeps only the text after the
   last `This is pdfTeX, Version` line, so the printed copy keeps that banner line only in the
   first run's log (the file is unchanged). After the log it writes the output of the state's
-  last biber run (`biber.out` in `canon/`, in full mode in `full/`; paths mapped), as latexmk's
+  last biber run (`biber.out` in `canon/`, in full mode in `full/`, there also BibTeX's
+  `bibtex.out`; paths mapped), as latexmk's
   output contains it: LaTeX Workshop parses biber's `INFO`/`WARN`/`ERROR` lines from there
   (the `.blg` has a prefix on every line). After a biber failure, that run's output.
 
 ### 6.14 Fallbacks to full mode
 
 Full mode: plain sequential runs to a fixpoint in `full/` (like latexmk: rerun while a file read
-by a pass changed; biber, makeindex), with `chapmk-ini.sty` and the picture cache, publishing
+by a pass changed; biber, BibTeX when an aux file names a database (`\bibdata`: classic BibTeX,
+biblatex with `backend=bibtex`; run in `full/`, the shadow tree in `BIBINPUTS`/`BSTINPUTS`),
+makeindex), with `chapmk-ini.sty` and the picture cache, publishing
 the PDF, SyncTeX file and log. Triggers:
 
 - unsupported packages, from the preamble and at runtime from the `.fls` of the format build
   and of every run (classes load packages too); hyperref without bookmark;
 - biblatex refsections (static) and citations in a refsection other than 0 (runtime);
+- BibTeX: `\bibliography` (static), `\bibdata` in a run's main aux (runtime: biblatex with
+  `backend=bibtex` set where the preamble scan does not look, e.g. `\PassOptionsToPackage`);
 - `\documentclass` not before the split line;
 - a format build failure, including state a format cannot keep (§6.3.3);
 - an eqparbox tag shared by chapters whose width changed (§6.9.1);

@@ -70,7 +70,13 @@ def _latexmk(src: Path, main_name: str, rc_dir: Path) -> None:
 
 @pytest.mark.parametrize(
     ("corpus", "variant"),
-    [("thesis", "twoside"), ("thesis", "oneside"), ("hgb", None), ("pictures", None)],
+    [
+        ("thesis", "twoside"),
+        ("thesis", "oneside"),
+        ("hgb", None),
+        ("pictures", None),
+        ("bibtex", None),  # BibTeX with natbib: full mode runs bibtex as latexmk does
+    ],
 )
 def test_full_build_matches_latexmk(
     copy_corpus,  # type: ignore[no-untyped-def]

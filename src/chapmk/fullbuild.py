@@ -39,7 +39,7 @@ from chapmk.publish import copy_bytes, publish, publish_all, text_writer
 from chapmk.recorder import dist_signatures, read_inputs
 from chapmk.synctex import rewrite_paths
 from chapmk.texdist import TexDistribution
-from chapmk.tools import NOMENCL_STYLE, run_biber, run_makeindex
+from chapmk.tools import NOMENCL_STYLE, bibtex_inputs, run_biber, run_bibtex, run_makeindex
 
 MAX_PASSES = 8
 #: present in the full-mode directory while passes run (C7): a kill leaves it, and the next
@@ -84,6 +84,7 @@ class ToolState:
     """Content hashes of the inputs when biber/makeindex last ran, and the tool runs."""
 
     bcf: str | None = None
+    bib: str | None = None
     nlo: str | None = None
     idx: str | None = None
     runs: list[str] = field(default_factory=list)
@@ -97,13 +98,19 @@ def run_tools(
     env: Mapping[str, str],
     state: ToolState,
 ) -> None:
-    """Run biber, makeindex for nomencl (``.nlo``) and makeindex for a generic index
+    """Run biber, BibTeX (aux files naming a database: classic BibTeX, biblatex with
+    ``backend=bibtex``), makeindex for nomencl (``.nlo``) and makeindex for a generic index
     (``.idx``, default style, like latexmk) in ``outdir`` when their inputs changed."""
     bcf = outdir / f"{job}.bcf"
     if bcf.is_file() and digest(bcf) != state.bcf:
         run_biber(dist, job, outdir, cwd, env)
         state.bcf = digest(bcf)
         state.runs.append("biber")
+    bib = bibtex_inputs(outdir)
+    if bib is not None and bib != state.bib:
+        run_bibtex(dist, job, outdir, cwd, env)
+        state.bib = bib
+        state.runs.append("bibtex")
     nlo = outdir / f"{job}.nlo"
     if nlo.is_file() and digest(nlo) != state.nlo:
         run_makeindex(dist, nlo.name, f"{job}.nls", NOMENCL_STYLE, outdir, env)

@@ -69,6 +69,10 @@ class TexDistribution(Protocol):
 
     def biber(self, jobname: str, outdir: Path) -> list[str]: ...
 
+    def bibtex(self, jobname: str) -> list[str]: ...
+
+    def bibtex_env(self, env: Mapping[str, str], inputs: Path) -> dict[str, str]: ...
+
     def makeindex(self, input_name: str, output_name: str, style: str | None) -> list[str]: ...
 
     def synctex_input(self, cwd: Path, relative: str) -> str:
@@ -178,6 +182,19 @@ class TeXLive:
     def biber(self, jobname: str, outdir: Path) -> list[str]:
         """biber, run with cwd = source/shadow tree; reads the .bcf from ``outdir`` (§6.10)."""
         return ["biber", "--output-directory", str(outdir), jobname]
+
+    def bibtex(self, jobname: str) -> list[str]:
+        """BibTeX on ``<jobname>.aux``, run with cwd = output directory (it follows the
+        ``\\@input`` lines of the aux file to the unit aux files, relative to it)."""
+        return ["bibtex", jobname]
+
+    def bibtex_env(self, env: Mapping[str, str], inputs: Path) -> dict[str, str]:
+        """``env`` with ``inputs`` (the shadow tree: ``.bib`` and local ``.bst`` files) in
+        ``BIBINPUTS`` and ``BSTINPUTS``; a trailing separator keeps the default path."""
+        out = dict(env)
+        for var in ("BIBINPUTS", "BSTINPUTS"):
+            out[var] = f"{inputs}{os.pathsep}{env.get(var, '')}"
+        return out
 
     def makeindex(self, input_name: str, output_name: str, style: str | None) -> list[str]:
         """makeindex with relative names (``style`` None: default style); run with cwd =

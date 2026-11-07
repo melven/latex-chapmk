@@ -187,6 +187,12 @@ def _check_runtime_support(run: RunView, fmt: FormatInfo) -> None:
     for pkg in sorted(UNSUPPORTED_PACKAGES):
         if f"{pkg}.sty" in loaded:
             raise FallbackError(f"package {pkg!r} is not supported (loaded at runtime)", True)
+    if any(line.startswith("\\bibdata{") for line in run.main_lines):
+        raise FallbackError(
+            "BibTeX in use (\\bibdata in the aux file, e.g. biblatex with backend=bibtex); "
+            "use biblatex with biber for incremental builds",
+            True,
+        )
     if "hyperref.sty" in loaded and "bookmark.sty" not in loaded:
         raise FallbackError(
             "hyperref without the bookmark package (load bookmark to build incrementally)", True

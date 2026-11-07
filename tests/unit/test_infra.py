@@ -64,6 +64,10 @@ def test_texlive_command_lines(tmp_path: Path) -> None:
         tex_path(tmp_path / "pre.tex"),
     ]
     assert tl.biber("thesis", tmp_path) == ["biber", "--output-directory", str(tmp_path), "thesis"]
+    assert tl.bibtex("thesis") == ["bibtex", "thesis"]
+    benv = tl.bibtex_env({"BIBINPUTS": "/x"}, tmp_path)
+    assert benv["BIBINPUTS"] == f"{tmp_path}{os.pathsep}/x"
+    assert benv["BSTINPUTS"] == f"{tmp_path}{os.pathsep}"
     assert tl.makeindex("t.nlo", "t.nls", "nomencl.ist") == [
         "makeindex",
         "-s",
