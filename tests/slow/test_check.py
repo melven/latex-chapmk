@@ -56,3 +56,32 @@ def test_report_compare() -> None:
         ("y", "#1: reference 2 != 3"),
         ("z", "length 1 != 2"),
     ]
+
+
+def test_font_descriptor_metrics_are_tolerated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Merged runs can carry other Ascent/CapHeight/Descent/XHeight for a font (pdfTeX takes
+    them from one instance of the font; sweep: se-tuebingen, Agda78): not visible, but
+    pdftotext's word boxes and, in some layouts (margin notes), its text change. Tolerated
+    with a note when the texts agree with the metrics normalised; a real change differs.
+    The extraction is simulated: small documents do not show the layout effect."""
+    import chapmk.check as check
+
+    src = tmp_path / "s"
+    src.mkdir()
+    a = build(src, "Same text.", "a")
+    b = build(src, "Same text.", "b")
+    c = build(src, "Other text.", "c")
+    real = check._texts
+
+    def texts(pdf: Path, workdir: Path) -> list[str]:  # b's metrics shift its layout
+        pages = real(pdf, workdir)
+        return [p + " (layout)" for p in pages] if pdf == b else pages
+
+    monkeypatch.setattr(check, "_texts", texts)
+    rep = compare_pdfs(a, b)
+    assert rep.ok and rep.counts["text pages"] == 1, rep.summary()
+    assert "NOTE text pages: equal up to font descriptor metrics" in rep.summary()
+    rep = compare_pdfs(a, c)
+    assert "text pages" in {d.item for d in rep.differences} and not rep.notes

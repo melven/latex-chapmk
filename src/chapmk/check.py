@@ -50,6 +50,7 @@ class Report:
 
     differences: list[Difference] = field(default_factory=list)
     counts: dict[str, int] = field(default_factory=dict)
+    notes: list[str] = field(default_factory=list)  # tolerated, printed (not a failure)
 
     @property
     def ok(self) -> bool:
@@ -70,6 +71,7 @@ class Report:
         lines = [f"{'FAIL' if self.differences else 'PASS'}"]
         lines += [f"  {item}: {n} compared" for item, n in self.counts.items()]
         lines += [f"  DIFFERS {d.item}: {d.detail}" for d in self.differences]
+        lines += [f"  NOTE {n}" for n in self.notes]
         return "\n".join(lines)
 
 
@@ -184,6 +186,34 @@ def _texts(pdf: Path, workdir: Path) -> list[str]:
     return pages[:-1] if pages and not pages[-1].strip() else pages
 
 
+def box_metrics_copy(pdf: Path, out: Path) -> Path:
+    """A copy of ``pdf`` whose font descriptors all take Ascent and CapHeight from the top of
+    the FontBBox, Descent from its bottom, and have no XHeight. pdfTeX writes these metrics
+    from the TFM of one instance of a font, which depends on the fonts a run used (merged runs
+    differ); they change only the boxes of text extraction, never the rendering (glyphs and
+    widths come from the font program and ``/Widths``)."""
+    with pikepdf.open(pdf) as doc:
+        for obj in doc.objects:
+            if not isinstance(obj, pikepdf.Dictionary):
+                continue
+            bbox = obj.get("/FontBBox")
+            if obj.get("/Type") == pikepdf.Name.FontDescriptor and isinstance(bbox, pikepdf.Array):
+                obj.Ascent, obj.CapHeight, obj.Descent = bbox[3], bbox[3], bbox[1]
+                if "/XHeight" in obj:
+                    del obj["/XHeight"]
+        doc.save(out)
+    return out
+
+
+def _texts_with_box_metrics(pdf: Path, workdir: Path) -> list[str]:
+    """``_texts`` of :func:`box_metrics_copy`."""
+    copy = box_metrics_copy(pdf, workdir / "box-metrics.pdf")
+    try:
+        return _texts(copy, workdir)
+    finally:
+        copy.unlink()
+
+
 #: programs ``chapmk check`` needs (poppler-utils; synctex from TeX Live)
 CHECK_TOOLS = ("pdfinfo", "pdftoppm", "pdftotext", "synctex")
 
@@ -206,7 +236,18 @@ def compare_pdfs(ref: Path, got: Path, *, dpi: int = DPI, report: Report | None 
         ra, ga = _rasters(ref, Path(t1), dpi), _rasters(got, Path(t2), dpi)
         report.compare("page count", [len(ra)], [len(ga)])
         report.compare("raster pages", ra, ga)
-        report.compare("text pages", _texts(ref, Path(t1)), _texts(got, Path(t2)))
+        rt, gt = _texts(ref, Path(t1)), _texts(got, Path(t2))
+        if rt != gt and _texts_with_box_metrics(ref, Path(t1)) == _texts_with_box_metrics(
+            got, Path(t2)
+        ):
+            report.counts["text pages"] = len(rt)
+            report.notes.append(
+                "text pages: equal up to font descriptor metrics (Ascent, CapHeight, Descent, "
+                "XHeight: pdfTeX takes them from one instance of a font; not visible, only "
+                "text extraction boxes)"
+            )
+        else:
+            report.compare("text pages", rt, gt)
     (rl, ro, rk), (gl, go, gk) = _structure(ref), _structure(got)
     report.compare("page labels", rl, gl)
     report.compare("outline items", ro, go)
