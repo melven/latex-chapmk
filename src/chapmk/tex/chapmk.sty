@@ -298,11 +298,16 @@
     \xdef\chapmk@seg{U\chapmk@k}\chapmk@main{\string\chapmk@unit{\chapmk@seg}{}}\fi
   \chapmk@glue@begin}
 
-% page map and file attribution (\jobname.frec)
-\AddToHook{shipout/before}{\protected@edef\chapmk@tmp{\thepage}%
+% page map and file attribution (\jobname.frec). The page label is \thepage as plain text
+% (expl3's text purification, like hyperref's page labels): babel-spanish's roman numerals
+% (\protect\es@scroman{i}) expanded in the \write gave "Unbalanced write command".
+\ExplSyntaxOn
+\cs_new:Npn \chapmk@pagelabel { \text_purify:n { \thepage } }
+\ExplSyntaxOff
+\AddToHook{shipout/before}{\edef\chapmk@tmp{\chapmk@pagelabel}%
   \immediate\write\chapmk@rec{P \the\numexpr\ReadonlyShipoutCounter+\chapmk@pics\relax\space%
     \chapmk@seg\space
-    \the\c@page\space\chapmk@tmp}}
+    \the\c@page\space\detokenize\expandafter{\chapmk@tmp}}}
 \AddToHook{file/before}{\immediate\write\chapmk@rec{F \chapmk@seg\space
   \CurrentFilePathUsed/\CurrentFileUsed}}
 \AtBeginDocument{\ifdefined\Gin@setfile
