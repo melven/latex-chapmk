@@ -336,10 +336,20 @@
 % statement of its aux) and \chapmk@lmark{/<seg>} after each entry record, written while
 % the aux files are read at \end{document}; the driver splices list files by them
 \providecommand\chapmk@listexts{toc,lof,lot,loalg,lol,tdo}
-% "L <ext>": a list file read by \@starttoc (lists with other extensions: algorithm's .loa,
-% tocbasic's \DeclareNewTOC); the driver then copies, stores and splices them too
-\AddToHookWithArguments{cmd/@starttoc/before}{\immediate\write\chapmk@rec{L #1}}
+% "L <seg> <ext>": a list file read by \@starttoc (lists with other extensions: algorithm's
+% .loa, tocbasic's \DeclareNewTOC); the driver then copies, stores and splices them too, and
+% the segment reads that list (also through a class macro the source scan does not see)
+\AddToHookWithArguments{cmd/@starttoc/before}{\immediate\write\chapmk@rec{L \chapmk@seg\space#1}}
 \def\chapmk@lmark#1{}
+% a list typeset inside a unit (\tableofcontents in a front-matter unit, a class's preface
+% command) is not opened by a run that excludes that unit: LaTeX would drop every unit's
+% entries for it while it reads the aux files. Before that, each of the document's list files
+% (one the canonical state has) that no \@starttoc opened is opened, as \@starttoc would.
+\def\chapmk@openlist#1{\ifcsname tf@#1\endcsname\else\IfFileExists{\jobname.#1}{%
+  \expandafter\newwrite\csname tf@#1\endcsname
+  \immediate\openout\csname tf@#1\endcsname\jobname.#1\relax}{}\fi}
+\AddToHook{enddocument/afterlastpage}{\if@filesw\@for\chapmk@ext:=\chapmk@listexts\do{%
+  \expandafter\chapmk@openlist\expandafter{\chapmk@ext}}\fi}
 \def\chapmk@listmarks#1{\@for\chapmk@ext:=\chapmk@listexts\do{%
   \@writefile{\chapmk@ext}{\chapmk@lmark{#1}}}}
 \def\chapmk@ustart#1{\chapmk@listmarks{#1}}
