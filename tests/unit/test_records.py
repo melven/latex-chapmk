@@ -84,7 +84,7 @@ def test_read_run_records(tmp_path: Path) -> None:
         (lambda d: (d / "doc.aux").write_text("\\relax\n"), "no baseline"),
         (
             lambda d: (d / "doc.aux").write_text(MAIN_AUX.replace("{ch/a.tex}", "{x.tex}")),
-            "expected",
+            "outside the main file's body",  # e.g. a class macro with \\include (persistent)
         ),
         (
             lambda d: (d / "doc.aux").write_text(MAIN_AUX.replace("\\chapmk@unit{U2}{}\n", "")),
@@ -218,3 +218,15 @@ def test_read_marked_index_entries(tmp_path: Path) -> None:
     idx.write_text("\\indexentry{early}{1}\n%chapmk-seg G0\n")
     with pytest.raises(RecordError, match="before the first segment marker"):
         read_marked(idx)
+
+
+def test_include_outside_the_main_body_is_persistent(tmp_path: Path) -> None:
+    """A run with an \\include the main file does not have (a class macro calls it): a full
+    build that later builds do not try again (MiunThesisTemplate's \\printabstract)."""
+    a = analyse(project(tmp_path))
+    d = tmp_path / "run"
+    write_run(d)
+    (d / "doc.aux").write_text(MAIN_AUX.replace("{ch/a.tex}", "{abstract.tex}"))
+    with pytest.raises(RecordError, match=r"'abstract\.tex', the main file's is 'ch/a'") as err:
+        read_run_records(d, a)
+    assert err.value.persistent

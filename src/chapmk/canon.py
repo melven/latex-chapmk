@@ -329,11 +329,23 @@ def commit_lists(
     return complete
 
 
+_ORDER = re.compile(r' order="(\d+)"')
+
+
+def _ranked_orders(lines: list[str]) -> list[str]:
+    """Citekey lines with the ``order`` numbers replaced by their ranks: biber uses only
+    their relative order; TeX's numbering may start later (citation commands that wrote no
+    citekey), the patch numbers from 1."""
+    found = sorted({int(m.group(1)) for line in lines if (m := _ORDER.search(line))})
+    rank = {n: i + 1 for i, n in enumerate(found)}
+    return [_ORDER.sub(lambda m: f' order="{rank[int(m.group(1))]}"', line) for line in lines]
+
+
 def _check_bcf(patched: str, written: Path) -> None:
     if not written.is_file():
         return
     tex = read_raw(written)
-    if citekey_lines(patched) != citekey_lines(tex):
+    if _ranked_orders(citekey_lines(patched)) != _ranked_orders(citekey_lines(tex)):
         raise SelfCheckError(f"the patched .bcf citations differ from {written}")
     if datalists(patched) != datalists(tex):
         raise SelfCheckError(f"the patched .bcf datalists differ from {written}")

@@ -129,3 +129,24 @@ def test_bibtex_errors_and_inputs(tmp_path: Path) -> None:
     assert bibtex_inputs(out) == first  # labels do not matter
     (out / "ch" / "a.aux").write_text("\\relax\n\\citation{k1}\n\\citation{k2}\n")
     assert bibtex_inputs(out) != first
+
+
+def test_bcf_self_check_compares_the_order_of_citations(tmp_path: Path) -> None:
+    """The .bcf self-check: TeX's citation numbers may start later than the patch's (citation
+    commands that wrote no citekey); only their order and grouping count for biber."""
+    from chapmk.canon import _check_bcf
+    from chapmk.errors import SelfCheckError
+
+    def bcf(orders: list[int], keys: list[str]) -> str:
+        cites = "".join(
+            f'  <bcf:citekey order="{o}" intorder="1">{k}</bcf:citekey>\n'
+            for o, k in zip(orders, keys, strict=True)
+        )
+        return f'<bcf:controlfile>\n<bcf:section number="0">\n{cites}</bcf:section>\n'
+
+    written = tmp_path / "run.bcf"
+    written.write_text(bcf([5, 6, 6, 8], ["a", "b", "c", "d"]))
+    _check_bcf(bcf([1, 2, 2, 3], ["a", "b", "c", "d"]), written)  # same order and grouping
+    for other in (bcf([1, 2, 3, 4], ["a", "b", "c", "d"]), bcf([1, 2, 2, 3], ["a", "c", "b", "d"])):
+        with pytest.raises(SelfCheckError, match="citations differ"):
+            _check_bcf(other, written)

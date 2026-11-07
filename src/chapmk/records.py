@@ -335,7 +335,12 @@ def _read_run_records(run_dir: Path, analysis: Analysis) -> RunRecords:
         if name is None:
             raise RecordError(f"{main_aux}: no record for include {k} ({inc.arg})")
         if name and include_name(recorded_name(name)) != inc.name:
-            raise RecordError(f"{main_aux}: include {k} is {name!r}, expected {inc.arg!r}")
+            raise RecordError(
+                f"the run's include {k} is {recorded_name(name)!r}, the main file's is "
+                f"{inc.arg!r}: an \\include outside the main file's body (e.g. in a class or "
+                "macro) is not supported (A2)",
+                persistent=True,
+            )
     known = set(analysis.segments)
     for page in recs.pages:
         if page.segment not in known:
