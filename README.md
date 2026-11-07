@@ -91,8 +91,10 @@ Details: [docs/design.md](https://github.com/melven/latex-chapmk/blob/main/docs/
 ## Document assumptions
 
 1. Macro definitions and settings are in the preamble; chapter bodies change only counters,
-   labels, citations, list and nomenclature entries. Violations (e.g. `\setlength` outside a
-   group) give a warning, and that chapter is then compiled in every run.
+   labels, citations, list and nomenclature entries, and leave no colour, font, size or
+   paragraph switch open at their end. Violations (e.g. `\setlength` outside a group, a
+   `\color{red}` at the top level of a chapter) give a warning, and that chapter is then
+   compiled in every run.
 2. Units are the `\include`s in the top-level body of the main file (no `..` or absolute
    paths, no spaces).
 3. Edits of the main-file body, the include list, a `.bib` file or files read by the

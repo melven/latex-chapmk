@@ -479,7 +479,12 @@ beyond the unit (`lint.py`):
   directly after a control word, `}` or `]` counts as an argument);
 - **global-effect commands** (`\gdef`, `\global`, `\newcounter`, `\pagenumbering`,
   `\appendix`, `\selectlanguage`, `\pagecolor`, `\hypersetup`, `\usetikzlibrary`, …) are
-  always a hit.
+  always a hit;
+- **state switches** (`\color`, `\pdfrender`, font and size switches such as `\bfseries`,
+  `\small`, `\centering`, `\raggedright`, `\linespread`, `\selectfont`, setspace's spacing
+  commands) are a hit only at the top level, outside every group (a macro argument counts as
+  a group): they stay in effect for the following units, which a run that excludes the unit
+  would start in the default state (S18). The warning says so (probably not intended).
 
 A hit is a warning with `file:line`; the unit becomes *global*: its state is not in the
 checkpoints, so it is compiled in every run, and when it is dirty itself all later units are
