@@ -16,6 +16,7 @@ from chapmk.gensrc import run_main
 from chapmk.layout import Layout
 from chapmk.logs import map_paths, run_error
 from chapmk.proc import run, terminate_all
+from chapmk.shadow import mirror_subdirectories
 from chapmk.texdist import TexDistribution
 
 #: File name of the generated run main. TeX reads the command line with the catcodes of the
@@ -83,6 +84,7 @@ def prepare_run_dir(
     names += [f"{job}{suffix}" for suffix in derived_suffixes(list_suffixes)]
     for inc in analysis.includes:
         (run_dir / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
+    mirror_subdirectories(layout.shadow_dir, run_dir)  # includes the analysis does not see
     if canon_dir is not None:
         for name in names:
             src = canon_dir / name
