@@ -1,0 +1,15 @@
+\documentclass[twoside]{book}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{hyperref}
+\usepackage{bookmark}
+\usepackage[capitalise]{cleveref}
+\newtheorem{theorem}{Theorem}[chapter]
+\newtheorem{lemma}[theorem]{Lemma}
+\crefname{lemma}{Lemma}{Lemmas}
+\begin{document}
+\tableofcontents
+\include{a}
+\include{b}
+\include{c}
+\end{document}
