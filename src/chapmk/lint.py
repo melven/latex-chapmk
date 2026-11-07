@@ -75,6 +75,48 @@ GLOBAL_COMMANDS = frozenset(
         "DeclareMathOperator",
     ]
 )
+#: state switches that stay in effect after the unit when used at its top level (S18): colour,
+#: pdfrender's render mode, font and size, paragraph shape, line spacing. Hits only outside
+#: every group (also a macro argument: ``\\parbox{..}{\\centering ..}`` is grouped).
+STATE_COMMANDS = frozenset(
+    [
+        "color",
+        "normalcolor",
+        "pdfrender",
+        "bfseries",
+        "mdseries",
+        "itshape",
+        "slshape",
+        "scshape",
+        "upshape",
+        "sffamily",
+        "rmfamily",
+        "ttfamily",
+        "normalfont",
+        "em",
+        "tiny",
+        "scriptsize",
+        "footnotesize",
+        "small",
+        "normalsize",
+        "large",
+        "Large",
+        "LARGE",
+        "huge",
+        "Huge",
+        "selectfont",
+        "linespread",
+        "raggedright",
+        "raggedleft",
+        "centering",
+        "singlespacing",
+        "onehalfspacing",
+        "doublespacing",
+        "setstretch",
+    ]
+)
+#: version of the rules, part of the lint cache key (results of older rules are not reused)
+LINT_RULES = 2
 #: source files linted: TeX sources, not packages or data
 LINT_SUFFIXES = (".tex", ".ltx")
 #: environments whose content is not scanned
@@ -106,14 +148,20 @@ class LintHit:
     line: int
     command: str
     is_global: bool  # from the global list (or \global prefix); else outside a group
+    stays: bool = False  # a state switch at the top level: in effect for the following units
 
     def message(self) -> str:
         if self.is_global:
-            advice = "it has a global effect; move it to the preamble"
+            advice = "in a unit body: it has a global effect; move it to the preamble"
+        elif self.stays:
+            advice = (
+                "at the top level of a unit body: it stays in effect for the following units "
+                "(probably not intended); wrap it in a group or environment"
+            )
         else:
-            advice = "outside a group; wrap it in a group or environment"
+            advice = "in a unit body: outside a group; wrap it in a group or environment"
         return (
-            f"{self.file}:{self.line}: {self.command} in a unit body: {advice} "
+            f"{self.file}:{self.line}: {self.command} {advice} "
             "(the unit is treated as global: later units are recompiled with it)"
         )
 
@@ -129,7 +177,9 @@ def lint_files(
     """Hits in the TeX sources among ``names`` (relative to ``source_dir``). ``cache`` maps a
     digest of file name, content and options to the file's hits (as lists, JSON-ready);
     entries are added for linted files."""
-    options = json.dumps([chapmk.__version__, sorted(allow), sorted(verbatim), sorted(shortverb)])
+    options = json.dumps(
+        [chapmk.__version__, LINT_RULES, sorted(allow), sorted(verbatim), sorted(shortverb)]
+    )
     hits: list[LintHit] = []
     for name in names:
         path = source_dir / name
@@ -144,7 +194,7 @@ def lint_files(
             text = data.decode("utf-8", "surrogateescape")
             found = lint_text(text, name, allow, verbatim, shortverb)
             if cache is not None:
-                cache[key] = [[h.file, h.line, h.command, h.is_global] for h in found]
+                cache[key] = [[h.file, h.line, h.command, h.is_global, h.stays] for h in found]
             hits += found
     return hits
 
@@ -225,18 +275,21 @@ def lint_text(
     return hits
 
 
-def _hit(word: str, text: str, pos: int, stack: list[str]) -> tuple[str, bool] | None:
+def _hit(word: str, text: str, pos: int, stack: list[str]) -> tuple[str, bool, bool] | None:
+    """(command, is_global, stays) of a hit, None if the command is no hit here."""
     if word == "global":
         nxt = _NEXT_CS.match(text, pos)
         if nxt is not None and nxt.group(1) in LOCAL_COMMANDS:
-            return f"\\global\\{nxt.group(1)}", True
-        return "\\global", True
+            return f"\\global\\{nxt.group(1)}", True, False
+        return "\\global", True, False
     if word in GLOBAL_COMMANDS:
-        return f"\\{word}", True
+        return f"\\{word}", True, False
     if word in LOCAL_COMMANDS and not any(kind != "arg" for kind in stack):
         if _prefixed_by_global(text, pos - len(word) - 1):
             return None  # reported at the \global
-        return f"\\{word}", False
+        return f"\\{word}", False, False
+    if word in STATE_COMMANDS and not stack:
+        return f"\\{word}", False, True
     return None
 
 
