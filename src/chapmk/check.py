@@ -177,6 +177,85 @@ def _rasters(pdf: Path, workdir: Path, dpi: int, chunk: int = 25) -> list[str]:
     return digests
 
 
+#: largest difference of a /Widths entry tolerated by the raster comparison (per 1000 em)
+WIDTH_TOLERANCE = 0.11
+
+
+def _base_font(font: Any) -> str:
+    """BaseFont without the subset tag (``ABCDEF+``)."""
+    name = str(font.get("/BaseFont", ""))[1:]
+    return name[7:] if len(name) > 7 and name[6] == "+" else name
+
+
+def ref_widths_copy(ref: Path, got: Path, out: Path) -> Path:
+    """A copy of ``got`` whose ``/Widths`` entries take the value of ``ref`` (same font, same
+    code) where the two differ by at most :data:`WIDTH_TOLERANCE`. pdfTeX shares one font
+    object among all sizes of a TFM and rounds its widths (to 0.1 per 1000 em) from the size
+    whose object it created first, which depends on the fonts a run used; viewers place the
+    glyphs of a string by these widths, so a page can differ in a few antialiased pixels."""
+    widths: dict[str, dict[int, set[float]]] = {}
+    with pikepdf.open(ref) as doc:
+        for obj in doc.objects:
+            if isinstance(obj, pikepdf.Dictionary) and isinstance(
+                obj.get("/Widths"), pikepdf.Array
+            ):
+                codes = widths.setdefault(_base_font(obj), {})
+                first = int(obj.get("/FirstChar", 0))
+                for i, w in enumerate(obj.Widths):
+                    codes.setdefault(first + i, set()).add(float(w))
+    with pikepdf.open(got) as doc:
+        for obj in doc.objects:
+            if not (
+                isinstance(obj, pikepdf.Dictionary)
+                and isinstance(obj.get("/Widths"), pikepdf.Array)
+            ):
+                continue
+            codes = widths.get(_base_font(obj), {})
+            first = int(obj.get("/FirstChar", 0))
+            for i, w in enumerate(obj.Widths):
+                own = float(w)
+                near = min(codes.get(first + i, ()), key=lambda c: abs(c - own), default=own)
+                if 0 < abs(near - own) <= WIDTH_TOLERANCE:
+                    obj.Widths[i] = near
+        doc.save(out)
+    return out
+
+
+def _rasters_with_ref_widths(
+    ref: Path, got: Path, pages: Sequence[int], workdir: Path, dpi: int
+) -> list[str]:
+    """SHA-256 of the pages (0-based) of :func:`ref_widths_copy`, rendered one by one."""
+    copy = ref_widths_copy(ref, got, workdir / "ref-widths.pdf")
+    digests = []
+    try:
+        for i in pages:
+            r = run(
+                [
+                    "pdftoppm",
+                    "-r",
+                    str(dpi),
+                    "-f",
+                    str(i + 1),
+                    "-l",
+                    str(i + 1),
+                    str(copy),
+                    str(workdir / "w"),
+                ],
+                cwd=workdir,
+                env=dict(os.environ),
+            )
+            files = sorted(workdir.glob("w-*.ppm"))
+            if not r.ok or len(files) != 1:
+                raise ToolError(
+                    f"pdftoppm failed on {copy} page {i + 1}: {r.output.strip()[-300:]}"
+                )
+            digests.append(digest(files[0]))
+            files[0].unlink()
+    finally:
+        copy.unlink()
+    return digests
+
+
 def _texts(pdf: Path, workdir: Path) -> list[str]:
     out = workdir / "text.txt"
     r = run(["pdftotext", "-layout", str(pdf), str(out)], cwd=workdir, env=dict(os.environ))
@@ -235,7 +314,20 @@ def compare_pdfs(ref: Path, got: Path, *, dpi: int = DPI, report: Report | None 
     with tempfile.TemporaryDirectory() as t1, tempfile.TemporaryDirectory() as t2:
         ra, ga = _rasters(ref, Path(t1), dpi), _rasters(got, Path(t2), dpi)
         report.compare("page count", [len(ra)], [len(ga)])
-        report.compare("raster pages", ra, ga)
+        pages = [i for i, (a, b) in enumerate(zip(ra, ga, strict=False)) if a != b]
+        if (
+            len(ra) == len(ga)
+            and pages
+            and _rasters_with_ref_widths(ref, got, pages, Path(t2), dpi) == [ra[i] for i in pages]
+        ):
+            report.counts["raster pages"] = len(ra)
+            report.notes.append(
+                f"raster pages: {len(pages)} page(s) equal up to /Widths rounding (at most "
+                f"{WIDTH_TOLERANCE} per 1000 em: pdfTeX rounds them from the size of a font "
+                "it used first; glyph positions differ by about 0.001pt)"
+            )
+        else:
+            report.compare("raster pages", ra, ga)
         rt, gt = _texts(ref, Path(t1)), _texts(got, Path(t2))
         if rt != gt and _texts_with_box_metrics(ref, Path(t1)) == _texts_with_box_metrics(
             got, Path(t2)
