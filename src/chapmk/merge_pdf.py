@@ -208,8 +208,13 @@ def merge_pdf(
 
         _normalize_font_descriptors(merged)
         _write_outline(merged, outline)
-        merged.Root.PageLabels = Dictionary(Nums=page_labels([(p.value, p.label) for p in pages]))
-        _check_page_labels(merged, pages, sources)
+        # page labels only where the runs have them (hyperref); a plain build without them
+        # leaves the viewer's default numbering (1, 2, ...), also over roman front matter
+        if any("/PageLabels" in sources.get(p.pdf).Root for p in pages):
+            merged.Root.PageLabels = Dictionary(
+                Nums=page_labels([(p.value, p.label) for p in pages])
+            )
+            _check_page_labels(merged, pages, sources)
         cat = sources.get(catalog_from)
         # pdfTeX refers to pages by number (hyperref: ``openaction goto page 1``), as a plain
         # build does: page N of the catalog run must be page N of the merged PDF
