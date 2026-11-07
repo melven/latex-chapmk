@@ -168,10 +168,17 @@ def test_include_errors(tmp_path: Path, include: str, message: str) -> None:
         analyse(make(tmp_path, body=BODY.replace("Glue.", include)))
 
 
-def test_nested_include_and_missing_begin(tmp_path: Path) -> None:
-    files = {"ch/a.tex": "\\chapter{A}\\include{x}", "ch/a2.tex": "x", "ch/b.tex": "x"}
-    with pytest.raises(AnalysisError, match="nested"):
-        analyse(make(tmp_path, files=files))
+def test_include_in_a_unit_is_left_to_latex(tmp_path: Path) -> None:
+    """A nested \\include is LaTeX's error ("\\include cannot be nested"); the analysis
+    accepts \\include in a unit's text, e.g. in \\verb or a verbatim example."""
+    files = {
+        "ch/a.tex": "\\chapter{A}\\verb|\\include{x}|\n\\begin{verbatim}\n\\include{y}\n"
+        "\\end{verbatim}\n",
+        "ch/a2.tex": "x",
+        "ch/b.tex": "x",
+    }
+    a = analyse(make(tmp_path, files=files))
+    assert [i.arg for i in a.includes] == ["ch/a", "ch/a2", "ch/b"]
 
 
 def test_structures_that_only_allow_full_builds(tmp_path: Path) -> None:

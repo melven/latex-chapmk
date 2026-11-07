@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 import pytest
-from _helpers import checked, edit, reasons, selections
+from _helpers import build, checked, edit, reasons, selections
 
 from chapmk.synctex import parse as parse_synctex
 
@@ -338,3 +338,28 @@ def test_list_writes_before_the_first_include(
     edit(src / "c.tex", "Text c.", "Txet c.")
     rep = checked(src, capsys)
     assert rep["mode"] == "incremental" and rep["compiled"] == ["c"], rep
+
+
+def test_include_in_a_unit(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """\\include in a unit's text (\\verb, verbatim: manuals that document \\include) is not a
+    nested \\include: the build is incremental. A real nested \\include is LaTeX's error,
+    reported with its location."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\begin{document}\n\\include{a}\n\\include{b}\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text(
+        "\\chapter{A}Use \\verb|\\include{file}|.\n\\begin{verbatim}\n\\include{x}\n"
+        "\\end{verbatim}\n"
+    )
+    (src / "b.tex").write_text("\\chapter{B}Text b.\n")
+    assert checked(src, capsys)["mode"] == "cold"
+    edit(src / "b.tex", "Text b.", "Txet b.")
+    rep = checked(src, capsys)
+    assert rep["mode"] == "incremental" and rep["compiled"] == ["b"], rep
+    (src / "x.tex").write_text("X.\n")
+    edit(src / "b.tex", "Txet b.", "\\include{x}")
+    rc, _ = build(src)
+    err = capsys.readouterr().err
+    assert rc == 1 and "b.tex:1: LaTeX Error: \\include cannot be nested" in err, err
