@@ -53,7 +53,7 @@ First test release (formerly developed as `fastinc`).
   tested yet.
 - Full builds (with a warning) for (most common first):
   - BibTeX and biblatex backends other than biber;
-  - the packages `cleveref`, `glossaries`, `minted`, `imakeidx`/`makeidx`;
+  - the packages `glossaries`, `minted`, `imakeidx`/`makeidx`;
   - hyperref without `bookmark`;
   - primitive `\mark`;
   - cases chapmk cannot verify.

@@ -40,8 +40,9 @@ a plain full build (§6.14). `chapmk check` compares a build with a plain full b
   `\tikzexternalize` but makes the figures itself (§6.4.3, §6.17).
 - Byte-identical PDFs.
 - Packages that write their own index or glossary files or need shell escape: `glossaries`,
-  `imakeidx`/`makeidx`, `minted`, `cleveref` (full builds with a warning; one table,
-  `facts.UNSUPPORTED_PACKAGES`, for the preamble scan and the runtime check).
+  `imakeidx`/`makeidx`, `minted` (full builds with a warning; one table,
+  `facts.UNSUPPORTED_PACKAGES`, for the preamble scan and the runtime check). `cleveref` is
+  supported (S16).
 - biblatex with another backend than biber, classic BibTeX, biblatex refsections.
 - hyperref without the `bookmark` package (the outline comes from bookmark's records).
 
@@ -444,8 +445,9 @@ citations of its excluded units (biblatex would treat them as removed and drop e
 4. Imports: label and citation keys it references, found by a text scan of its attributed
    files (`deps.TokenScan`: a key delimited by braces, brackets, commas or whitespace, not as
    a `\label` argument; comments count, a safe over-approximation). A label's value is its
-   whole `\newlabel` argument; a citation's value is its `.bbl` block, position and keyed
-   biblatex aux data.
+   whole `\newlabel` argument, together with its companion labels (cleveref's
+   `\newlabel{<key>@cref}`: the type and counter `\cref{<key>}` prints; S16); a citation's
+   value is its `.bbl` block, position and keyed biblatex aux data.
 5. Self data: its *self* statements must be the same before and after the compile.
 6. The list files it typesets (`\tableofcontents` → `.toc`, `\printbibliography` → `.bbl`,
    …; an unknown list command counts all list files) or reads (`F` records).
