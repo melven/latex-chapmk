@@ -44,7 +44,9 @@ a plain full build (§6.14). `chapmk check` compares a build with a plain full b
   state vector does not carry: `acronym` (first use of an acronym, S17), `perpage`
   (counters reset per page through aux data and a macro posing as a counter; loaded by
   `footmisc`'s `perpage` option and `bigfoot`), and `hyperxmp` (writes its XMP packet on the
-  last page with the run's page count and job name; user decision, sweep D1) (full builds with
+  last page with the run's page count and job name; user decision, sweep D1), and `pdfx`
+  (PDF/A: writes its XMP file and PDF objects in the preamble, which a format cannot keep;
+  user decision, issue #78) (full builds with
   a warning; one table, `facts.UNSUPPORTED_PACKAGES`, for the preamble scan and the runtime
   check). `cleveref` is supported (S16).
 - biblatex with another backend than biber, classic BibTeX, biblatex refsections.
@@ -270,7 +272,10 @@ options are part of `pre` (`draft` freezes `\ifdraft`).
 
 #### 6.3.3 State a format does not keep (S13)
 
-- `\openout` calls (e.g. `\makenomenclature`) are replayed by mylatexformat (S1).
+- `\openout` calls (e.g. `\makenomenclature`) are replayed by mylatexformat (S1). A file the
+  preamble writes and closes (`filecontents`, `pdfx`'s XMP file) is never written in the format
+  build: mylatexformat postpones the open. Such a format build fails, and the document is
+  built in full mode (limitation, issue #78).
 - `\pdfcatalog`, `\pdfinfo`, `\pdfnames`, `\pdftrailer` entries are not dumped. In format builds
   `chapmk-ini.sty` wraps them (and their expl3 names) and records each call in the deferral
   table `\chapmk@deferred`; `chapmk.sty` replays the table at the split point of every run and
@@ -722,7 +727,9 @@ Measured: 319 pages from 5 runs in about 0.35 s.
 
 ### 6.14 Fallbacks to full mode
 
-Full mode: plain sequential runs to a fixpoint in `full/` (like latexmk: rerun while a file read
+Full mode: plain sequential runs to a fixpoint in `full/` (output directory first in `TEXINPUTS`, as
+for the runs: a file the document writes and reads back, e.g. with `filecontents`, is found
+there) (like latexmk: rerun while a file read
 by a pass changed; biber, BibTeX when an aux file names a database (`\bibdata`: classic BibTeX,
 biblatex with `backend=bibtex`; run in `full/`, the shadow tree in `BIBINPUTS`/`BSTINPUTS`),
 makeindex), with `chapmk-ini.sty` and the picture cache, publishing

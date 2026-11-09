@@ -10,6 +10,7 @@ write into ``<build>/full``; only the final PDF, SyncTeX file and log are publis
 from __future__ import annotations
 
 import json
+import os
 import shutil
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, field
@@ -208,6 +209,10 @@ def full_build(
         (out / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
     mirror_subdirectories(layout.shadow_dir, out)  # includes the analysis does not see
     argv = dist.pdflatex(full_mode_input(analysis), job, out)
+    # files the document writes and reads back (filecontents, generated data) are in the
+    # output directory: LaTeX's \input looks them up with \openin, which does not search it
+    # (the runs put their directory first as well, runner.run_one)
+    pass_env = {**env, "TEXINPUTS": f"{out}{os.pathsep}{env.get('TEXINPUTS', '')}"}
     fig_dir = (fig_dir or layout.full_fig_dir) if picture_cache else None
     stamp = picture_stamp(format_stamp(analysis, dist.version), asdict(analysis.fingerprints))
 
@@ -221,7 +226,7 @@ def full_build(
             refresh_cache(fig_dir, None, analysis.source_dir)
         text = driver_file(fig_dir, layout.shadow_dir, stamp, {"-": refs})
         (out / PICS_FILE).write_text(text, encoding="utf-8")
-        result = run(argv, cwd=layout.shadow_dir, env=env)
+        result = run(argv, cwd=layout.shadow_dir, env=pass_env)
         if result.ok and (out / f"{job}.pdf").is_file():
             pictures = read_pictures(out / f"{job}.log")
             exported = 0
