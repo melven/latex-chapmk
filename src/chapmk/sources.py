@@ -1,6 +1,7 @@
 """What the builder knows about the sources of each unit (design §6.8): token scans (imports,
 list reads) and lint hits (global units, §6.8.4), cached per build; the persistent lint cache
-(``canon/lint-cache.json``, only the entries a build used are kept)."""
+(``canon/lint-cache.json``, only the entries a build used are kept); the units whose anchor a
+later segment uses (S19, global units)."""
 
 from __future__ import annotations
 
@@ -14,6 +15,7 @@ from chapmk.config import Config
 from chapmk.deps import TokenScan, read_text
 from chapmk.files import write_atomic
 from chapmk.lint import LintHit, lint_files
+from chapmk.segment import is_glue
 from chapmk.state import State
 
 LINT_CACHE = "lint-cache.json"
@@ -48,6 +50,39 @@ def load_lint_cache(canon_dir: Path) -> _UsedCache:
 
 def save_lint_cache(canon_dir: Path, cache: _UsedCache) -> None:
     write_atomic(canon_dir / LINT_CACHE, json.dumps(dict(cache)))
+
+
+def anchor_owner(analysis: Analysis, state: State, reader: str) -> str | None:
+    """S19: the unit whose anchor an ``\\addcontentsline`` or ``\\label`` of segment ``reader``
+    used (``R`` records): the nearest earlier segment that sets an anchor (``H`` records; a
+    segment without a record yet counts as setting one). None if that is a glue segment
+    (compiled in every run) or a unit of the reader's own compilation unit (compiled with it),
+    or if no earlier segment sets one (the anchor comes from before the body, e.g. hyperref's
+    ``Doc-Start``)."""
+    order = analysis.segments
+    for seg in reversed(order[: order.index(reader)]):
+        if not state.anchors.get(seg, True):
+            continue
+        if is_glue(seg):
+            return None
+        if not is_glue(reader):
+            own = next(u for u in analysis.units if analysis.include_of(reader) in u.includes)
+            if analysis.include_of(seg) in own.includes:
+                return None
+        return seg
+    return None
+
+
+def anchor_owners(analysis: Analysis, state: State) -> dict[str, list[tuple[str, str, int]]]:
+    """Per owner unit (:func:`anchor_owner`): the reads of its anchor as (reading segment,
+    command, line), in document order."""
+    owners: dict[str, list[tuple[str, str, int]]] = {}
+    for reader in analysis.segments:
+        reads = state.anchor_reads.get(reader)
+        owner = anchor_owner(analysis, state, reader) if reads else None
+        if owner is not None:
+            owners.setdefault(owner, []).extend((reader, c, n) for c, n in reads or ())
+    return owners
 
 
 class UnitSources:
@@ -96,8 +131,13 @@ class UnitSources:
         return self._lint[seg]
 
     def is_global(self, seg: str) -> bool:
-        """Global unit (§6.8.4): a lint hit, or state it changed at run time (``G`` records)."""
-        return seg in self.state.runtime_global or bool(self.lint(seg))
+        """Global unit (§6.8.4): a lint hit, state it changed at run time (``G`` records), or
+        an anchor a later segment uses (S19)."""
+        return (
+            seg in self.state.runtime_global
+            or seg in anchor_owners(self.a, self.state)
+            or bool(self.lint(seg))
+        )
 
     def forget(self, segs: Iterable[str]) -> None:
         """Drop the scans and lint hits of ``segs`` and the glue scan (sources re-attributed)."""

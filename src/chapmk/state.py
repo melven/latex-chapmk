@@ -12,7 +12,7 @@ from chapmk.facts import DEFAULT_LIST_SUFFIXES
 from chapmk.files import write_atomic
 from chapmk.predict import SegmentVectors
 
-STATE_VERSION = 7
+STATE_VERSION = 8
 STATE_FILE = "state.json"
 
 
@@ -81,6 +81,11 @@ class State:
     openright: dict[str, bool] = field(default_factory=dict)  # unit starts on an odd page
     # units that changed page numbering or page style at run time (G records): global
     runtime_global: dict[str, list[str]] = field(default_factory=dict)
+    # S19: whether a segment sets a new current anchor (H records; units from their
+    # committing run, glue from the last run) and per segment the commands that used an
+    # anchor of an earlier segment (R records: command, line); see sources.anchor_owner
+    anchors: dict[str, bool] = field(default_factory=dict)
+    anchor_reads: dict[str, list[tuple[str, int]]] = field(default_factory=dict)
     # list files of the document: the defaults plus those recorded (L records)
     list_suffixes: list[str] = field(default_factory=lambda: list(DEFAULT_LIST_SUFFIXES))
     dist_files: dict[str, str] = field(default_factory=dict)  # path -> "size:mtime_ns"
@@ -169,6 +174,10 @@ def load_state(canon_dir: Path) -> State | None:
             pictures={k: list(v) for k, v in data["pictures"].items()},
             openright={k: bool(v) for k, v in data["openright"].items()},
             runtime_global={k: list(v) for k, v in data["runtime_global"].items()},
+            anchors={k: bool(v) for k, v in data["anchors"].items()},
+            anchor_reads={
+                k: [(str(c), int(n)) for c, n in v] for k, v in data["anchor_reads"].items()
+            },
             list_suffixes=list(data["list_suffixes"]),
             dist_files={str(k): str(v) for k, v in data["dist_files"].items()},
         )
