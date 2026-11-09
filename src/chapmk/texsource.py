@@ -245,26 +245,43 @@ PRIMITIVE_CONDITIONALS = frozenset(
 _WORD = re.compile(r"\\([A-Za-z@]+)")
 
 
+#: commands whose next control word is a name being defined (``\\let``: the next two)
+_DEFINERS = frozenset(
+    [
+        "def",
+        "gdef",
+        "edef",
+        "xdef",
+        "newif",
+        "newcommand",
+        "renewcommand",
+        "providecommand",
+        "DeclareRobustCommand",
+    ]
+)
+
+
 def open_conditional_at_line_starts(lines: list[str]) -> list[int]:
     """For each line of comment-free ``lines``: the 1-based line of the outermost conditional
-    that is still open at the line start (0 if none). Conditionals are TeX primitives and
-    switches defined by ``\\newif`` in ``lines``; ``\\fi`` closes."""
-    switches: set[str] = set()
-    for line in lines:
-        switches.update(m.group(1) for m in re.finditer(r"\\newif\s*\\(if[A-Za-z@]+)", line))
+    that is still open at the line start (0 if none). A conditional is every ``\\if<letters>``
+    control word not followed by an argument (``{`` or ``[``: ``\\ifthenelse{...}``,
+    ``\\iftoggle{...}``, KOMA's ``\\ifoot[...]{...}``) and not a name being defined
+    (``\\newif\\ifx``, ``\\let\\ifpdf\\iffalse``): TeX's primitives, ``\\newif`` switches and
+    those of packages and classes (``\\ifpdf``, ``\\ifPDFTeX``); ``\\fi`` closes."""
     out: list[int] = []
     stack: list[int] = []
     for lineno, line in enumerate(lines, start=1):
         out.append(stack[0] if stack else 0)
-        after_newif = False
+        skip = 0  # control words that are names being defined
         for m in _WORD.finditer(line):
             name = m.group(1)
-            if after_newif:
-                after_newif = False
-                continue
-            if name == "newif":
-                after_newif = True
-            elif name in PRIMITIVE_CONDITIONALS or name in switches:
+            if skip:
+                skip -= 1
+            elif name in _DEFINERS or name == "let":
+                skip = 2 if name == "let" else 1
+            elif name.startswith("if") and (
+                name in PRIMITIVE_CONDITIONALS or line[m.end() :].lstrip()[:1] not in ("{", "[")
+            ):
                 stack.append(lineno)
             elif name == "fi" and stack:
                 stack.pop()

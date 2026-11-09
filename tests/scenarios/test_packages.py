@@ -178,3 +178,19 @@ def test_index_with_makeidx(tmp_path: Path, capsys: pytest.CaptureFixture[str], 
     edit(src / "a.tex", "\\lipsum[1-2]", "\\lipsum[1-30]")  # b and c move by pages
     rep = checked(src, capsys, "-j", jobs)
     assert rep["mode"] == "incremental" and "a" in rep["compiled"], rep
+
+
+def test_hyperxmp_gives_full_builds(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """D1 (sweep): hyperxmp writes its XMP packet on the last page (shipout/lastpage) with the
+    page count and the job name of the run: full mode with the reason."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage{hyperref}\n\\usepackage{bookmark}\n"
+        "\\usepackage{hyperxmp}\n\\hypersetup{pdftitle={T},pdfauthor={A},pdfkeywords={k}}\n"
+        "\\begin{document}\n\\include{a}\n\\include{b}\n\\include{c}\n\\end{document}\n"
+    )
+    for x in "abc":
+        (src / f"{x}.tex").write_text(f"\\chapter{{{x}}}\nText {x}.\n")
+    rep = checked(src, capsys)
+    assert rep["mode"] == "full" and "hyperxmp" in rep["reason"], rep

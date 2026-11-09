@@ -227,7 +227,14 @@ def merge_pdf(
                 merged.Root[key] = _copy_value(value, merged, pages_of)
         merged.docinfo = merged.copy_foreign(cat.docinfo)  # type: ignore[assignment]
         tmp = out.with_name(f".{out.name}.merge-tmp")
-        merged.save(tmp, deterministic_id=True)
+        # the catalog run's PDF version; its XMP metadata stream (hyperxmp, pdfx) unchanged:
+        # pikepdf would rewrite it with pdf:PDFVersion set to the new file's version (D1)
+        merged.save(
+            tmp,
+            deterministic_id=True,
+            min_version=cat.pdf_version,
+            fix_metadata_version=False,
+        )
         tmp.replace(out)
         return MergeStats(len(merged.pages), len(chosen), len(outline))
     finally:

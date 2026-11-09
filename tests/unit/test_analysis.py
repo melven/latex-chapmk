@@ -228,6 +228,18 @@ def test_split_moves_out_of_open_conditional(tmp_path: Path) -> None:
     assert a.split_line == 5 and "tikzexternalize" in a.split_reason
 
 
+def test_split_moves_out_of_a_package_conditional(tmp_path: Path) -> None:
+    """A conditional of a package (iftex's \\ifpdf, D1 sweep templates): a split inside it
+    would leave the \\else and \\fi to the runs ("Extra \\else")."""
+    main = tmp_path / "m.tex"
+    main.write_text(
+        "\\documentclass{book}\n\\usepackage{iftex}\n\\ifpdf\n  \\usepackage{makeidx}\\makeindex\n"
+        "\\else\n  \\relax\n\\fi\n\\begin{document}\nx\n\\end{document}\n"
+    )
+    a = analyse(Config(main=main))
+    assert a.split_line == 3 and "makeindex" in a.split_reason
+
+
 def test_split_before_pdf_object_creators(tmp_path: Path) -> None:
     main = tmp_path / "m.tex"
     main.write_text(

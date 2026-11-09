@@ -158,3 +158,18 @@ def test_vspace_star_right_after_begin_document(
     edit(src / "b.tex", "Text b.", "Txet b.")
     rep = checked(src, capsys)
     assert rep["mode"] == "incremental" and rep["compiled"] == ["b"], rep
+
+
+def test_split_point_inside_a_package_conditional(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A deny match inside a package's conditional (\\makeindex inside iftex's \\ifpdf, as in
+    the D1 sweep templates): the format part ends before the conditional, not inside it."""
+    src = tmp_path / "src"
+    _format_state_document(
+        src,
+        "\\usepackage{iftex}\n\\ifpdf\n  \\usepackage{makeidx}\\makeindex\n\\else\n\\relax\n\\fi",
+    )
+    assert checked(src, capsys)["mode"] == "cold"
+    edit(src / "b.tex", "Text b.", "Txet b.")
+    assert checked(src, capsys)["compiled"] == ["b"]
