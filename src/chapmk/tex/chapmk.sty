@@ -181,7 +181,7 @@
 % \include's \clearpage before include/before and include/after puts each segment's pages
 % and messages between its markers)
 \def\chapmk@logmark#1{\wlog{chapmk-segment: #1}}
-\def\chapmk@entry@rec{\chapmk@logmark{\chapmk@seg}\chapmk@time{\chapmk@seg}\chapmk@markmap\chapmk@msnap\chapmk@mprep
+\def\chapmk@entry@rec{\chapmk@asnap\chapmk@logmark{\chapmk@seg}\chapmk@time{\chapmk@seg}\chapmk@markmap\chapmk@msnap\chapmk@mprep
   \def\chapmk@pfx{chapmk@b}%
   \chapmk@main{\string\chapmk@entry{\chapmk@seg}{\chapmk@vec}}}
 \def\chapmk@gexit@rec{\chapmk@mprep\def\chapmk@pfx{chapmk@b}%
@@ -223,9 +223,29 @@
     \ifx\chapmk@ef\@evenfoot\else\chapmk@grec{pagestyle}\fi\else\chapmk@grec{pagestyle}\fi
     \else\chapmk@grec{pagestyle}\fi\else\chapmk@grec{pagestyle}\fi}
 \def\chapmk@grec#1{\immediate\write\chapmk@rec{G \chapmk@seg\space#1}}
+% S19 (spike): anchors across segments. "H <seg>": the segment ends with another current
+% anchor (\@currentHref, \@currentlabel) than it started with. "R <seg> <command> <line>
+% <file>": \addcontentsline or \label used the anchor its segment started with, i.e. one
+% set in an earlier segment (e.g. KOMA's listof=totoc after the last \include).
+\def\chapmk@asnap{\global\let\chapmk@ahref\@currentHref
+  \global\let\chapmk@alabel\@currentlabel\global\let\chapmk@acounter\@currentcounter}
+\def\chapmk@aend{\ifx\chapmk@ahref\@currentHref\ifx\chapmk@alabel\@currentlabel
+  \ifx\chapmk@acounter\@currentcounter\else\chapmk@arecH\fi\else\chapmk@arecH\fi
+  \else\chapmk@arecH\fi}
+\def\chapmk@arecH{\immediate\write\chapmk@rec{H \chapmk@seg}}
+\def\chapmk@aread#1{\ifx\chapmk@seg\chapmk@Gzero\else
+  \immediate\write\chapmk@rec{R \chapmk@seg\space#1 \the\inputlineno\space
+    [\meaning\chapmk@ahref][\meaning\@currentHref][\meaning\chapmk@alabel][\meaning\@currentlabel]}\fi}
+\def\chapmk@Gzero{G0}
+\AddToHook{cmd/addcontentsline/before}{%
+  \ifx\chapmk@ahref\@currentHref\chapmk@aread{addcontentsline}\fi}
+\AddToHook{cmd/label/before}{%
+  \ifx\chapmk@ahref\@currentHref\chapmk@aread{label}\else
+    \ifx\chapmk@alabel\@currentlabel\ifx\chapmk@acounter\@currentcounter
+      \chapmk@aread{label}\fi\fi\fi}
 
 % segment transitions
-\def\chapmk@glue@end{\chapmk@gexit@rec\chapmk@abs@rec\@mainaux}
+\def\chapmk@glue@end{\chapmk@aend\chapmk@gexit@rec\chapmk@abs@rec\@mainaux}
 \def\chapmk@unit@begin#1{% #1: include argument as known (may be empty)
   \chapmk@inc\chapmk@k
   \chapmk@glue@end
@@ -254,7 +274,7 @@
 % exclusion itself (e.g. calc's \setcounter scratch register during the kernel restore).
 \AddToHook{include/after}{%
   \let\chapmk@pfx\chapmk@all
-  \chapmk@gcheck
+  \chapmk@gcheck\chapmk@aend
   \chapmk@markmap\chapmk@mkrec
   \chapmk@primitive
   \chapmk@mprep
