@@ -173,3 +173,26 @@ def test_split_point_inside_a_package_conditional(
     assert checked(src, capsys)["mode"] == "cold"
     edit(src / "b.tex", "Text b.", "Txet b.")
     assert checked(src, capsys)["compiled"] == ["b"]
+
+
+def test_fonts_are_set_up_after_the_begin_document_hooks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Sweep B2: mathptmx redeclares the AMS symbol fonts in \\AtBeginDocument (msam10 at all
+    sizes), type1cm declares msam7 for 7-10pt. A plain build sets up the script size at the
+    first formula, after that hook; the format must not set it up before (mylatexformat's font
+    preloading), or the superscript \\intercal is 0.74pt wider."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass[11pt]{book}\n\\usepackage{amssymb}\n\\usepackage{mathptmx}\n"
+        "\\usepackage{type1cm}\n\\begin{document}\n\\include{a}\n\\include{b}\n"
+        "\\end{document}\n"
+    )
+    (src / "a.tex").write_text(
+        "\\chapter{A}Text a.\n\\begin{equation}\\hat S = w^\\intercal Z\\end{equation}\n"
+    )
+    (src / "b.tex").write_text("\\chapter{B}Text b.\n")
+    assert checked(src, capsys)["mode"] == "cold"
+    edit(src / "b.tex", "Text b.", "Txet b.")
+    assert checked(src, capsys)["compiled"] == ["b"]
