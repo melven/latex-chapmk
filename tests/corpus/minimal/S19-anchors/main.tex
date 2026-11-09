@@ -1,7 +1,7 @@
-% S19: state a unit leaves for the glue after it (\@currentHref, \@currentlabel,
-% \@currentcounter, nameref's \@currentlabelname). KOMA's listof=totoc adds the LoF
-% heading to the ToC with \addcontentsline, which takes its target from \@currentHref; so
-% does a manual \addcontentsline. Both stand after the last \include.
+% S19: anchors used across files. KOMA's listof=totoc adds the LoF heading to the ToC with
+% \addcontentsline after \chapter*, which sets no anchor with hyperref: the entry links to the
+% last anchor before it (\@currentHref), here the last section of c; so does the manual
+% \addcontentsline, and \label takes c's last number. Both stand after the last \include.
 \documentclass[listof=totoc]{scrbook}
 \usepackage[T1]{fontenc}
 \usepackage{lipsum}
