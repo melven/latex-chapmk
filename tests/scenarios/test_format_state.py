@@ -28,7 +28,11 @@ def _format_state_document(src: Path, preamble: str) -> None:
 @pytest.mark.parametrize(
     ("preamble", "reason"),
     [
-        ("\\usepackage{cmap}", "writes PDF objects immediately"),
+        # cmap writes ToUnicode objects when a font is loaded: here by the preamble itself
+        (
+            "\\usepackage{cmap}\\usepackage[T1]{fontenc}\\settowidth{\\dimen0}{W}",
+            "writes PDF objects immediately",
+        ),
         ("\\chardef\\mystack=\\pdfcolorstackinit page direct{0 g 0 G}", "creates colour stacks"),
         ("\\def\\kw{(k)}\\pdfinfo\\expandafter{\\expandafter/Keywords\\kw}", "without a braced"),
     ],
@@ -39,13 +43,27 @@ def test_state_a_format_loses_gives_a_full_build(
     preamble: str,
     reason: str,
 ) -> None:
-    """S13: immediate PDF objects (cmap's ToUnicode maps), colour stacks and catalog entries
-    that cannot be recorded in the format part: full build with the reason."""
+    """S13: immediate PDF objects (cmap's ToUnicode maps of a font the preamble loads), colour
+    stacks and catalog entries that cannot be recorded in the format part: full build with the
+    reason."""
     src = tmp_path / "src"
     _format_state_document(src, preamble)
     rep = checked(src, capsys)
     assert rep["mode"] == "full" and "format build failed" in rep["reason"], rep
     assert reason in rep["reason"], rep
+
+
+def test_cmap_without_fonts_loaded_in_the_format(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """cmap writes its ToUnicode objects when a font is loaded. Without mylatexformat's font
+    preloading (sweep B2) a preamble that typesets nothing loads no font in the format part:
+    the objects are written by the runs, incremental builds are correct."""
+    src = tmp_path / "src"
+    _format_state_document(src, "\\usepackage{cmap}")
+    assert checked(src, capsys)["mode"] == "cold"
+    edit(src / "b.tex", "Text b.", "Txet b.")
+    assert checked(src, capsys)["compiled"] == ["b"]
 
 
 def test_catalog_and_info_of_the_format_part_are_replayed(
@@ -170,6 +188,29 @@ def test_split_point_inside_a_package_conditional(
         src,
         "\\usepackage{iftex}\n\\ifpdf\n  \\usepackage{makeidx}\\makeindex\n\\else\n\\relax\n\\fi",
     )
+    assert checked(src, capsys)["mode"] == "cold"
+    edit(src / "b.tex", "Text b.", "Txet b.")
+    assert checked(src, capsys)["compiled"] == ["b"]
+
+
+def test_fonts_are_set_up_after_the_begin_document_hooks(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Sweep B2: mathptmx redeclares the AMS symbol fonts in \\AtBeginDocument (msam10 at all
+    sizes), type1cm declares msam7 for 7-10pt. A plain build sets up the script size at the
+    first formula, after that hook; the format must not set it up before (mylatexformat's font
+    preloading), or the superscript \\intercal is 0.74pt wider."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass[11pt]{book}\n\\usepackage{amssymb}\n\\usepackage{mathptmx}\n"
+        "\\usepackage{type1cm}\n\\begin{document}\n\\include{a}\n\\include{b}\n"
+        "\\end{document}\n"
+    )
+    (src / "a.tex").write_text(
+        "\\chapter{A}Text a.\n\\begin{equation}\\hat S = w^\\intercal Z\\end{equation}\n"
+    )
+    (src / "b.tex").write_text("\\chapter{B}Text b.\n")
     assert checked(src, capsys)["mode"] == "cold"
     edit(src / "b.tex", "Text b.", "Txet b.")
     assert checked(src, capsys)["compiled"] == ["b"]

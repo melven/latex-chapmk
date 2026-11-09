@@ -252,8 +252,8 @@ Generated files keep the user's line numbers, so errors and SyncTeX need only a 
 working directory (`texdist.format_build`). Runs load it by name via `TEXFORMATS` and
 `-fmt=pre` (an absolute `-fmt` path breaks `-recorder`, S1); MiKTeX by `--undump=<path>`.
 
-The format is reused while its stamp is unchanged: `pre`, the split line, the distribution
-version string, `chapmk-ini.sty`, `chapmk.sty`, the chapmk version, the digests of the source
+The format is reused while its stamp is unchanged: `pre`, the split line, the generated format
+source, the distribution version string, `chapmk-ini.sty`, `chapmk.sty`, the chapmk version, the digests of the source
 files the format build read and the stat signatures (size, mtime) of the distribution files it
 read (from `pre.fls`; a `tlmgr` update does not change the version string). The class
 options are part of `pre` (`draft` freezes `\ifdraft`).
@@ -283,10 +283,16 @@ options are part of `pre` (`draft` freezes `\ifdraft`).
   too (a `\vspace*` right after `\begin{document}` restores it, and the next line's
   interline glue depends on it). The capture is called by `\csname`: mylatexformat reads
   the preamble with `@` a letter, and a preamble may end with `\makeatother`.
+- mylatexformat preloads fonts at `\endofdump` (text and math in all sizes into a box): that
+  sets up the math sizes and loads the fonts before the `\begin{document}` hooks, which may
+  redeclare fonts (`mathptmx`, `mathpazo`: the AMS symbol fonts), while a plain build sets
+  them up at first use. The format source switches the preloading off (sweep B2).
 - Detected and rejected (format build fails → full mode with the reason): immediate PDF
   objects (pdfTeX's `dangling objects discarded`, e.g. `cmap`), colour stacks
   (`\pdfcolorstackinit`), catalog calls without a braced argument, form xobjects and images.
-  Moving the split before `cmap` does not help: the fonts it affects are loaded earlier.
+  `cmap` writes its objects when a font is loaded: only a preamble that loads a font itself
+  (`\settowidth`, a class typesetting a box) is rejected; without the font preloading (above)
+  a plain `\usepackage{cmap}` builds incrementally.
 
 ### 6.4 LaTeX packages
 

@@ -39,6 +39,8 @@ def test_format_source(tmp_path: Path) -> None:
     # probes of the state a format cannot keep (S13), then the end of the dump
     for probe in ("chapmk-pdf-objects:", "chapmk-pdf-colorstacks:", "chapmk-pdf-unrecorded:"):
         assert probe in lines[-1]
+    # mylatexformat's font preloading off (sweep B2: fonts as in a plain build)
+    assert "\\csname MYLATEX@fontpreloading\\endcsname\\relax\\endofdump" in lines[-1]
     assert src.endswith("\\endofdump\n")
 
 
