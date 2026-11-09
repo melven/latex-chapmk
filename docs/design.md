@@ -272,7 +272,10 @@ options are part of `pre` (`draft` freezes `\ifdraft`).
 
 #### 6.3.3 State a format does not keep (S13)
 
-- `\openout` calls (e.g. `\makenomenclature`) are replayed by mylatexformat (S1).
+- `\openout` calls (e.g. `\makenomenclature`) are replayed by mylatexformat (S1). A file the
+  preamble writes and closes (`filecontents`, `pdfx`'s XMP file) is never written in the format
+  build: mylatexformat postpones the open. Such a format build fails, and the document is
+  built in full mode (limitation, issue #78).
 - `\pdfcatalog`, `\pdfinfo`, `\pdfnames`, `\pdftrailer` entries are not dumped. In format builds
   `chapmk-ini.sty` wraps them (and their expl3 names) and records each call in the deferral
   table `\chapmk@deferred`; `chapmk.sty` replays the table at the split point of every run and
@@ -720,7 +723,9 @@ Measured: 319 pages from 5 runs in about 0.35 s.
 
 ### 6.14 Fallbacks to full mode
 
-Full mode: plain sequential runs to a fixpoint in `full/` (like latexmk: rerun while a file read
+Full mode: plain sequential runs to a fixpoint in `full/` (output directory first in `TEXINPUTS`, as
+for the runs: a file the document writes and reads back, e.g. with `filecontents`, is found
+there) (like latexmk: rerun while a file read
 by a pass changed; biber, BibTeX when an aux file names a database (`\bibdata`: classic BibTeX,
 biblatex with `backend=bibtex`; run in `full/`, the shadow tree in `BIBINPUTS`/`BSTINPUTS`),
 makeindex), with `chapmk-ini.sty` and the picture cache, publishing
