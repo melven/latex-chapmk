@@ -194,3 +194,18 @@ def test_hyperxmp_gives_full_builds(tmp_path: Path, capsys: pytest.CaptureFixtur
         (src / f"{x}.tex").write_text(f"\\chapter{{{x}}}\nText {x}.\n")
     rep = checked(src, capsys)
     assert rep["mode"] == "full" and "hyperxmp" in rep["reason"], rep
+
+
+def test_pdfx_gives_full_builds(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Sweep (issue #78): pdfx (PDF/A) writes its XMP file and PDF objects in the preamble,
+    which a format cannot keep: full mode with the reason."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage[a-2u]{pdfx}\n\\usepackage{bookmark}\n"
+        "\\begin{document}\n\\include{a}\n\\include{b}\n\\end{document}\n"
+    )
+    for x in "ab":
+        (src / f"{x}.tex").write_text(f"\\chapter{{{x}}}\nText {x}.\n")
+    rep = checked(src, capsys)
+    assert rep["mode"] == "full" and "pdfx" in rep["reason"], rep
