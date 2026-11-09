@@ -321,7 +321,8 @@ Loaded at the split point of incremental runs.
    `Hy@linkcounter`, biblatex citation order, `LT@tables` (S4).
 4. **Records file `\jobname.frec`** (one write stream for all): page map (`P`), file
    attribution (`F`, from `file/before` and the graphics inclusion), elapsed TeX time (`T`),
-   eqparbox tag uses (`Q`), list files (`L`), per-unit layout (`O`), mark classes (`K`).
+   eqparbox tag uses (`Q`), list files (`L`), per-unit layout (`O`), mark classes (`K`),
+   run-time global state (`G`), anchors (`H`, `R`; §6.8.4).
 5. **Markers in shared files:** `%chapmk-seg <seg>` lines in the `.nlo` and `.idx` streams; list-file
    markers `\chapmk@lmark{U<k>}` / `{/<seg>}` (no-ops) written while the aux files are read at
    `\end{document}`, which delimit each unit's list entries (§6.7.1).
@@ -391,7 +392,8 @@ both cases, so they never enter the unit's list-file section or main-aux slice (
 - per segment: the run that committed it and its page indices; its attributed source files
   with digests; its vectors (entry, exit, absolute set); citations (`.bcf` elements); eqparbox
   tags; picture keys; per unit the inputs it was compiled with (entry, imported values, list
-  files read, self-data stability) and its odd-page flag;
+  files read, self-data stability) and its odd-page flag; per segment whether it sets an
+  anchor and its uses of an earlier segment's anchor (§6.8.4);
 - global inputs (source files read by no segment, by the format build, `.bib` files) with
   digests, distribution files with stat signatures, the document's list suffixes, the glue
   input hashes, and pending dirty reasons if a build stopped before the fixpoint.
@@ -520,6 +522,19 @@ cached by file content (`canon/lint-cache.json`).
 (e.g. a class switching both in `\@chapter` for chapter 1), writes `G <unit> <command>`; it
 becomes global too (`State.runtime_global`), and later units committed from runs without it
 are recompiled.
+
+**Anchors used across segments** (S19): `\addcontentsline` (with hyperref: its link target) and
+`\label` (its number and target) use the last anchor before them (`\@currentHref`,
+`\@currentlabel`, `\@currentcounter`). Where a segment has none of its own before such a
+command, e.g. KOMA's `\chapter*` (no anchor with hyperref) or `listof=totoc` after the last
+`\include`, it links to an anchor of an earlier segment, also in a plain build; a run that
+excludes that segment would use an older one. `chapmk.sty` records such a use (`R`: the
+anchor macros still have their values from the segment's start, and the segment did not
+create that anchor name or counter number again) and each segment that ends with an anchor of
+its own (`H`). The owner is the nearest earlier segment with `H`; if it is a unit outside the
+reader's compilation unit, it becomes global (`sources.anchor_owner`), with a warning naming
+the command's line and the fix (`\phantomsection` before it). A newly found owner recompiles
+the later units committed from runs without it, and the glue.
 
 **Slow glue (hint):** a glue block taking ≥ 0.5 s in every run (`T` records) is reported with
 its line range and whether it could move into an `\include` (a hint, not a warning: it depends
@@ -977,6 +992,8 @@ Relevant mechanisms: the `.nlo` stream, biblatex renumbering, longtable and eqpa
 | eqparbox use | `.frec` | `Q <seg> <tag>` |
 | list file | `.frec` | `L <seg> <ext>` per `\@starttoc` (the segment reads that list) |
 | run-time global state | `.frec` | `G <unit> pagenumbering\|pagestyle` when a unit changes it |
+| anchor of its own | `.frec` | `H <seg>`: the segment ends with an anchor or number it created (S19) |
+| anchor of an earlier segment | `.frec` | `R <seg> addcontentsline\|label <line>`: the command used the anchor the segment started with (S19) |
 | unit layout | `.frec` | `O <seg> 0\|1` (twoside and openright at the unit start) |
 | mark classes | `.frec` | `K <pseudo register> <class>`; `K primitive <n>` |
 | stream marker | `.nlo`, `.idx` | `%chapmk-seg <seg>` |
