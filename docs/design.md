@@ -290,7 +290,9 @@ options are part of `pre` (`draft` freezes `\ifdraft`).
 - Detected and rejected (format build fails → full mode with the reason): immediate PDF
   objects (pdfTeX's `dangling objects discarded`, e.g. `cmap`), colour stacks
   (`\pdfcolorstackinit`), catalog calls without a braced argument, form xobjects and images.
-  Moving the split before `cmap` does not help: the fonts it affects are loaded earlier.
+  `cmap` writes its objects when a font is loaded: only a preamble that loads a font itself
+  (`\settowidth`, a class typesetting a box) is rejected; without the font preloading (above)
+  a plain `\usepackage{cmap}` builds incrementally.
 
 ### 6.4 LaTeX packages
 
