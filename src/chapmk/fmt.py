@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -102,6 +103,10 @@ def _lost_state(log: str) -> str | None:
     m = re.search(r"chapmk-pdf-unrecorded:(\S+)", log)
     if m:
         return f"calls \\{m.group(1)} without a braced argument"
+    m = re.search(r"chapmk-file-written:(.*)", log)
+    if m:
+        name = m.group(1).strip().strip('"').replace("\\jobname ", "\\jobname")
+        return f"writes and closes a file ({name}, e.g. with filecontents)"
     return None
 
 
@@ -110,7 +115,8 @@ def format_path_map(analysis: Analysis, layout: Layout) -> list[tuple[str, str]]
     the main file's line numbers, so it maps to the main file; then :meth:`Layout.path_map`."""
     source = layout.fmt_dir / f"{FORMAT_NAME}.tex"
     main = str(analysis.main)
-    forms = dict.fromkeys([str(source), source.as_posix()])
+    relative = Path(os.path.relpath(source, layout.shadow_dir))  # the command line's form
+    forms = dict.fromkeys([str(source), source.as_posix(), str(relative), relative.as_posix()])
     return [*((form, main) for form in forms), *layout.path_map()]
 
 
@@ -141,7 +147,7 @@ def ensure_format(
     source = fmt_dir / f"{FORMAT_NAME}.tex"
     write_if_changed(source, format_source(analysis))
     result = run(
-        dist.format_build(source, FORMAT_NAME, fmt_dir),
+        dist.format_build(source, FORMAT_NAME, fmt_dir, layout.shadow_dir),
         cwd=layout.shadow_dir,
         env=env,
         log_path=fmt_dir / "build.out",

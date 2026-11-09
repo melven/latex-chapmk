@@ -59,7 +59,9 @@ class TexDistribution(Protocol):
         self, tex_input: str, jobname: str, outdir: Path, fmt: Path | None = None
     ) -> list[str]: ...
 
-    def format_build(self, source: Path, jobname: str, outdir: Path) -> list[str]: ...
+    def format_build(self, source: Path, jobname: str, outdir: Path, cwd: Path) -> list[str]:
+        """Format build of ``source`` with working directory ``cwd`` (§6.3.1)."""
+        ...
 
     def run_input(self, cwd: Path, run_main: Path) -> str:
         """The command-line input naming ``run_main`` (in a directory on ``TEXINPUTS``) for a
@@ -163,8 +165,11 @@ class TeXLive:
             tex_input,
         ]
 
-    def format_build(self, source: Path, jobname: str, outdir: Path) -> list[str]:
-        """mylatexformat format build of ``source`` (§6.3.1)."""
+    def format_build(self, source: Path, jobname: str, outdir: Path, cwd: Path) -> list[str]:
+        """mylatexformat format build of ``source`` (§6.3.1), named relative to ``cwd``:
+        mylatexformat reads it from the command line with ``\\input``, which ends the name at a
+        space (a source directory with a space, sweep: MateoTaito); the relative path has
+        only the build directory's own names (``../fmt/pre.tex``)."""
         return [
             "pdflatex",
             "-ini",
@@ -176,7 +181,7 @@ class TeXLive:
             f"-output-directory={tex_path(outdir)}",
             "&pdflatex",
             "mylatexformat.ltx",
-            tex_path(source),
+            tex_path(Path(os.path.relpath(source, cwd))),
         ]
 
     def biber(self, jobname: str, outdir: Path) -> list[str]:
@@ -269,8 +274,8 @@ class MiKTeX(TeXLive):
     def _run_options(self, tex_input: str, jobname: str, outdir: Path) -> list[str]:
         return ["--max-print-line=10000", *super()._run_options(tex_input, jobname, outdir)]
 
-    def format_build(self, source: Path, jobname: str, outdir: Path) -> list[str]:
-        argv = super().format_build(source, jobname, outdir)
+    def format_build(self, source: Path, jobname: str, outdir: Path, cwd: Path) -> list[str]:
+        argv = super().format_build(source, jobname, outdir, cwd)
         return [argv[0], "--max-print-line=10000", *argv[1:]]
 
     def run_input(self, cwd: Path, run_main: Path) -> str:

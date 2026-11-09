@@ -165,3 +165,19 @@ def test_unreadable_state_gives_a_cold_build(
     state.write_text(state.read_text()[:100])
     rep = checked(src, capsys)
     assert rep["mode"] == "cold" and "unreadable" in rep["reason"], rep
+
+
+def test_source_directory_with_a_space(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Sweep (MateoTaito): mylatexformat reads the format source from the command line with
+    \\input, which ends a name at a space; the format build names it relative to the shadow
+    tree."""
+    src = tmp_path / "my thesis"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\begin{document}\n\\include{a}\n\\include{b}\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}Text a.\n")
+    (src / "b.tex").write_text("\\chapter{B}Text b.\n")
+    assert checked(src, capsys)["mode"] == "cold"
+    edit(src / "b.tex", "Text b.", "Txet b.")
+    assert checked(src, capsys)["compiled"] == ["b"]

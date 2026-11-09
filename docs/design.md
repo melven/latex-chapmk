@@ -279,8 +279,10 @@ options are part of `pre` (`draft` freezes `\ifdraft`).
   reads them as TeX does instead (number, optional `=`, file name up to a space or an
   unexpandable token; `\jobname` kept for the runs) and records the same replay. A file the
   preamble writes and closes (`filecontents`, `pdfx`'s XMP file) is never written in the format
-  build: mylatexformat postpones the open. Such a format build fails, and the document is
-  built in full mode (limitation, issue #78).
+  build: mylatexformat postpones the open, the runs would start it empty. In format builds a
+  `\closeout` of a stream opened there records the file, and the format is rejected: the
+  document is built in full mode (limitation, issue #78), unless `format.split_before` moves
+  the code after the split point.
 - `\pdfcatalog`, `\pdfinfo`, `\pdfnames`, `\pdftrailer` entries are not dumped. In format builds
   `chapmk-ini.sty` wraps them (and their expl3 names) and records each call in the deferral
   table `\chapmk@deferred`; `chapmk.sty` replays the table at the split point of every run and
