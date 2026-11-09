@@ -57,11 +57,11 @@ def test_texlive_command_lines(tmp_path: Path) -> None:
     assert {"-synctex=1", "-recorder", "-halt-on-error", "-jobname=thesis"} <= set(argv)
     assert argv[-1] == "\\input{a.tex}"
     assert "-fmt" not in " ".join(tl.pdflatex("x", "j", tmp_path))
-    fb = tl.format_build(tmp_path / "pre.tex", "pre", tmp_path)
+    fb = tl.format_build(tmp_path / "a b/fmt/pre.tex", "pre", tmp_path, tmp_path / "a b/shadow")
     assert fb[:2] == ["pdflatex", "-ini"] and fb[-3:] == [
         "&pdflatex",
         "mylatexformat.ltx",
-        tex_path(tmp_path / "pre.tex"),
+        "../fmt/pre.tex",  # relative: mylatexformat's \\input ends a name at a space
     ]
     assert tl.biber("thesis", tmp_path) == ["biber", "--output-directory", str(tmp_path), "thesis"]
     assert tl.bibtex("thesis") == ["bibtex", "thesis"]
@@ -132,9 +132,9 @@ def test_miktex_command_lines(tmp_path: Path) -> None:
     assert {"-synctex=1", "-recorder", "-halt-on-error", "-jobname=thesis"} <= set(argv)
     assert argv[-1] == "chapmk-run.tex"
     assert not any(a.startswith(("-fmt", "--undump")) for a in mk.pdflatex("x", "j", tmp_path))
-    fb = mk.format_build(tmp_path / "pre.tex", "pre", tmp_path)
+    fb = mk.format_build(tmp_path / "fmt/pre.tex", "pre", tmp_path, tmp_path / "shadow")
     assert fb[:3] == ["pdflatex", "--max-print-line=10000", "-ini"]
-    assert fb[-2:] == ["mylatexformat.ltx", tex_path(tmp_path / "pre.tex")]
+    assert fb[-2:] == ["mylatexformat.ltx", "../fmt/pre.tex"]
     assert mk.biber("t", tmp_path) == TeXLive().biber("t", tmp_path)
     assert mk.environment(1, {}) == TeXLive().environment(1, {})
     src = Path("/doc")
