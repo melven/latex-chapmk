@@ -901,10 +901,14 @@ asserts the compiled units and reasons from the report (`tests/scenarios/`).
 | T19/T19b | stale build files in the source directory; alternating latexmk and chapmk | ignored; both correct |
 | T20 | a chapter split into two includes | one compilation unit; running heads correct |
 
-Further scenarios cover the review's robustness and edge cases (`test_edge_cases.py`,
-`test_robustness.py`: local packages, list files of other packages, upgrades, running heads,
-primitive marks, shared eqparbox tags, format state, interrupted commits, tool errors) and the
-picture cache (`test_picture_cache.py`).
+Further scenarios, one file per topic in `tests/scenarios/`: parallel runs and prediction
+(`test_parallel.py`), state crossing unit boundaries (`test_cross_unit_state.py`: running heads,
+primitive marks, anchors, switches left open, run-time page numbering), stale inputs
+(`test_stale_inputs.py`: local packages, upgrades), format state and the first page
+(`test_format_state.py`), list files (`test_lists.py`), packages (`test_packages.py`: eqparbox,
+cleveref, mparhack, makeidx, full-mode packages), includes (`test_includes.py`), page labels
+(`test_page_labels.py`), robustness (`test_robustness.py`: interrupted commits, signals, tool
+errors) and the picture cache (`test_picture_cache.py`).
 
 ### 8.3 Unit, property and acceptance tests
 
