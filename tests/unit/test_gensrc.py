@@ -37,7 +37,8 @@ def test_format_source(tmp_path: Path) -> None:
     )
     assert lines[1] == "\\usepackage{tikz}\n"
     # probes of the state a format cannot keep (S13), then the end of the dump
-    for probe in ("chapmk-pdf-objects:", "chapmk-pdf-colorstacks:", "chapmk-pdf-unrecorded:"):
+    probes = ("chapmk-pdf-objects:", "chapmk-pdf-colorstacks:", "chapmk-pdf-unrecorded:")
+    for probe in (*probes, "chapmk-file-written:"):
         assert probe in lines[-1]
     # the catcode of @ the preamble leaves, for the runs (sweep: theo543)
     assert "\\csname chapmk@atcatcode\\endcsname{\\the\\catcode64}" in lines[-1]

@@ -241,8 +241,10 @@ def test_catcode_of_at_after_the_preamble(
 
 def test_file_written_in_the_preamble(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """A file written in the preamble (filecontents) and read by a unit: mylatexformat
-    postpones \\openout, so the format build fails and the build falls back to full mode;
-    full mode finds the file in its output directory (as latexmk in the source directory)."""
+    postpones \\openout, so the file would be empty in the runs; the format is rejected and
+    the build falls back to full mode; full mode finds the file in its output directory (as
+    latexmk in the source directory). The parser of \\openout keeps filecontents' stream
+    number in \\reserved@c (sweep: osmartormena)."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "main.tex").write_text(
@@ -253,7 +255,7 @@ def test_file_written_in_the_preamble(tmp_path: Path, capsys: pytest.CaptureFixt
     (src / "a.tex").write_text("\\chapter{A}\\input{data} Text a.\n")
     (src / "b.tex").write_text("\\chapter{B}Text b.\n")
     rep = checked(src, capsys)
-    assert rep["mode"] == "full" and "format build failed" in rep["reason"], rep
+    assert rep["mode"] == "full" and "writes and closes a file (data.tex" in rep["reason"], rep
     assert not (src / "data.tex").exists()  # written into the build directory only (F11)
 
 

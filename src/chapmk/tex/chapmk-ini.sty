@@ -164,10 +164,19 @@
 % is another).
 \ifcsname chapmk@formatbuild\endcsname\ifdefined\MYLATEX@opens
   \def\openout{\afterassignment\chapmk@oo@num\count@=}
-  \def\chapmk@oo@num{\edef\chapmk@oo@stream{\the\count@}%
-    \@ifnextchar={\chapmk@oo@eq}{\chapmk@oo@start}}
+  % not \@ifnextchar: it sets \reserved@a..\reserved@d, and filecontents keeps its stream in
+  % \reserved@c (sweep: osmartormena)
+  \def\chapmk@oo@peek#1{\let\chapmk@oo@then#1\futurelet\chapmk@tok\chapmk@oo@skip}
+  \def\chapmk@oo@skip{\ifx\chapmk@tok\@sptoken\expandafter\chapmk@oo@sp
+    \else\expandafter\chapmk@oo@then\fi}
+  \begingroup\def\:{\endgroup\def\chapmk@oo@sp}\: {\futurelet\chapmk@tok\chapmk@oo@skip}
+  \def\chapmk@oo@num{\edef\chapmk@oo@stream{\the\count@}\chapmk@oo@peek\chapmk@oo@eqtest}
+  \def\chapmk@oo@eqtest{\ifx\chapmk@tok=\expandafter\chapmk@oo@eq
+    \else\expandafter\chapmk@oo@start\fi}
   \def\chapmk@oo@eq={\chapmk@oo@start}
-  \def\chapmk@oo@start{\def\chapmk@oo@name{}\@ifnextchar\bgroup\chapmk@oo@braced\chapmk@oo@next}
+  \def\chapmk@oo@start{\def\chapmk@oo@name{}\chapmk@oo@peek\chapmk@oo@bracetest}
+  \def\chapmk@oo@bracetest{\ifx\chapmk@tok\bgroup\expandafter\chapmk@oo@braced
+    \else\expandafter\chapmk@oo@next\fi}
   \def\chapmk@oo@braced#1{\def\chapmk@oo@name{{#1}}\chapmk@oo@done}
   \def\chapmk@oo@next{\futurelet\chapmk@tok\chapmk@oo@test}
   \def\chapmk@oo@test{\let\chapmk@oo@do\chapmk@oo@done
@@ -182,7 +191,20 @@
   \def\chapmk@oo@expand{\expandafter\chapmk@oo@next}
   \def\chapmk@oo@done{\edef\chapmk@tmp{\noexpand\g@addto@macro\noexpand\MYLATEX@opens
     {\noexpand\immediate\noexpand\openout\chapmk@oo@stream=%
-     \unexpanded\expandafter{\chapmk@oo@name}\noexpand\relax}}\chapmk@tmp}
+     \unexpanded\expandafter{\chapmk@oo@name}\noexpand\relax}}\chapmk@tmp
+    \expandafter\xdef\csname chapmk@oo@s\chapmk@oo@stream\endcsname
+      {\detokenize\expandafter{\chapmk@oo@name}}}
+  % A file the format part writes and closes (filecontents) is not written: its open is
+  % postponed to the runs, which would start it empty. \closeout of such a stream records the
+  % file (\chapmk@written), and the format is rejected (gensrc.format_source,
+  % fmt._lost_state). Other streams are not open in the format part: nothing to close.
+  % mylatexformat's \MYLATEX@cleanup (\endofdump) restores the primitive.
+  \let\chapmk@co@orig\closeout
+  \def\closeout{\afterassignment\chapmk@co@num\count@=}
+  \def\chapmk@co@num{\ifcsname chapmk@oo@s\the\count@\endcsname
+    \ifdefined\chapmk@written\else
+      \xdef\chapmk@written{\csname chapmk@oo@s\the\count@\endcsname}\fi\fi}
+  \g@addto@macro\MYLATEX@cleanup{\let\closeout\chapmk@co@orig}
 \fi\fi
 
 % S13: nodes that the format part leaves on the main vertical list are not dumped (e.g. the

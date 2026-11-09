@@ -102,6 +102,10 @@ def _lost_state(log: str) -> str | None:
     m = re.search(r"chapmk-pdf-unrecorded:(\S+)", log)
     if m:
         return f"calls \\{m.group(1)} without a braced argument"
+    m = re.search(r"chapmk-file-written:(.*)", log)
+    if m:
+        name = m.group(1).strip().strip('"').replace("\\jobname ", "\\jobname")
+        return f"writes and closes a file ({name}, e.g. with filecontents)"
     return None
 
 

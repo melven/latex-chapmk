@@ -45,6 +45,9 @@ def format_source(analysis: Analysis) -> str:
         "\\the\\numexpr\\pdfcolorstackinit direct{}\\relax}\\fi"
         "\\ifcsname chapmk@pdfunrecorded\\endcsname\\typeout{chapmk-pdf-unrecorded:"
         "\\csname chapmk@pdfunrecorded\\endcsname}\\fi"
+        # a file the format part writes and closes (filecontents): chapmk-ini.sty
+        "\\ifcsname chapmk@written\\endcsname\\typeout{chapmk-file-written:"
+        "\\csname chapmk@written\\endcsname}\\fi"
         # S13: nodes left on the main vertical list go into a dumped box (chapmk-ini.sty);
         # \csname: the preamble may leave @ "other", and \chapmk@capturemvl would be \chapmk
         # followed by text
