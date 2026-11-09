@@ -86,6 +86,16 @@ def test_open_conditionals() -> None:
         "\\iftoggle{t}{a}{b}\n",  # etoolbox command, not a conditional
     ]
     assert open_conditional_at_line_starts(lines) == [0, 0, 0, 3, 3, 3, 0]
+    # conditionals of packages (iftex's \\ifpdf, D1 sweep: hyperxmp inside it), definitions
+    lines = [
+        "\\let\\ifmine\\iffalse\\def\\ifother{x}\n",
+        "\\ifpdf\n",
+        "  \\usepackage{hyperxmp}\n",
+        "\\else\\ifoot[a]{b}\n",
+        "\\fi\n",
+        "x\n",
+    ]
+    assert open_conditional_at_line_starts(lines) == [0, 0, 2, 2, 2, 0]
 
 
 def test_text_lines_only_newlines() -> None:
