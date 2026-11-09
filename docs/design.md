@@ -47,10 +47,12 @@ a plain full build (§6.14). `chapmk check` compares a build with a plain full b
   last page with the run's page count and job name; user decision, sweep D1), and `pdfx`
   (PDF/A: writes its XMP file and PDF objects in the preamble, which a format cannot keep;
   user decision, issue #78) (full builds with
-  a warning; one table, `facts.UNSUPPORTED_PACKAGES`, for the preamble scan and the runtime
-  check). `cleveref` is supported (S16).
+  a warning; one table, `facts.UNSUPPORTED_PACKAGES` with each package's reason, for the
+  preamble scan and the runtime check). `cleveref` is supported (S16).
 - biblatex with another backend than biber, classic BibTeX, biblatex refsections.
 - hyperref without the `bookmark` package (the outline comes from bookmark's records).
+  These and BibTeX are entries of the other tables in `facts.py` (`REQUIRED_COMPANIONS`,
+  `UNSUPPORTED_SOURCE`, `UNSUPPORTED_AUX`).
 
 ---
 
