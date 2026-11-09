@@ -115,6 +115,9 @@ Details: [docs/design.md](https://github.com/melven/latex-chapmk/blob/main/docs/
 - Dates (`\today`, PDF dates) are fixed at the first build. The merged PDF is larger than a
   plain one (fonts per run): use `chapmk build --full` for the final version.
 - chapmk uses one of TeX's 16 write streams.
+- A font is loaded at its first use in a run, so a run that excludes earlier chapters loads
+  it later. Inside a TikZ picture this can change SyncTeX records, and in rare cases move a
+  link target by a fraction of a point; nothing visible. `chapmk check` reports it.
 
 ## Troubleshooting
 
