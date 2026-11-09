@@ -1,0 +1,20 @@
+% S19: state a unit leaves for the glue after it (\@currentHref, \@currentlabel,
+% \@currentcounter, nameref's \@currentlabelname). KOMA's listof=totoc adds the LoF
+% heading to the ToC with \addcontentsline, which takes its target from \@currentHref; so
+% does a manual \addcontentsline. Both stand after the last \include.
+\documentclass[listof=totoc]{scrbook}
+\usepackage[T1]{fontenc}
+\usepackage{lipsum}
+\usepackage{hyperref}
+\usepackage{bookmark}
+\begin{document}
+\tableofcontents
+\include{a}
+\include{b}
+\include{c}
+\listoffigures
+\cleardoublepage
+\addcontentsline{toc}{chapter}{REFERENCES}
+\label{refs}
+REFERENCES (label \ref{refs}, ``\nameref{refs}'' after \texttt{c}).
+\end{document}
