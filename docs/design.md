@@ -727,7 +727,6 @@ with `-v` (C9).
 chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [--print-log] [--build-dir DIR] [--out-dir DIR] [--keep-runs] [--no-wait] [-v]
 chapmk check [MAIN] [build options]           # = build --check
 chapmk clean [MAIN] [--no-wait]
-chapmk graph [MAIN] [--format text|dot|json]
 ```
 
 - **Exit codes:** 0 ok; 1 TeX error or `check` difference; 2 other error (configuration,
@@ -737,8 +736,6 @@ chapmk graph [MAIN] [--format text|dot|json]
   wall time per build phase.
 - **`check`** builds the `--full` reference into `check/` with the state's epoch and a fresh
   picture cache, then compares (§3.3).
-- **`graph`** shows compilation units, glue, global units, imports by exporter and pending
-  reasons (`--format dot`: Graphviz).
 - **`clean`** removes the build directory, only if it carries the build-directory marker.
 - **One process per build directory** (C6): `build`, `check` and `clean` hold an OS file lock
   on `<build>/lock`, released also when the process is killed. A second process waits with a
