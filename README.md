@@ -41,7 +41,6 @@ The LaTeX packages chapmk uses are part of the Python package; nothing is instal
 ```
 chapmk build [MAIN] [-j N] [--full] [--check] [--report FILE] [--print-log] [-v]
 chapmk check [MAIN]                            # build, plain full build, compare
-chapmk graph [MAIN] [--format text|dot|json]   # compilation units and dependencies
 chapmk clean [MAIN]
 ```
 

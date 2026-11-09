@@ -1,4 +1,4 @@
-"""Command-line interface (design §6.15): ``build``, ``check``, ``clean``, ``graph``."""
+"""Command-line interface (design §6.15): ``build``, ``check``, ``clean``."""
 
 from __future__ import annotations
 
@@ -112,9 +112,6 @@ def _parser() -> argparse.ArgumentParser:
     c = sub.add_parser("clean", help="remove the build directory")
     _main_arg(c)
     c.add_argument("--no-wait", action="store_true", help=_NO_WAIT)
-    g = sub.add_parser("graph", help="compilation units and dependencies of the last build")
-    _main_arg(g)
-    g.add_argument("--format", choices=("text", "dot", "json"), default="text")
     return p
 
 
@@ -274,21 +271,6 @@ def cmd_clean(args: argparse.Namespace, cwd: Path) -> int:
     return 0
 
 
-def cmd_graph(args: argparse.Namespace, cwd: Path) -> int:
-    from chapmk.graph import dependency_graph, to_dot, to_json, to_text
-
-    config = load_config(args.main, cwd, build_dir=args.build_dir)
-    analysis = analyse(config)
-    layout = make_layout(config, analysis)
-    try:
-        g = dependency_graph(analysis, layout, config)
-    except FileNotFoundError as err:
-        raise ConfigError(str(err)) from err
-    render = {"text": to_text, "dot": to_dot, "json": to_json}[args.format]
-    sys.stdout.write(render(g))
-    return 0
-
-
 class _Terminated(BaseException):
     """SIGTERM (e.g. an editor stopping a build on the next save)."""
 
@@ -320,8 +302,6 @@ def _main(args: argparse.Namespace, workdir: Path) -> int:
     try:
         if args.command in ("build", "check"):
             return cmd_build(args, workdir)
-        if args.command == "graph":
-            return cmd_graph(args, workdir)
         return cmd_clean(args, workdir)
     except ChapmkError as err:
         _say(f"error: {err}")
