@@ -292,6 +292,10 @@ options are part of `pre` (`draft` freezes `\ifdraft`).
   sets up the math sizes and loads the fonts before the `\begin{document}` hooks, which may
   redeclare fonts (`mathptmx`, `mathpazo`: the AMS symbol fonts), while a plain build sets
   them up at first use. The format source switches the preloading off (sweep B2).
+- mylatexformat reads the preamble after its own `\makeatletter` and ends the dump with
+  `\makeatother`; a plain build reads it with `@` "other" and keeps an unclosed
+  `\makeatletter` until the body. The format source starts with `@` "other" and stores the
+  catcode of `@` before the dump; the run main sets it again after `\usepackage{chapmk}`.
 - Detected and rejected (format build fails → full mode with the reason): immediate PDF
   objects (pdfTeX's `dangling objects discarded`, e.g. `cmap`), colour stacks
   (`\pdfcolorstackinit`), catalog calls without a braced argument, form xobjects and images.

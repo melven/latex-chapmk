@@ -32,13 +32,15 @@ def test_format_source(tmp_path: Path) -> None:
     lines = split_lines(src)
     assert len(lines) == a.split_line  # lines 1..s-1 (numbers kept), then the probes
     assert lines[0] == (
-        "\\expandafter\\def\\csname chapmk@formatbuild\\endcsname{}"
+        "\\catcode64=12 \\expandafter\\def\\csname chapmk@formatbuild\\endcsname{}"
         "\\RequirePackage{chapmk-ini}\\documentclass{book}\n"
     )
     assert lines[1] == "\\usepackage{tikz}\n"
     # probes of the state a format cannot keep (S13), then the end of the dump
     for probe in ("chapmk-pdf-objects:", "chapmk-pdf-colorstacks:", "chapmk-pdf-unrecorded:"):
         assert probe in lines[-1]
+    # the catcode of @ the preamble leaves, for the runs (sweep: theo543)
+    assert "\\csname chapmk@atcatcode\\endcsname{\\the\\catcode64}" in lines[-1]
     # mylatexformat's font preloading off (sweep B2: fonts as in a plain build)
     assert "\\csname MYLATEX@fontpreloading\\endcsname\\relax\\endofdump" in lines[-1]
     assert src.endswith("\\endofdump\n")
@@ -49,7 +51,10 @@ def test_run_main_keeps_line_numbers(tmp_path: Path) -> None:
     lines = split_lines(run_main(a, ["a"]))
     assert len(lines) == len(a.lines)
     assert lines[0] == "\n"
-    assert lines[1] == "\\csname endofdump\\endcsname\\usepackage{chapmk}\\includeonly{a}\n"
+    assert lines[1] == (
+        "\\csname endofdump\\endcsname\\usepackage{chapmk}"
+        "\\catcode64=\\csname chapmk@atcatcode\\endcsname\\relax\\includeonly{a}\n"
+    )
     assert lines[2:] == list(a.lines[2:])  # the split statement starts on a fresh line
     assert "\\includeonly{}" in run_main(a, [])
     assert "includeonly" not in run_main(a, None)

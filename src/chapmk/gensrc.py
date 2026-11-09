@@ -28,9 +28,11 @@ def format_source(analysis: Analysis) -> str:
     lines = list(analysis.lines[: analysis.split_line - 1])
     if not lines:
         lines = [nl]
-    # \chapmk@formatbuild: chapmk-ini records what a format does not keep (S13)
+    # \chapmk@formatbuild: chapmk-ini records what a format does not keep (S13);
+    # \catcode64=12: mylatexformat reads the preamble after its own \makeatletter, a plain
+    # build with @ "other" (sweep: theo543)
     lines[0] = (
-        "\\expandafter\\def\\csname chapmk@formatbuild\\endcsname{}"
+        "\\catcode64=12 \\expandafter\\def\\csname chapmk@formatbuild\\endcsname{}"
         f"\\RequirePackage{{{INI_PACKAGE}}}{lines[0]}"
     )
     if not lines[-1].endswith("\n"):
@@ -44,9 +46,12 @@ def format_source(analysis: Analysis) -> str:
         "\\ifcsname chapmk@pdfunrecorded\\endcsname\\typeout{chapmk-pdf-unrecorded:"
         "\\csname chapmk@pdfunrecorded\\endcsname}\\fi"
         # S13: nodes left on the main vertical list go into a dumped box (chapmk-ini.sty);
-        # \csname: the preamble may end with \makeatother (mylatexformat reads it with @ a
-        # letter), and \chapmk@capturemvl would be \chapmk followed by text
+        # \csname: the preamble may leave @ "other", and \chapmk@capturemvl would be \chapmk
+        # followed by text
         "\\ifcsname chapmk@capturemvl\\endcsname\\csname chapmk@capturemvl\\endcsname\\fi"
+        # the catcode of @ the preamble leaves (an unclosed \makeatletter): \endofdump does
+        # \makeatother before the dump; run_main sets it again (sweep: theo543)
+        "\\expandafter\\xdef\\csname chapmk@atcatcode\\endcsname{\\the\\catcode64}"
         # sweep B2: mylatexformat typesets text and math in all sizes at \endofdump, which
         # sets up the math sizes and loads the fonts before the \begin{document} hooks that
         # redeclare fonts (mathptmx, mathpazo: the AMS symbol fonts); a plain build sets
@@ -67,7 +72,8 @@ def run_main(
     Lines ``1..s-1`` become empty lines (they are in the format). Line ``s-1`` gets
     ``\\csname endofdump\\endcsname``, the driver parameters for chapmk.sty (extra run-local
     register names ``deny_names``, config ``[state] ignore``; the list files ``list_suffixes`` that
-    get unit markers), ``\\usepackage{chapmk}`` and, if
+    get unit markers), ``\\usepackage{chapmk}``, the catcode of ``@`` the preamble's format part
+    left (stored by :func:`format_source`) and, if
     ``selection`` is not ``None``, ``\\includeonly{...}`` (an empty selection gives a glue-only
     run). The rest is verbatim, so line numbers equal the user's main file.
     """
@@ -81,6 +87,7 @@ def run_main(
         exts = ",".join(s.lstrip(".") for s in list_suffixes)
         prefix += f"\\expandafter\\def\\csname chapmk@listexts\\endcsname{{{exts}}}"
     prefix += f"\\usepackage{{{RUNTIME_PACKAGE}}}"
+    prefix += "\\catcode64=\\csname chapmk@atcatcode\\endcsname\\relax"
     if selection is not None:
         prefix += "\\includeonly{" + ",".join(selection) + "}"
     # on its own line (s-1, empty here): the statement at line s may span several lines, and

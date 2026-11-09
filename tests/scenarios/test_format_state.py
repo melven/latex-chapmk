@@ -216,6 +216,29 @@ def test_fonts_are_set_up_after_the_begin_document_hooks(
     assert checked(src, capsys)["compiled"] == ["b"]
 
 
+@pytest.mark.parametrize(
+    ("preamble", "body"),
+    [
+        # an unclosed \makeatletter: the body reads \@author (sweep: theo543)
+        ("\\author{Ada}\\makeatletter", "By \\@author."),
+        # none: \@ is LaTeX's end-of-sentence command in the body
+        ("", "NASA\\@. Text."),
+    ],
+)
+def test_catcode_of_at_after_the_preamble(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], preamble: str, body: str
+) -> None:
+    """The runs continue with the catcode of @ the preamble left, as a plain build does:
+    mylatexformat reads the preamble after its own \\makeatletter and ends the dump with
+    \\makeatother."""
+    src = tmp_path / "src"
+    _format_state_document(src, preamble)
+    edit(src / "a.tex", "Text $x^2", f"{body} Text $x^2")
+    assert checked(src, capsys)["mode"] == "cold"
+    edit(src / "b.tex", "Text b.", "Txet b.")
+    assert checked(src, capsys)["compiled"] == ["b"]
+
+
 def test_file_written_in_the_preamble(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """A file written in the preamble (filecontents) and read by a unit: mylatexformat
     postpones \\openout, so the format build fails and the build falls back to full mode;
