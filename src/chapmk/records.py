@@ -209,6 +209,11 @@ class RunRecords:
     #: ``\\marks`` registers outside the kernel's classes that hold marks (``\\mark`` is 0;
     #: ``K primitive <n>``): they cannot be restored for excluded units
     primitive_marks: set[int] = field(default_factory=set)
+    #: segments that set a new current anchor (``H`` records, S19)
+    anchor_sets: set[str] = field(default_factory=set)
+    #: per segment: ``(command, line)`` of each ``\\addcontentsline``/``\\label`` that used the
+    #: anchor the segment started with, i.e. one of an earlier segment (``R`` records, S19)
+    anchor_reads: dict[str, list[tuple[str, int]]] = field(default_factory=dict)
 
     def reset_registers(self, counter: str) -> set[int]:
         """Registers of the counters reset, directly or transitively, when ``counter`` is
@@ -284,6 +289,11 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
             if not what:
                 raise ValueError(f"G record without a command: {line.strip()!r}")
             recs.global_effects.setdefault(seg, set()).add(what)
+        elif line.startswith("H "):
+            recs.anchor_sets.add(line[2:].strip())
+        elif line.startswith("R "):
+            seg, command, number = line[2:].split()
+            recs.anchor_reads.setdefault(seg, []).append((command, int(number)))
         elif line.startswith("O "):
             seg, _, flag = line[2:].partition(" ")
             recs.openright[seg] = flag.strip() == "1"

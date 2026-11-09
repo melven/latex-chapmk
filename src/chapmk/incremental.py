@@ -97,9 +97,9 @@ from chapmk.records import (
 )
 from chapmk.runner import RunSpec, prepare_run_dir, run_batch
 from chapmk.schedule import Schedule
-from chapmk.segment import is_unit, position, unit_id
+from chapmk.segment import is_glue, is_unit, position, unit_id
 from chapmk.shadow import sync_project_shadow
-from chapmk.sources import UnitSources, load_lint_cache, save_lint_cache
+from chapmk.sources import UnitSources, anchor_owners, load_lint_cache, save_lint_cache
 from chapmk.state import CorruptStateError, State, UnitInputs, load_state
 from chapmk.texdist import TexDistribution
 from chapmk.timing import Timings
@@ -179,6 +179,36 @@ def _global_files(ctx: Context, run: RunView, attributed: set[str]) -> dict[str,
             if (ctx.analysis.source_dir / m.group(1)).is_file():
                 names.add(Path(m.group(1)).as_posix())
     return _hashes(ctx, names - attributed)
+
+
+def _store_anchors(state: State, recs: RunRecords, segs: set[str]) -> None:
+    """S19: whether each of ``segs`` sets an anchor and which of its commands used an earlier
+    segment's anchor, from ``recs`` (the run that committed it; the glue: any run)."""
+    for seg in segs:
+        state.anchors[seg] = seg in recs.anchor_sets
+        reads = recs.anchor_reads.get(seg)
+        if reads:
+            state.anchor_reads[seg] = reads
+        else:
+            state.anchor_reads.pop(seg, None)
+
+
+def _anchor_warning(a: Analysis, owner: str, reader: str, command: str, line: int) -> str:
+    """The warning for a command that used the anchor of ``owner`` (S19), with the fix."""
+    where = f"{a.main.name if is_glue(reader) else a.include_of(reader).name + '.tex'}:{line}"
+    arg = a.include_of(owner).arg
+    if command == "addcontentsline":
+        return (
+            f"{where}: \\addcontentsline has no anchor of its own: its ToC entry and bookmark "
+            f"link to the last anchor in {arg}, also in a plain build (with hyperref, KOMA's "
+            f"\\chapter* and listof=totoc set none); {arg} is compiled in every run. Put "
+            "\\phantomsection before it (before a new page: \\cleardoublepage\\phantomsection)"
+        )
+    return (
+        f"{where}: \\{command} takes its number and target from the last numbered item in "
+        f"{arg} (none before it in its own part), also in a plain build; {arg} is compiled "
+        "in every run. Put it after the item it refers to"
+    )
 
 
 def _check_runtime_support(run: RunView, fmt: FormatInfo) -> None:
@@ -337,10 +367,12 @@ class Fixpoint:
                 self.register_names[reg] = f"marks {name}"
         t.lap("records")
         new_global: dict[str, set[str]] = {}  # unit -> units compiled in its run
+        owners_before = set(anchor_owners(a, state))
         with committing(canon, state, [s.name for s in specs]):  # journal (C7)
             for view, recs, compiled in zip(views, all_recs, compiled_by_run, strict=True):
                 commit_run(a, ctx.layout, state, view, compiled)
                 self._attribute(view, compiled)
+                _store_anchors(state, recs, compiled)
                 for seg in compiled:
                     if seg in recs.openright:
                         state.openright[seg] = recs.openright[seg]
@@ -351,6 +383,12 @@ class Fixpoint:
                         state.runtime_global[seg] = sorted(effects)
                     elif seg in state.runtime_global:
                         del state.runtime_global[seg]
+            _store_anchors(state, all_recs[-1], set(a.glue_segments))  # glue: every run
+            owners = anchor_owners(a, state)
+            for owner, uses in owners.items():
+                for reader, command, line in uses:
+                    self._warn(_anchor_warning(a, owner, reader, command, line))
+            new_owners = sorted(set(owners) - owners_before, key=position)
             exported = self._pictures(views, compiled_by_run, pre)
             t.lap("commit")
             lists_complete = commit_lists(a, ctx.layout, state, views)
@@ -404,6 +442,16 @@ class Fixpoint:
                         dirty_after.setdefault(seg, []).append(
                             f"after {a.include_of(g).arg}, which changes {what} at run time"
                         )
+            for owner in new_owners:
+                # a later segment uses its anchor: segments committed from runs without it
+                # (the glue: the last run) used an older anchor
+                with_o = next((c for c in compiled_by_run if owner in c), set())
+                why = f"after {a.include_of(owner).arg}, whose anchor a later part uses"
+                for seg in a.unit_segments[a.unit_segments.index(owner) + 1 :]:
+                    if seg not in with_o:
+                        dirty_after.setdefault(seg, []).append(why)
+                if owner not in compiled_by_run[-1]:
+                    glue_after = glue_after or why
             for seg, n in sorted(exported.items()):
                 # the run typeset these pictures inline; embedded, the result equals externalize
                 if is_unit(seg):
