@@ -153,6 +153,38 @@
     tex_pdfnames:D,tex_pdftrailer:D\do{\expandafter\chapmk@pdfwrap\expandafter{\chapmk@tmp}}
 \fi
 
+% S1, issue #78: mylatexformat postpones \openout in the format part (the runs replay
+% \MYLATEX@opens at their start), but takes the stream and the file name up to the next
+% space (\def\openout#1 {...}). After a control word there is none: nomencl's
+% \openout\@nomenclaturefile=\jobname\@outputfileextension ran on into the following
+% preamble code (at a blank line: "Paragraph ended before \openout was complete"). Here the
+% arguments are read as TeX reads them: a <number>, an optional =, then a file name up to a
+% space or the first unexpandable token that is not a letter or other character (a braced
+% name whole); macros in it are expanded as TeX does, except \jobname (the runs' job name
+% is another).
+\ifcsname chapmk@formatbuild\endcsname\ifdefined\MYLATEX@opens
+  \def\openout{\afterassignment\chapmk@oo@num\count@=}
+  \def\chapmk@oo@num{\edef\chapmk@oo@stream{\the\count@}%
+    \@ifnextchar={\chapmk@oo@eq}{\chapmk@oo@start}}
+  \def\chapmk@oo@eq={\chapmk@oo@start}
+  \def\chapmk@oo@start{\def\chapmk@oo@name{}\@ifnextchar\bgroup\chapmk@oo@braced\chapmk@oo@next}
+  \def\chapmk@oo@braced#1{\def\chapmk@oo@name{{#1}}\chapmk@oo@done}
+  \def\chapmk@oo@next{\futurelet\chapmk@tok\chapmk@oo@test}
+  \def\chapmk@oo@test{\let\chapmk@oo@do\chapmk@oo@done
+    \ifx\chapmk@tok\jobname \let\chapmk@oo@do\chapmk@oo@add
+    \else\expandafter\ifx\noexpand\chapmk@tok\chapmk@tok % unexpandable
+      \ifcat\noexpand\chapmk@tok a\let\chapmk@oo@do\chapmk@oo@add\fi
+      \ifcat\noexpand\chapmk@tok 1\let\chapmk@oo@do\chapmk@oo@add\fi
+    \else\let\chapmk@oo@do\chapmk@oo@expand\fi\fi
+    \chapmk@oo@do}
+  \def\chapmk@oo@add#1{\expandafter\def\expandafter\chapmk@oo@name\expandafter
+    {\chapmk@oo@name#1}\chapmk@oo@next}
+  \def\chapmk@oo@expand{\expandafter\chapmk@oo@next}
+  \def\chapmk@oo@done{\edef\chapmk@tmp{\noexpand\g@addto@macro\noexpand\MYLATEX@opens
+    {\noexpand\immediate\noexpand\openout\chapmk@oo@stream=%
+     \unexpanded\expandafter{\chapmk@oo@name}\noexpand\relax}}\chapmk@tmp}
+\fi\fi
+
 % S13: nodes that the format part leaves on the main vertical list are not dumped (e.g. the
 % unmatched \pdfcolorstack 0 push {0 g 0 G} and the empty \write of xcolor: without them a
 % colour left open across a page break ends on that page). At the end of the format source

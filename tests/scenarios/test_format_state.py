@@ -255,3 +255,27 @@ def test_file_written_in_the_preamble(tmp_path: Path, capsys: pytest.CaptureFixt
     rep = checked(src, capsys)
     assert rep["mode"] == "full" and "format build failed" in rep["reason"], rep
     assert not (src / "data.tex").exists()  # written into the build directory only (F11)
+
+
+def test_open_write_stream_in_the_format_part(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """S1, issue #78: \\makenomenclature (nomencl opens \\jobname\\@outputfileextension: no space
+    after the file name) followed by a blank line, then a package. The format build reads the
+    stream and file name as TeX does (mylatexformat took them up to the next space: an error
+    here, else it moved the following code into the runs); the package is in the format and
+    the runs write the nomenclature through the replayed stream."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage{nomencl}\n\\makenomenclature\n\n"
+        "\\usepackage{xcolor}\n\\begin{document}\n\\include{a}\n\\include{b}\n"
+        "\\printnomenclature\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}Text a.\\nomenclature{$a$}{Alpha}\n")
+    (src / "b.tex").write_text("\\chapter{B}Text b.\\nomenclature{$b$}{Beta}\n")
+    assert checked(src, capsys)["mode"] == "cold"
+    fls = (src / ".chapmk" / "main" / "fmt" / "pre.fls").read_text()
+    assert "xcolor.sty" in fls
+    edit(src / "b.tex", "Text b.", "Txet b.")
+    assert checked(src, capsys)["compiled"] == ["b"]
