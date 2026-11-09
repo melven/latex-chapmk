@@ -1,5 +1,6 @@
 """Unit tests for merge_pdf.py helpers."""
 
+from pathlib import Path
 from typing import Any
 
 import pikepdf
@@ -60,3 +61,33 @@ def test_font_descriptors_of_figures() -> None:
         -212,
         519,
     ]
+
+
+XMP = (
+    b'<?xpacket begin="\xef\xbb\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?>\n'
+    b'<x:xmpmeta xmlns:x="adobe:ns:meta/">\n'
+    b' <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">\n'
+    b'  <rdf:Description rdf:about=""\n'
+    b'     xmlns:pdf="http://ns.adobe.com/pdf/1.3/">\n'
+    b"   <pdf:Producer></pdf:Producer>\n"
+    b"   <pdf:PDFVersion>1.7</pdf:PDFVersion>\n"
+    b"  </rdf:Description>\n </rdf:RDF>\n</x:xmpmeta>\n"
+    b'<?xpacket end="w"?>'
+)
+
+
+def test_xmp_metadata_and_version_are_kept(tmp_path: Path) -> None:
+    """D1 (sweep): the catalog run's XMP stream (hyperxmp, pdfx) is copied unchanged and the
+    merged file keeps that run's PDF version; pikepdf's default would rewrite the stream with
+    pdf:PDFVersion set to its own version (1.3)."""
+    from chapmk.merge_pdf import PageSource, merge_pdf
+
+    run = tmp_path / "r1.pdf"
+    pdf = pikepdf.new()
+    pdf.add_blank_page()
+    pdf.Root.Metadata = pdf.make_stream(XMP, Type=Name.Metadata, Subtype=Name.XML)
+    pdf.save(run, min_version="1.7", fix_metadata_version=False)
+    merge_pdf([PageSource(run, 0, 1, "1", check_label=False)], [], run, tmp_path / "m.pdf")
+    with pikepdf.open(tmp_path / "m.pdf") as merged:
+        assert merged.pdf_version == "1.7"
+        assert merged.Root.Metadata.read_bytes() == XMP
