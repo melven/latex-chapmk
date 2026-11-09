@@ -272,7 +272,12 @@ options are part of `pre` (`draft` freezes `\ifdraft`).
 
 #### 6.3.3 State a format does not keep (S13)
 
-- `\openout` calls (e.g. `\makenomenclature`) are replayed by mylatexformat (S1). A file the
+- `\openout` calls (e.g. `\makenomenclature`) are replayed by mylatexformat (S1). Its
+  replacement of `\openout` takes the stream and file name up to the next space, which current
+  nomencl does not leave (`\jobname\@outputfileextension`): the argument ran on into the
+  following preamble code (at a blank line: a TeX error). In format builds `chapmk-ini.sty`
+  reads them as TeX does instead (number, optional `=`, file name up to a space or an
+  unexpandable token; `\jobname` kept for the runs) and records the same replay. A file the
   preamble writes and closes (`filecontents`, `pdfx`'s XMP file) is never written in the format
   build: mylatexformat postpones the open. Such a format build fails, and the document is
   built in full mode (limitation, issue #78).
