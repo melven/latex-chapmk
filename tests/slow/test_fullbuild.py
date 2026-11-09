@@ -97,6 +97,7 @@ _MESSAGE = re.compile(r"^(?:(?:LaTeX|Package|Class) .*Warning|(?:Over|Under)full
 _SUMMARY = re.compile(
     r"Rerun|may have changed|There were (?:undefined references|multiply-defined labels)"
     r"|Some font shapes were not available|Size substitutions"
+    r"|Unused \\captionsetup"  # caption's check at \AtEndDocument
 )
 
 
