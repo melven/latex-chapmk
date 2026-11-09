@@ -974,6 +974,7 @@ Candidates for later:
 | One of TeX's 16 write streams used by chapmk.sty | Documented |
 | Dates fixed at the cold build (N4) | Documented; `chapmk clean` for a new date |
 | PDF features without merge rules (forms, optional content) | Catalog entries are copied with mapped page references; `check` compares the catalog |
+| A font is loaded where a run first uses it: a run that excludes the unit using it first loads it later, e.g. inside a TikZ picture, where the code that runs on first use (`.fd` files, microtype's settings) can leave zero-size nodes (sweep E2: SyncTeX records differ), and a tiny size difference of a tree scaled to the line width moves an anchor by up to 0.14 pt (sweep C2, 6ym6n) | Accepted (user decision, issue #78): invisible; replaying the fonts each unit loads first at excluded units would be costly for rare cases; `chapmk check` reports it |
 
 ---
 
