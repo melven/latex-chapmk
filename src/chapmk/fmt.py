@@ -40,13 +40,17 @@ class FormatInfo:
 
 def format_stamp(analysis: Analysis, dist_version: str) -> str:
     """Everything the format and the canonical state depend on (§6.3.1): the ``pre``
-    fingerprint (lines and inlined inputs), the split line, the distribution version,
-    chapmk-ini.sty, chapmk.sty and the driver version (record parsing, state semantics)."""
+    fingerprint (lines and inlined inputs), the split line, the generated format source
+    (probes, font preloading), the distribution version, chapmk-ini.sty, chapmk.sty and the
+    driver version (record parsing, state semantics)."""
     ini = (TEX_DIR / "chapmk-ini.sty").read_bytes()
     runtime = (TEX_DIR / "chapmk.sty").read_bytes()
     data = {
         "pre": analysis.fingerprints.pre,
         "split_line": analysis.split_line,
+        "source": hashlib.sha256(
+            format_source(analysis).encode("utf-8", "surrogateescape")
+        ).hexdigest(),
         "dist": dist_version,
         "ini": hashlib.sha256(ini).hexdigest(),
         # not in the format, but its records are the canonical state's: a change means cold
