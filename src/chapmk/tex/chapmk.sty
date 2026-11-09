@@ -223,26 +223,44 @@
     \ifx\chapmk@ef\@evenfoot\else\chapmk@grec{pagestyle}\fi\else\chapmk@grec{pagestyle}\fi
     \else\chapmk@grec{pagestyle}\fi\else\chapmk@grec{pagestyle}\fi}
 \def\chapmk@grec#1{\immediate\write\chapmk@rec{G \chapmk@seg\space#1}}
-% S19 (spike): anchors across segments. "H <seg>": the segment ends with another current
-% anchor (\@currentHref, \@currentlabel) than it started with. "R <seg> <command> <line>
-% <file>": \addcontentsline or \label used the anchor its segment started with, i.e. one
-% set in an earlier segment (e.g. KOMA's listof=totoc after the last \include).
+% anchors read across segments (S19). "R <seg> <command> <line>": \addcontentsline (with
+% hyperref: its link target) or \label (its number and target) used the anchor the segment
+% started with, i.e. one of an earlier segment, e.g. KOMA's listof=totoc after the last
+% \include (KOMA's \chapter* sets no anchor). Old means: the value is the one at the segment's
+% start (a float's local anchor reverts to it) and the segment created no anchor of that name
+% (\hyper@anchorstart) or no number of that counter (\refstepcounter): a name created again,
+% e.g. sections renumbered after KOMA's \chapter*, is the segment's own. "H <seg>": the
+% segment ends with an anchor or number of its own. The driver makes the unit global that
+% set the anchor a later segment uses.
 \def\chapmk@asnap{\global\let\chapmk@ahref\@currentHref
   \global\let\chapmk@alabel\@currentlabel\global\let\chapmk@acounter\@currentcounter}
-\def\chapmk@aend{\ifx\chapmk@ahref\@currentHref\ifx\chapmk@alabel\@currentlabel
-  \ifx\chapmk@acounter\@currentcounter\else\chapmk@arecH\fi\else\chapmk@arecH\fi
-  \else\chapmk@arecH\fi}
-\def\chapmk@arecH{\immediate\write\chapmk@rec{H \chapmk@seg}}
-\def\chapmk@aread#1{\ifx\chapmk@seg\chapmk@Gzero\else
-  \immediate\write\chapmk@rec{R \chapmk@seg\space#1 \the\inputlineno\space
-    [\meaning\chapmk@ahref][\meaning\@currentHref][\meaning\chapmk@alabel][\meaning\@currentlabel]}\fi}
-\def\chapmk@Gzero{G0}
-\AddToHook{cmd/addcontentsline/before}{%
-  \ifx\chapmk@ahref\@currentHref\chapmk@aread{addcontentsline}\fi}
+% names created in the current segment
+\def\chapmk@anew#1{\expandafter\gdef\csname chapmk@an@\chapmk@seg @#1\endcsname{}}
+\def\chapmk@lnew{\expandafter\gdef\csname chapmk@ln@\chapmk@seg @\@currentcounter
+  @\detokenize\expandafter{\@currentlabel}\endcsname{}}
+\AddToHook{cmd/refstepcounter/after}{\chapmk@lnew}
+\def\chapmk@ahyper{\AddToHookWithArguments{cmd/hyper@anchorstart/before}{\chapmk@anew{##1}}%
+  \AddToHook{cmd/addcontentsline/before}{\chapmk@hrefold{\chapmk@aread{addcontentsline}}{}}}
+\AddToHook{begindocument/before}{\@ifpackageloaded{hyperref}{\chapmk@ahyper}{}}
+% \chapmk@hrefold{<true>}{<false>}: \@currentHref is old; \chapmk@labelold: \@currentlabel
+\def\chapmk@hrefold{\let\chapmk@tmpf\@secondoftwo
+  \ifx\chapmk@ahref\@currentHref
+    \ifcsname chapmk@an@\chapmk@seg @\@currentHref\endcsname\else
+      \let\chapmk@tmpf\@firstoftwo\fi\fi
+  \chapmk@tmpf}
+\def\chapmk@labelold{\let\chapmk@tmpf\@secondoftwo
+  \ifx\chapmk@alabel\@currentlabel\ifx\chapmk@acounter\@currentcounter
+    \ifcsname chapmk@ln@\chapmk@seg @\@currentcounter
+      @\detokenize\expandafter{\@currentlabel}\endcsname\else
+      \let\chapmk@tmpf\@firstoftwo\fi\fi\fi
+  \chapmk@tmpf}
 \AddToHook{cmd/label/before}{%
-  \ifx\chapmk@ahref\@currentHref\chapmk@aread{label}\else
-    \ifx\chapmk@alabel\@currentlabel\ifx\chapmk@acounter\@currentcounter
-      \chapmk@aread{label}\fi\fi\fi}
+  \chapmk@hrefold{\chapmk@aread{label}}{\chapmk@labelold{\chapmk@aread{label}}{}}}
+\def\chapmk@Gzero{G0}% G0: no earlier segment
+\def\chapmk@aread#1{\ifx\chapmk@seg\chapmk@Gzero\else
+  \immediate\write\chapmk@rec{R \chapmk@seg\space#1 \the\inputlineno}\fi}
+\def\chapmk@aend{\chapmk@hrefold{\chapmk@labelold{}{\chapmk@arecH}}{\chapmk@arecH}}
+\def\chapmk@arecH{\immediate\write\chapmk@rec{H \chapmk@seg}}
 
 % segment transitions
 \def\chapmk@glue@end{\chapmk@aend\chapmk@gexit@rec\chapmk@abs@rec\@mainaux}
