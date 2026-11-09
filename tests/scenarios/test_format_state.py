@@ -214,3 +214,21 @@ def test_fonts_are_set_up_after_the_begin_document_hooks(
     assert checked(src, capsys)["mode"] == "cold"
     edit(src / "b.tex", "Text b.", "Txet b.")
     assert checked(src, capsys)["compiled"] == ["b"]
+
+
+def test_file_written_in_the_preamble(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """A file written in the preamble (filecontents) and read by a unit: mylatexformat
+    postpones \\openout, so the format build fails and the build falls back to full mode;
+    full mode finds the file in its output directory (as latexmk in the source directory)."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\begin{filecontents}[overwrite]{data.tex}\n"
+        "Hello from the preamble file.\n\\end{filecontents}\n\\begin{document}\n"
+        "\\include{a}\n\\include{b}\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}\\input{data} Text a.\n")
+    (src / "b.tex").write_text("\\chapter{B}Text b.\n")
+    rep = checked(src, capsys)
+    assert rep["mode"] == "full" and "format build failed" in rep["reason"], rep
+    assert not (src / "data.tex").exists()  # written into the build directory only (F11)
