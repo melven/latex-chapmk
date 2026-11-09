@@ -209,9 +209,6 @@ class RunRecords:
     #: ``\\marks`` registers outside the kernel's classes that hold marks (``\\mark`` is 0;
     #: ``K primitive <n>``): they cannot be restored for excluded units
     primitive_marks: set[int] = field(default_factory=set)
-    #: pseudo registers of the carried state items -> (kind, name) (``C <id> <kind> <name>``,
-    #: S19; values: digests of the item's text, e.g. ``macro`` ``@currentHref``)
-    carried: dict[int, tuple[str, str]] = field(default_factory=dict)
 
     def reset_registers(self, counter: str) -> set[int]:
         """Registers of the counters reset, directly or transitively, when ``counter`` is
@@ -295,9 +292,6 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
         elif line.startswith("K "):
             reg, _, name = line[2:].partition(" ")
             recs.mark_classes[int(reg)] = name.strip()
-        elif line.startswith("C "):
-            reg, kind, name = line[2:].strip().split(" ", 2)
-            recs.carried[int(reg)] = (kind, name)
 
 
 def read_marked(path: Path) -> dict[str, list[str]]:

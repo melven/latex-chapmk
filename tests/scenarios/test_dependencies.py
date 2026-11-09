@@ -117,9 +117,8 @@ def test_t9_new_figure(thesis: Path, capsys: pytest.CaptureFixture[str]) -> None
     The original plan expected later units to stay clean; with hyperref they cannot: the
     caption steps \\Hy@linkcounter, which names the anchors of later captions and starred sections
     (``section*.N``); old pages of ch3 would keep anchor names that ch2 now uses. So ch3..appB
-    follow in a tail run, and only because of that register and the carried \\@currentHref
-    (S19) it numbers: ch2 ends with a starred section. (A tikzpicture would also step pgf's
-    picture id counter, which moves later remember-picture ids.)
+    follow in a tail run, and only because of that register. (A tikzpicture would also step
+    pgf's picture id counter, which moves later remember-picture ids.)
     """
     fig = (
         "\\begin{figure}[htb]\n  \\centering\n  \\rule{1cm}{0.3cm}\n"
@@ -131,7 +130,7 @@ def test_t9_new_figure(thesis: Path, capsys: pytest.CaptureFixture[str]) -> None
     sels = selections(rep)
     assert sels[0] == ["chapters/ch2"]
     assert run_with(rep, "chapters/ch3")["reasons"]["chapters/ch3"] == [
-        "entry state changed (\\Hy@linkcounter [hyperref], macro \\@currentHref)"
+        "entry state changed (\\Hy@linkcounter [hyperref])"
     ]
     assert [] in sels[1:]  # list of figures
 

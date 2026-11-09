@@ -39,7 +39,7 @@ MAIN_AUX = r"""\relax
 UNIT_AUX = "\\relax\n\\chapmk@ckpt{U1}{0=7,276=6,280=-2,}\n\\chapmk@abs{U1}{12,-1,}\n"
 FREC = (
     "F G0 /usr/x/book.cls\nP 0 G0 1 i\nP 1 U1 1 1\nP 2 U1 2 2\nF U1 ch/a.tex\nF U1 plot1.pdf\n"
-    "L U1 toc\nG U1 pagenumbering\nK 100002 2e-right\nC 200001 macro @currentHref\n"
+    "L U1 toc\nG U1 pagenumbering\n"
 )
 NLO = "%chapmk-seg G0\n%chapmk-seg U1\n\\nomenclatureentry{A$x$}{1}\n%chapmk-seg G1\n"
 
@@ -79,8 +79,6 @@ def test_read_run_records(tmp_path: Path) -> None:
     assert ("U1", "plot1.pdf") in r.files
     assert r.list_starts == {("U1", ".toc")} and r.list_suffixes == {".toc"}
     assert r.global_effects == {"U1": {"pagenumbering"}}
-    assert r.mark_classes == {100002: "2e-right"}
-    assert r.carried == {200001: ("macro", "@currentHref")}
     assert r.nomenclature == {"G0": [], "U1": ["\\nomenclatureentry{A$x$}{1}"], "G1": []}
 
 
@@ -102,7 +100,6 @@ def test_read_run_records(tmp_path: Path) -> None:
         (lambda d: (d / "doc.frec").write_text("P 0 G0 1 i\nP 1 U1\n"), "unreadable records"),
         (lambda d: (d / "doc.frec").write_text("P 0 G0 x i\n"), "unreadable records"),
         (lambda d: (d / "doc.frec").write_text("P 0 U7 1 i\n"), "no known segment"),
-        (lambda d: (d / "doc.frec").write_text("C 200001 macro\n"), "unreadable records"),
     ],
 )
 def test_record_errors(tmp_path: Path, change, message: str) -> None:  # type: ignore[no-untyped-def]

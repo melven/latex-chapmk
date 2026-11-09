@@ -335,8 +335,6 @@ class Fixpoint:
             )
             for reg, name in all_recs[0].mark_classes.items():
                 self.register_names[reg] = f"marks {name}"
-            for reg, (kind, name) in all_recs[0].carried.items():
-                self.register_names[reg] = f"{kind} \\{name}"
         t.lap("records")
         new_global: dict[str, set[str]] = {}  # unit -> units compiled in its run
         with committing(canon, state, [s.name for s in specs]):  # journal (C7)

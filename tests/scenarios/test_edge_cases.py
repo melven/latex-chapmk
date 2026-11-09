@@ -138,56 +138,6 @@ def test_running_heads_of_excluded_units(
     assert any(x.startswith("entry state changed (marks 2e-right") for x in b), rep["runs"]
 
 
-def test_state_a_unit_leaves_for_the_glue(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """S19 (sweep C1): after the last \\include, KOMA's listof=totoc and a manual
-    \\addcontentsline take their target from \\@currentHref, \\label its text from
-    \\@currentlabel and nameref's \\@currentlabelname, all left by the last unit. A run that
-    excludes it restores them from its checkpoint (carried state); they are part of the state
-    vector, so a changed \\@currentHref at the end of b recompiles c."""
-    src = tmp_path / "src"
-    src.mkdir()
-    (src / "main.tex").write_text(
-        "\\documentclass[listof=totoc]{scrbook}\n\\usepackage{lipsum}\n\\usepackage{hyperref}\n"
-        "\\usepackage{bookmark}\n\\begin{document}\n\\tableofcontents\n"
-        "\\include{a}\n\\include{b}\n\\include{c}\n\\listoffigures\n\\cleardoublepage\n"
-        "\\addcontentsline{toc}{chapter}{REFERENCES}\\label{refs}\n"
-        "REFERENCES (\\ref{refs}, \\nameref{refs}).\n\\end{document}\n"
-    )
-    for x in "abc":
-        (src / f"{x}.tex").write_text(
-            f"\\chapter{{Chap {x}}}\n\\section{{First of {x}}}\nText {x}.\n\\lipsum[1-3]\n"
-            f"\\begin{{figure}}[h]\\rule{{2cm}}{{1cm}}\\caption{{Fig {x}}}\\end{{figure}}\n"
-            f"\\section{{Last of {x}}}\n\\lipsum[4-6]\n"
-        )
-    assert checked(src, capsys)["mode"] == "cold"  # its parallel batch excludes c
-    edit(src / "a.tex", "Text a.", "Txet a.")
-    rep = checked(src, capsys)
-    assert selections(rep) == [["a"]], rep["runs"]
-    edit(src / "b.tex", "\\lipsum[4-6]\n", "\\lipsum[4-6]\n\\phantomsection\n")
-    rep = checked(src, capsys)
-    assert selections(rep)[0] == ["b"], rep["runs"]
-    assert any("macro \\@currentHref" in x for x in reasons(rep, "c")), rep["runs"]
-
-
-def test_contents_line_before_the_bibliography(
-    thesis: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """S19 (sweep C1): \\addcontentsline{toc}{chapter}{...} before \\printbibliography, after
-    the last \\include, links to the last unit's \\@currentHref; a typo in another chapter
-    (a run that excludes the last unit) keeps that target."""
-    edit(
-        thesis / "main.tex",
-        "\\printbibliography\n",
-        "\\cleardoublepage\n\\addcontentsline{toc}{chapter}{REFERENCES}\n\\printbibliography\n",
-    )
-    checked(thesis, capsys)
-    edit(thesis / "chapters" / "ch5.tex", "Further reading:", "Furhter reading:")
-    rep = checked(thesis, capsys)
-    assert selections(rep)[0] == ["chapters/ch5"], rep["runs"]
-
-
 def test_primitive_marks_fall_back(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """A primitive \\mark cannot be restored for excluded units: full mode with a warning."""
     src = tmp_path / "src"
