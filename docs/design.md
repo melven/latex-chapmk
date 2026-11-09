@@ -44,7 +44,9 @@ a plain full build (§6.14). `chapmk check` compares a build with a plain full b
   state vector does not carry: `acronym` (first use of an acronym, S17), `perpage`
   (counters reset per page through aux data and a macro posing as a counter; loaded by
   `footmisc`'s `perpage` option and `bigfoot`), and `hyperxmp` (writes its XMP packet on the
-  last page with the run's page count and job name; user decision, sweep D1) (full builds with
+  last page with the run's page count and job name; user decision, sweep D1), and `pdfx`
+  (PDF/A: writes its XMP file and PDF objects in the preamble, which a format cannot keep;
+  user decision, issue #78) (full builds with
   a warning; one table, `facts.UNSUPPORTED_PACKAGES`, for the preamble scan and the runtime
   check). `cleveref` is supported (S16).
 - biblatex with another backend than biber, classic BibTeX, biblatex refsections.
