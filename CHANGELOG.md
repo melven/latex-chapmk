@@ -25,8 +25,8 @@ First test release (formerly developed as `fastinc`).
   equals an externalized latexmk build.
 - `chapmk check`: compares the result with a plain full build (rendered pages, text, page
   labels, outline, links, SyncTeX in both directions).
-- `chapmk build --full`, `chapmk graph`, `chapmk clean`, `--report` (JSON with the reason each
-  unit was recompiled and the time per phase), `chapmk.toml` (docs/configuration.md).
+- `chapmk build --full`, `chapmk clean`, `--report` (JSON with the reason each unit was
+  recompiled and the time per phase), `chapmk.toml` (docs/configuration.md).
 - A lint for unit bodies that change macros or lengths outside groups, and hints for slow
   parts of the main file that could become `\include`s.
 - Robustness:

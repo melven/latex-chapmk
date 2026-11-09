@@ -70,11 +70,6 @@ def label_values(aux_lines: Iterable[list[str]]) -> dict[str, str]:
     return values
 
 
-def defined_labels(stmts: Iterable[str]) -> list[str]:
-    """``L:key`` of the ``\\newlabel`` statements among ``stmts``."""
-    return [f"L:{m.group(1)}" for m in map(_NEWLABEL.match, stmts) if m]
-
-
 def cite_values(bbl: Path, aux_statements: Iterable[str] = ()) -> dict[str, str]:
     """``C:key`` → hash of ``<position>:<entry block>`` of the key's ``.bbl`` entry and of
     the keyed biblatex aux statements naming the key (``\\abx@aux@number{..}{key}...``)."""
