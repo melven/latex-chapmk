@@ -58,7 +58,7 @@
 \def\chapmk@all{all}
 \def\chapmk@one#1{\ifx\chapmk@pfx\chapmk@all#1=\the\count#1,\else
   \ifnum\count#1=\chapmk@ref{#1} \else#1=\the\count#1,\fi\fi}
-\def\chapmk@vec{\chapmk@cvec\chapmk@mvec}
+\def\chapmk@vec{\chapmk@cvec\chapmk@mvec\chapmk@xvec}
 \def\chapmk@cvec{\expandafter\chapmk@kvec\chapmk@kidx\@nil,\chapmk@rvec@start}
 \def\chapmk@kvec#1,{\ifx\@nil#1\else\chapmk@one{#1}\expandafter\chapmk@kvec\fi}
 \def\chapmk@rvec@start{%
@@ -72,7 +72,7 @@
     \expandafter\xdef\csname#1@\chapmk@tmp\endcsname{\the\count\chapmk@tmp}\fi}%
   \xdef\chapmk@i{\the\numexpr\chapmk@kernelcount+1}%
   \chapmk@store@
-  \chapmk@markmap\chapmk@mstore}
+  \chapmk@markmap\chapmk@mstore\chapmk@xmap\chapmk@xstore}
 \def\chapmk@store@{\ifnum\chapmk@i>\count10 \else
   \expandafter\xdef\csname\chapmk@pfx @\chapmk@i\endcsname{\the\count\chapmk@i}%
   \chapmk@inc\chapmk@i\expandafter\chapmk@store@\fi}
@@ -106,16 +106,18 @@
 % the robust "\MakeUppercase " becomes \MakeUppercase), so a restored mark has the digest of
 % the original; \chapmk@mprep computes the digests before a vector is written
 \def\chapmk@mprep{\chapmk@markmap\chapmk@mprep@}
-\def\chapmk@mprep@#1{\begingroup
+\def\chapmk@mprep@#1{%
   \edef\chapmk@tmp{\chapmk@mtextof{#1}}%
   \ifx\chapmk@tmp\@empty\global\let\chapmk@tmpa\@empty\else
-    \makeatletter\endlinechar\m@ne\everyeof{}%
-    \expandafter\scantokens\expandafter{\expandafter\gdef\expandafter\chapmk@tmpa
-      \expandafter{\chapmk@tmp}}\fi
-  \endgroup
+    \expandafter\chapmk@rtscan\expandafter{\chapmk@tmp}\fi
   \expandafter\xdef\csname chapmk@md@#1\endcsname{\ifx\chapmk@tmpa\@empty0\else
-    \number"\expandafter\chapmk@seven\pdfmdfivesum{\detokenize\expandafter{\chapmk@tmpa}}%
-    \@nil\fi}}
+    \chapmk@rtdigest\fi}}
+% \chapmk@tmpa := the text #1 (a string) as an aux file gives it back; \chapmk@rtdigest: its
+% 28-bit digest (expandable)
+\def\chapmk@rtscan#1{\begingroup\makeatletter\endlinechar\m@ne\everyeof{}%
+  \scantokens{\gdef\chapmk@tmpa{#1}}\endgroup}
+\def\chapmk@rtdigest{%
+  \number"\expandafter\chapmk@seven\pdfmdfivesum{\detokenize\expandafter{\chapmk@tmpa}}\@nil}
 \def\chapmk@mdigest#1{\csname chapmk@md@#1\endcsname}
 % vector part (expandable, like \chapmk@one)
 \def\chapmk@mvec{\chapmk@markmap\chapmk@mone}
@@ -164,6 +166,70 @@
         \immediate\write\chapmk@rec{K primitive \the\count@}\count@\count256 \fi\fi
     \advance\count@\@ne\repeat\endgroup}
 
+%% ---------------------------------------------------------------- carried state (S19)
+% State a unit leaves for the following segments that neither a counter nor a mark carries:
+% one declaration \chapmk@carry{<kind>}{<name>} per item. Kind "macro": the parameterless
+% macro \<name> (e.g. hyperref's \@currentHref, the target of an \addcontentsline after the
+% last \include). Each item is a pseudo register \chapmk@carrybase + <declaration number> of
+% the state vector: 0 while \<name> is undefined, else a 28-bit digest of its text after an
+% aux round trip. Like the marks: a unit records the texts at its end (\chapmk@cv in the unit
+% aux), an excluded unit restores those listed in its checkpoint, and a changed item is an
+% absolute assignment of the segment. "C <id> <kind> <name>" in .frec names the items.
+\def\chapmk@carrybase{200000}
+\def\chapmk@carryn{0}
+\ExplSyntaxOn
+\seq_new:N \chapmk@carried
+\cs_new:Npn \chapmk@xmap #1 { \seq_map_function:NN \chapmk@carried #1 }
+\cs_new_protected:Npn \chapmk@xadd #1 { \seq_gput_right:Nx \chapmk@carried {#1} }
+\ExplSyntaxOff
+\def\chapmk@carry#1#2{\chapmk@inc\chapmk@carryn
+  \edef\chapmk@tmp{\the\numexpr\chapmk@carrybase+\chapmk@carryn}%
+  \expandafter\gdef\csname chapmk@xkind@\chapmk@tmp\endcsname{#1}%
+  \expandafter\gdef\csname chapmk@xname@\chapmk@tmp\endcsname{#2}%
+  \chapmk@xadd{\chapmk@tmp}}
+\def\chapmk@xn#1{\csname chapmk@xname@#1\endcsname}
+\def\chapmk@xd#1{\csname chapmk@xd@#1\endcsname}
+% #2 if \<name> of item #1 is defined (and not \relax), else #3; \csname would define it
+\def\chapmk@xifdef#1#2#3{\ifcsname\chapmk@xn{#1}\endcsname
+  \expandafter\ifx\csname\chapmk@xn{#1}\endcsname\relax#3\else#2\fi\else#3\fi}
+\def\chapmk@xget#1{\expandafter\let\expandafter\chapmk@tmpv\csname\chapmk@xn{#1}\endcsname}
+% digests (before a vector is written, with the marks': \chapmk@vprep)
+\def\chapmk@xprep{\chapmk@xmap\chapmk@xprep@}
+\def\chapmk@xprep@#1{\chapmk@xifdef{#1}%
+  {\chapmk@xget{#1}\edef\chapmk@tmp{\detokenize\expandafter{\chapmk@tmpv}}%
+   \expandafter\chapmk@rtscan\expandafter{\chapmk@tmp}%
+   \expandafter\xdef\csname chapmk@xd@#1\endcsname{\chapmk@rtdigest}}%
+  {\expandafter\gdef\csname chapmk@xd@#1\endcsname{0}}}
+\def\chapmk@vprep{\chapmk@mprep\chapmk@xprep}
+% vector part (expandable, like \chapmk@one)
+\def\chapmk@xvec{\chapmk@xmap\chapmk@xone}
+\def\chapmk@xone#1{\ifx\chapmk@pfx\chapmk@all#1=\chapmk@xd{#1},\else
+  \ifnum\chapmk@xd{#1}=\chapmk@ref{#1} \else#1=\chapmk@xd{#1},\fi\fi}
+\def\chapmk@xstore#1{\expandafter\xdef\csname\chapmk@pfx @#1\endcsname{\chapmk@xd{#1}}}
+% segment start: snapshot of the digests; a changed one at the end is an absolute assignment
+\def\chapmk@xsnap#1{\expandafter\xdef\csname chapmk@xsnap@#1\endcsname{\chapmk@xd{#1}}}
+\def\chapmk@xabs#1{\ifnum\chapmk@xd{#1}=\csname chapmk@xsnap@#1\endcsname\relax\else
+  \edef\chapmk@absidx{\chapmk@absidx#1,}\fi}
+% unit end: "\chapmk@cv{<id>}{<text>}" per defined item
+\def\chapmk@xrec{\chapmk@xmap\chapmk@xrec@}
+\def\chapmk@xrec@#1{\chapmk@xifdef{#1}{\chapmk@xget{#1}%
+  \immediate\write\@partaux{\string\chapmk@cv{#1}{\unexpanded\expandafter{\chapmk@tmpv}}}}{}}
+% read from the unit aux before its \@setckpt (collected with the marks in \chapmk@lastmk);
+% restore (excluded unit): only the pseudo registers listed in the checkpoint
+\long\def\chapmk@cv#1#2{\xdef\chapmk@lastmk{\unexpanded\expandafter{\chapmk@lastmk}%
+  \noexpand\chapmk@xset{#1}{\unexpanded{#2}}}}
+\long\def\chapmk@xset#1#2{\ifcsname chapmk@mon@#1\endcsname
+  \expandafter\gdef\csname\chapmk@xn{#1}\endcsname{#2}\fi}
+\def\chapmk@xoff#1{\expandafter\global\expandafter\let\csname chapmk@mon@#1\endcsname
+  \@undefined}
+\def\chapmk@xclass#1{\immediate\write\chapmk@rec{C #1 \csname chapmk@xkind@#1\endcsname\space
+  \chapmk@xn{#1}}}
+% the table
+\chapmk@carry{macro}{@currentHref}%      hyperref: target of \addcontentsline, \label
+\chapmk@carry{macro}{@currentlabel}%     \label
+\chapmk@carry{macro}{@currentcounter}%   \label (cleveref, kernel's \label type)
+\chapmk@carry{macro}{@currentlabelname}% nameref: \label
+
 %% ---------------------------------------------------------------- records
 \newwrite\chapmk@rec
 \immediate\openout\chapmk@rec=\jobname.frec
@@ -181,10 +247,11 @@
 % \include's \clearpage before include/before and include/after puts each segment's pages
 % and messages between its markers)
 \def\chapmk@logmark#1{\wlog{chapmk-segment: #1}}
-\def\chapmk@entry@rec{\chapmk@logmark{\chapmk@seg}\chapmk@time{\chapmk@seg}\chapmk@markmap\chapmk@msnap\chapmk@mprep
+\def\chapmk@entry@rec{\chapmk@logmark{\chapmk@seg}\chapmk@time{\chapmk@seg}\chapmk@markmap\chapmk@msnap
+  \chapmk@vprep\chapmk@xmap\chapmk@xsnap
   \def\chapmk@pfx{chapmk@b}%
   \chapmk@main{\string\chapmk@entry{\chapmk@seg}{\chapmk@vec}}}
-\def\chapmk@gexit@rec{\chapmk@mprep\def\chapmk@pfx{chapmk@b}%
+\def\chapmk@gexit@rec{\chapmk@vprep\def\chapmk@pfx{chapmk@b}%
   \chapmk@main{\string\chapmk@gexit{\chapmk@seg}{\chapmk@vec}}}
 % segment markers in the nomenclature and index streams (delayed, like their own writes;
 % S2b): \makenomenclature's .nlo, \makeindex's .idx
@@ -199,7 +266,7 @@
   \def\chapmk@absidx{}%
   \@for\chapmk@tmp:=\chapmk@absnames\do{\ifx\chapmk@tmp\@empty\else
     \edef\chapmk@absidx{\chapmk@absidx\chapmk@idx{c@\chapmk@tmp},}\fi}%
-  \chapmk@markmap\chapmk@mabs
+  \chapmk@markmap\chapmk@mabs\chapmk@xmap\chapmk@xabs
   \immediate\write#1{\string\chapmk@abs{\chapmk@seg}{\chapmk@absidx}}%
   \gdef\chapmk@absnames{}}
 % (\protected: never expanded in \edef/\write contexts)
@@ -255,9 +322,9 @@
 \AddToHook{include/after}{%
   \let\chapmk@pfx\chapmk@all
   \chapmk@gcheck
-  \chapmk@markmap\chapmk@mkrec
+  \chapmk@markmap\chapmk@mkrec\chapmk@xrec
   \chapmk@primitive
-  \chapmk@mprep
+  \chapmk@vprep
   \immediate\write\@partaux{\string\chapmk@ckpt{\chapmk@seg}{\chapmk@vec}}%
   \chapmk@abs@rec\@partaux
   \chapmk@glue@begin}
@@ -300,7 +367,7 @@
   \@for\chapmk@tmp:=\chapmk@tmp\do{\ifx\chapmk@tmp\@empty\else
     \expandafter\chapmk@assign\chapmk@tmp\@nil\fi}%
   \csname chapmk@mk@#1\endcsname
-  \chapmk@markmap\chapmk@moff}
+  \chapmk@markmap\chapmk@moff\chapmk@xmap\chapmk@xoff}
 \def\chapmk@moff#1{\expandafter\global\expandafter\let\csname chapmk@mon@\chapmk@mid{#1}%
   \endcsname\@undefined}
 \def\chapmk@assign#1=#2\@nil{%
@@ -394,11 +461,12 @@
     \string\providecommand\string\chapmk@abs[2]{}\string\providecommand\string\chapmk@unit[2]{}%
     \string\providecommand\string\chapmk@ckpt[2]{}\string\providecommand\string\chapmk@bkmlevels[1]{}%
     \string\providecommand\string\chapmk@counters[1]{}\string\providecommand\string\chapmk@layout[1]{}%
-    \string\providecommand\string\chapmk@ustart[1]{}\string\providecommand\string\chapmk@mk[4]{}}%
+    \string\providecommand\string\chapmk@ustart[1]{}\string\providecommand\string\chapmk@mk[4]{}%
+    \string\providecommand\string\chapmk@cv[2]{}}%
   \chapmk@time{begin}%
   \chapmk@setup@vector
-  \chapmk@markmap\chapmk@mclass
-  \chapmk@mprep
+  \chapmk@markmap\chapmk@mclass\chapmk@xmap\chapmk@xclass
+  \chapmk@vprep
   \chapmk@counters@rec
   \chapmk@layout@rec
   \chapmk@store{chapmk@b}%
