@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,7 +13,7 @@ import chapmk
 from chapmk.analysis import Analysis
 from chapmk.errors import TexError
 from chapmk.files import changed_files, digest, read_log, write_atomic, write_if_changed
-from chapmk.gensrc import format_source
+from chapmk.gensrc import format_source, lost_state
 from chapmk.layout import Layout
 from chapmk.logs import run_error
 from chapmk.proc import run
@@ -89,27 +88,6 @@ def format_dist_inputs(layout: Layout) -> dict[str, str]:
     return _read_stamp(layout.fmt_dir / STAMP_FILE)[2]
 
 
-def _lost_state(log: str) -> str | None:
-    """What the format part did that a dump loses (S13), from the probes of the format source
-    and pdfTeX's warning; None if nothing. Reserved \\pdfobj objects are kept."""
-    m = re.search(r"chapmk-pdf-objects:(\d+),(\d+),(\d+)", log)
-    if m and (int(m.group(2)) or int(m.group(3))):
-        return f"creates PDF form xobjects or images ({m.group(2)}/{m.group(3)})"
-    if "dangling objects discarded" in log:
-        return "writes PDF objects immediately (e.g. the cmap package's ToUnicode maps)"
-    m = re.search(r"chapmk-pdf-colorstacks:(\d+)", log)
-    if m and int(m.group(1)) > 1:
-        return f"creates colour stacks ({int(m.group(1)) - 1}, \\pdfcolorstackinit)"
-    m = re.search(r"chapmk-pdf-unrecorded:(\S+)", log)
-    if m:
-        return f"calls \\{m.group(1)} without a braced argument"
-    m = re.search(r"chapmk-file-written:(.*)", log)
-    if m:
-        name = m.group(1).strip().strip('"').replace("\\jobname ", "\\jobname")
-        return f"writes and closes a file ({name}, e.g. with filecontents)"
-    return None
-
-
 def format_path_map(analysis: Analysis, layout: Layout) -> list[tuple[str, str]]:
     """Path map for the format build's messages and log: the format source ``pre.tex`` keeps
     the main file's line numbers, so it maps to the main file; then :meth:`Layout.path_map`."""
@@ -156,7 +134,7 @@ def ensure_format(
     if not result.ok or not fmt_file.is_file():
         err = run_error(log_file, result.output, format_path_map(analysis, layout))
         raise TexError("format build failed", log=log_file, first_error=err)
-    lost = _lost_state(read_log(log_file))
+    lost = lost_state(read_log(log_file))
     if lost:
         fmt_file.unlink(missing_ok=True)
         raise TexError(
