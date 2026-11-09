@@ -43,8 +43,9 @@ a plain full build (§6.14). `chapmk check` compares a build with a plain full b
   `imakeidx` (runs makeindex itself through shell escape), `minted`, and packages that keep document-wide state in macros the
   state vector does not carry: `acronym` (first use of an acronym, S17), `perpage`
   (counters reset per page through aux data and a macro posing as a counter; loaded by
-  `footmisc`'s `perpage` option and `bigfoot`) (full builds with a
-  warning; one table, `facts.UNSUPPORTED_PACKAGES`, for the preamble scan and the runtime
+  `footmisc`'s `perpage` option and `bigfoot`), and `hyperxmp` (writes its XMP packet on the
+  last page with the run's page count and job name; user decision, sweep D1) (full builds with
+  a warning; one table, `facts.UNSUPPORTED_PACKAGES`, for the preamble scan and the runtime
   check). `cleveref` is supported (S16).
 - biblatex with another backend than biber, classic BibTeX, biblatex refsections.
 - hyperref without the `bookmark` package (the outline comes from bookmark's records).
@@ -204,8 +205,11 @@ Input: the main file (argument or `main` in `chapmk.toml`). Done without TeX (`a
    the preamble are inlined for the split detection.
 2. **Split point `s`:** the first preamble line that matches the deny list (§6.3.2) or a
    `format.split_before` pattern. A match inside a command or group spanning several lines
-   (`\ifdraft{…}`) moves `s` to the start of that command; a match inside an `\input` file
-   moves it to the `\input` line (S1).
+   (`\ifdraft{…}`) or inside a conditional moves `s` to the start of that command or
+   conditional; a match inside an `\input` file moves it to the `\input` line (S1).
+   Conditionals are all `\if…` control words not followed by an argument: TeX's primitives,
+   `\newif` switches and those of packages and classes (`\ifpdf`); a split inside one would
+   leave its `\else` and `\fi` to the runs.
 3. **Includes:** top-level `\include{…}` in the body, in order (`U1..Un`); the glue
    `G0..Gn` lies between them. Arguments that are absolute, contain `..` or spaces are
    errors (the unit aux would leave the run directory). A unit's file, aux file and records
@@ -659,7 +663,8 @@ unsupported.
    from the run of the first merged page (`G0` has no pages when the document starts with an
    `\include`, and its run may not have compiled the first unit). pdfTeX refers to pages by
    number (`openaction goto page 1`): page N of that run must be page N of the merged PDF,
-   otherwise a merge error (full mode).
+   otherwise a merge error (full mode). The merged file has that run's PDF version, and its
+   XMP metadata stream is copied unchanged (pikepdf would rewrite it, sweep D1).
 7. **Font descriptors** are normalised to the whole-document rule (§6.17).
 
 The merged PDF is larger than a plain one (font subsets per run); `--full` gives the compact
