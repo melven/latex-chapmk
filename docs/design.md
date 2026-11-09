@@ -306,8 +306,9 @@ Loaded at the split point of incremental runs.
 2. **State vector** (S4): the counters of the kernel checkpoint list, plus every `\count`
    register allocated after the kernel, minus run-local registers (`Hy@abspage`, `BKM@id`,
    `calc@Acount`, `calc@Bcount`, config `state.ignore`), plus one pseudo register per kernel
-   mark class (`100000 + <marks register>`: a digest of the last mark's text). The number→name
-   map for messages comes from the allocation lines in the logs.
+   mark class (`100000 + <marks register>`: a digest of the last mark's text) and one per
+   carried item (`200000 + <declaration number>`, below). The number→name map for messages
+   comes from the allocation lines in the logs and the `K` and `C` records.
    - Baseline at `\begin{document}`; per segment an entry vector (sparse against the
      baseline) in the main aux, written before an excluded unit's checkpoint is restored;
      per glue segment its exit; per unit its complete exit vector in the unit aux, after the
@@ -316,6 +317,15 @@ Loaded at the split point of incremental runs.
      for the prediction (§6.9.3).
    - Mark texts of the `page` and `column` regions at a unit's end, restored for an excluded
      unit. Primitive marks cannot be restored: their use is a persistent fallback.
+   - **Carried state** (S19): state a unit leaves for the following segments that neither a
+     counter nor a mark carries, one declaration per item (`\chapmk@carry{<kind>}{<name>}`).
+     Kind `macro`: a parameterless macro; its pseudo register is 0 while it is undefined,
+     else a digest of its text after an aux round trip. The text is recorded at a unit's end
+     and restored (`\gdef`) for an excluded unit, a change in a segment is an absolute
+     assignment, as for marks. Items: `\@currentHref` (hyperref: the target of an
+     `\addcontentsline` after the last `\include`, e.g. KOMA's `listof=totoc`),
+     `\@currentlabel`, `\@currentcounter`, `\@currentlabelname` (nameref; all read by
+     `\label`). A changed item at a unit's end recompiles the next unit (rule (d), §6.9.1).
 3. **Restore.** An excluded unit's checkpoint assigns, after the kernel restore, all stored
    post-kernel registers (not run-local). Without it partial runs lose state such as
    `Hy@linkcounter`, biblatex citation order, `LT@tables` (S4).
@@ -937,7 +947,7 @@ Candidates for later:
 
 | Limitation or risk | Handling |
 |---|---|
-| Partial-run differences not captured by the `\count` vector (dimensions, skips, `\everypar`, …) | Acceptance and scenario tests; `chapmk check`; extend the vector if needed |
+| Partial-run differences not captured by the `\count` vector, marks and carried items (dimensions, skips, `\everypar`, other macros, …) | Acceptance and scenario tests; `chapmk check`; declare a carried item (§6.4.2) |
 | Label or citation keys built by macros, references hidden in macros inside pictures | Not tracked; `chapmk check` detects |
 | Glue cost in every run (bibliography, lists) | Slow-glue hints (§6.8.4) |
 | Larger merged PDF | `--full` for the final version |
@@ -970,6 +980,7 @@ Relevant mechanisms: the `.nlo` stream, biblatex renumbering, longtable and eqpa
 | counters | main aux, header | `\chapmk@counters{<name>=<register>:<child>/<child>/;...}` (reset lists) |
 | layout | main aux, header | `\chapmk@layout{twoside=0\|1,openright=0\|1}` |
 | unit marks | unit aux | `\chapmk@mk{<pseudo register>}{<class>}{<region>_<top\|first\|last>}{<text>}` |
+| carried state | unit aux | `\chapmk@cv{<pseudo register>}{<text>}` (each defined item at the unit's end) |
 | unit start | unit aux, first statement | `\chapmk@ustart{U<k>}` (writes the list-file start marker) |
 | page map | `.frec` | `P <shipout#> <seg> <\c@page> <\thepage text>` |
 | file attribution | `.frec` | `F <seg> <path>` |
@@ -979,6 +990,7 @@ Relevant mechanisms: the `.nlo` stream, biblatex renumbering, longtable and eqpa
 | run-time global state | `.frec` | `G <unit> pagenumbering\|pagestyle` when a unit changes it |
 | unit layout | `.frec` | `O <seg> 0\|1` (twoside and openright at the unit start) |
 | mark classes | `.frec` | `K <pseudo register> <class>`; `K primitive <n>` |
+| carried items | `.frec` | `C <pseudo register> <kind> <name>` (e.g. `C 200001 macro @currentHref`) |
 | stream marker | `.nlo`, `.idx` | `%chapmk-seg <seg>` |
 | list-file markers | list files | `\chapmk@lmark{U<k>}`, `\chapmk@lmark{/<seg>}` |
 
