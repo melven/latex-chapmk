@@ -228,17 +228,19 @@
 % started with, i.e. one of an earlier segment, e.g. KOMA's listof=totoc after the last
 % \include (KOMA's \chapter* sets no anchor). Old means: the value is the one at the segment's
 % start (a float's local anchor reverts to it) and the segment created no anchor of that name
-% (\hyper@anchorstart) or no number of that counter (\refstepcounter): a name created again,
-% e.g. sections renumbered after KOMA's \chapter*, is the segment's own. "H <seg>": the
+% (\hyper@anchorstart) or did not step that counter to its current value (\stepcounter, which
+% \refstepcounter calls; an after-hook on \refstepcounter would break cleveref's optional
+% argument): a name or number created again, e.g. sections renumbered after KOMA's \chapter*,
+% is the segment's own. "H <seg>": the
 % segment ends with an anchor or number of its own. The driver makes the unit global that
 % set the anchor a later segment uses.
 \def\chapmk@asnap{\global\let\chapmk@ahref\@currentHref
   \global\let\chapmk@alabel\@currentlabel\global\let\chapmk@acounter\@currentcounter}
 % names created in the current segment
 \def\chapmk@anew#1{\expandafter\gdef\csname chapmk@an@\chapmk@seg @#1\endcsname{}}
-\def\chapmk@lnew{\expandafter\gdef\csname chapmk@ln@\chapmk@seg @\@currentcounter
-  @\detokenize\expandafter{\@currentlabel}\endcsname{}}
-\AddToHook{cmd/refstepcounter/after}{\chapmk@lnew}
+\def\chapmk@lnew#1{\expandafter\gdef\csname chapmk@ln@\chapmk@seg @#1@\the\value{#1}%
+  \endcsname{}}
+\AddToHookWithArguments{cmd/stepcounter/after}{\chapmk@lnew{#1}}
 \def\chapmk@ahyper{\AddToHookWithArguments{cmd/hyper@anchorstart/before}{\chapmk@anew{##1}}%
   \AddToHook{cmd/addcontentsline/before}{\chapmk@hrefold{\chapmk@aread{addcontentsline}}{}}}
 \AddToHook{begindocument/before}{\@ifpackageloaded{hyperref}{\chapmk@ahyper}{}}
@@ -250,9 +252,10 @@
   \chapmk@tmpf}
 \def\chapmk@labelold{\let\chapmk@tmpf\@secondoftwo
   \ifx\chapmk@alabel\@currentlabel\ifx\chapmk@acounter\@currentcounter
-    \ifcsname chapmk@ln@\chapmk@seg @\@currentcounter
-      @\detokenize\expandafter{\@currentlabel}\endcsname\else
-      \let\chapmk@tmpf\@firstoftwo\fi\fi\fi
+    \ifcsname c@\@currentcounter\endcsname
+      \ifcsname chapmk@ln@\chapmk@seg @\@currentcounter @\the\value{\@currentcounter}%
+        \endcsname\else\let\chapmk@tmpf\@firstoftwo\fi
+    \else\let\chapmk@tmpf\@firstoftwo\fi\fi\fi
   \chapmk@tmpf}
 \AddToHook{cmd/label/before}{%
   \chapmk@hrefold{\chapmk@aread{label}}{\chapmk@labelold{\chapmk@aread{label}}{}}}
