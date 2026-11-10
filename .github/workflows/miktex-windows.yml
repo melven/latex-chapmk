@@ -34,12 +34,14 @@ jobs:
           # rewrites pdftex.map ("miktex fontmaps configure"), and every build state recorded
           # before then falls back to a cold build. lipsum, cleveref: minimal corpora (S7, S13);
           # the others: corpora of the scenario tests (BibTeX, makeidx, mparhack, acronym,
-          # pdfrender, babel-spanish page labels).
+          # pdfrender, babel-spanish page labels, cmap and mmap, hyperxmp, pdfx with
+          # colorprofiles and xmpincl, mathptmx (psnfss) with type1cm).
           # One call per package: an installed one (biblatex) makes a call with several fail
           # without installing the others (exit code 1, which pwsh does not check).
           foreach ($p in "mylatexformat", "nomencl", "biblatex", "latexmk", "lipsum", "cleveref",
                    "natbib", "bigfoot", "imakeidx", "mparhack", "acronym", "pdfrender",
-                   "babel-spanish") {
+                   "babel-spanish", "cmap", "mmap", "hyperxmp", "pdfx", "colorprofiles",
+                   "xmpincl", "psnfss", "type1cm") {
             $out = miktex --admin packages install $p 2>&1 | Out-String
             if ($LASTEXITCODE -eq 0) { "${p}: installed" }
             elseif ($out -match "already installed") { "${p}: already installed" }

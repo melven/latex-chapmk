@@ -5,6 +5,8 @@ unit's end (S18), page numbering or page style switched at run time.
 Each build asserts §3.3 against ``--full`` (``--check``).
 """
 
+import subprocess
+from functools import cache
 from pathlib import Path
 
 import pytest
@@ -83,14 +85,35 @@ def _anchor_document(src: Path, cls: str, after: str, start: str = "") -> None:
         )
 
 
+@cache
+def _koma_star_sets_an_anchor() -> bool:
+    """Whether KOMA-Script's \\chapter* (and its list headings, listof=totoc) sets an anchor
+    with hyperref: 3.49.2 does (chapter*.N, TeX Live 2025), 3.49.3 does not (TeX Live 2026).
+    Without one, the commands after it use an earlier anchor (S19)."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "k.tex").write_text(
+            "\\documentclass{scrbook}\\usepackage{hyperref}\\begin{document}\\makeatletter\n"
+            "\\chapter{A}\\section{S}\\chapter*{Star}\\typeout{chapmk-test:\\@currentHref}\n"
+            "\\end{document}\n"
+        )
+        subprocess.run(
+            ["pdflatex", "-interaction=nonstopmode", "k.tex"], cwd=d, capture_output=True
+        )
+        log = (Path(d) / "k.log").read_text(errors="replace")
+    return "chapmk-test:chapter*" in log
+
+
 def test_anchor_of_the_last_unit_used_after_it(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """S19 (sweep C1): after the last \\include, KOMA's listof=totoc and a manual
-    \\addcontentsline link to the last anchor of c (KOMA's \\chapter* sets none), \\label takes
-    c's last number, also in a plain build. A run without c would use an older anchor: c is
-    compiled in every run, with a warning and the fix. With \\phantomsection after the page
-    break the main file has its own anchor: no warning, typos compile one unit."""
+    \\addcontentsline link to the last anchor of c (KOMA-Script 3.49.3's \\chapter* sets none;
+    3.49.2's sets one: no such use), \\label takes c's last number (any version), also in a
+    plain build. A run without c would use an older anchor: c is compiled in every run, with a
+    warning and the fix. With \\phantomsection after the page break the main file has its own
+    anchor: no warning, typos compile one unit."""
     src = tmp_path / "src"
     _anchor_document(
         src,
@@ -100,9 +123,10 @@ def test_anchor_of_the_last_unit_used_after_it(
     )
     rep = checked(src, capsys)
     for line in ("main.tex:10: \\addcontentsline", "main.tex:12: \\addcontentsline"):
-        assert any(
+        found = any(
             w.startswith(line) and "c is compiled in every run" in w for w in rep["warnings"]
         )
+        assert found != _koma_star_sets_an_anchor(), rep["warnings"]
     assert any(w.startswith("main.tex:12: \\label") for w in rep["warnings"]), rep["warnings"]
     edit(src / "a.tex", "Text a.", "Txet a.")
     assert selections(checked(src, capsys)) == [["a", "c"]]
@@ -123,19 +147,22 @@ def test_anchor_of_the_last_unit_used_after_it(
 def test_anchor_used_at_the_start_of_a_unit(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """S19: KOMA's \\chapter* sets no anchor, so an \\addcontentsline right after it at the
-    start of b links to a's last anchor: a is compiled in every run. Sections renumbered after
-    \\chapter* reuse a's anchor names; those are b's own. With \\phantomsection after
-    \\chapter* (an edit of b only), a is a normal unit again."""
+    """S19: KOMA-Script 3.49.3's \\chapter* sets no anchor, so an \\addcontentsline right after it
+    at the start of b links to a's last anchor: a is compiled in every run. Sections renumbered
+    after \\chapter* reuse a's anchor names; those are b's own. With \\phantomsection after
+    \\chapter* (an edit of b only), a is a normal unit again. 3.49.2's \\chapter* sets an anchor
+    of its own: no such use, no global unit."""
     src = tmp_path / "src"
     _anchor_document(src, "scrbook", "", "\\chapter*{Star}\\addcontentsline{toc}{chapter}{Star}")
     rep = checked(src, capsys)
     lines = sorted(
         w.split(":")[0] + ":" + w.split(":")[1] for w in rep["warnings"] if "anchor" in w
     )
-    assert lines == ["b.tex:1", "c.tex:1"], rep["warnings"]
+    own = _koma_star_sets_an_anchor()
+    assert lines == ([] if own else ["b.tex:1", "c.tex:1"]), rep["warnings"]
     edit(src / "c.tex", "Text c.", "Txet c.")
-    assert selections(checked(src, capsys)) == [None]  # a and b are global: all units
+    # a and b are global: all units
+    assert selections(checked(src, capsys)) == ([["c"]] if own else [None])
     for x in "bc":
         edit(src / f"{x}.tex", "\\chapter*{Star}", "\\chapter*{Star}\\phantomsection")
     rep = checked(src, capsys)

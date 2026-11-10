@@ -70,26 +70,57 @@ jobs:
       - name: Reference cache of this job (writable in the container)
         # not kept between runs: the image has the day's packages, and the references depend
         # on the TeX installation; the second test run reuses the references of the first
-        run: mkdir -p .test-cache && chmod 777 .test-cache
+        run: mkdir -p .test-cache miktex-logs && chmod 777 .test-cache miktex-logs
       - name: All tests as root (slow, scenario, acceptance)
         run: |
-          docker run --rm -v "$PWD":/work:ro -v "$PWD/.test-cache":/cache --user root chapmk-miktex bash -c '
+          docker run --rm -v "$PWD":/work:ro -v "$PWD/.test-cache":/cache -v "$PWD/miktex-logs":/logs --user root chapmk-miktex bash -c '
             set -e
+            # the logs of MiKTeX (format and font making, package database), kept for the upload
+            trap "cp -r $HOME/.miktex/texmfs/data/miktex/log /logs/$(id -un) 2>/dev/null || true" EXIT
             w=$(mktemp -d); tar -C /work --exclude=./.test-cache -cf - . | tar -C "$w" -xf -
             ln -s /cache "$w/.test-cache"; cd "$w"
+            # the file name database and pdflatex.fmt before the tests: MiKTeX makes them at
+            # first use (root has no user database yet: its first pdflatex refreshes it, and
+            # the format then counts as outdated), and a test that recorded the format before
+            # a parallel test made it again builds cold
+            initexmf --update-fndb >/dev/null && initexmf --dump=pdflatex >/dev/null
             pip install -q -e .
             pytest -n auto --dist worksteal -q -rfE
           '
       - name: All tests as non-root user (slow, scenario, acceptance)
         if: success() || failure()
         run: |
-          docker run --rm -v "$PWD":/work:ro -v "$PWD/.test-cache":/cache chapmk-miktex bash -c '
+          docker run --rm -v "$PWD":/work:ro -v "$PWD/.test-cache":/cache -v "$PWD/miktex-logs":/logs chapmk-miktex bash -c '
             set -e
+            # the logs of MiKTeX (format and font making, package database), kept for the upload
+            trap "cp -r $HOME/.miktex/texmfs/data/miktex/log /logs/$(id -un) 2>/dev/null || true" EXIT
             w=$(mktemp -d); tar -C /work --exclude=./.test-cache -cf - . | tar -C "$w" -xf -
             ln -s /cache "$w/.test-cache"; cd "$w"
+            # the file name database and pdflatex.fmt before the tests: MiKTeX makes them at
+            # first use (root has no user database yet: its first pdflatex refreshes it, and
+            # the format then counts as outdated), and a test that recorded the format before
+            # a parallel test made it again builds cold
+            initexmf --update-fndb >/dev/null && initexmf --dump=pdflatex >/dev/null
             pip install -q -e .
             pytest -n auto --dist worksteal -q -rfE
           '
+      - name: MiKTeX format and font making (from its logs)
+        if: always()
+        run: |
+          # who made formats, fonts or the package database during the tests (cold builds:
+          # "TeX distribution files changed (pdflatex.fmt)")
+          for d in miktex-logs/*/; do
+            echo "== $d"
+            grep -h "started by" "$d"*.log* 2>/dev/null | grep -iE "makefmt|initexmf|makepk|maketfm|mf |makebase|fndb" | cut -c1-300 | tail -40 || true
+            ls -la "$d" "$d"makefmt/* 2>/dev/null | head -40 || true
+          done
+      - name: MiKTeX logs (format and font making, package database)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: miktex-logs-current
+          path: miktex-logs/
+          if-no-files-found: ignore
       - name: Summary
         if: always()
         run: |
