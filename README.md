@@ -118,8 +118,11 @@ Details: [docs/design.md](https://github.com/melven/latex-chapmk/blob/main/docs/
 - Files written in the preamble (e.g. `filecontents` before `\begin{document}`) give full
   builds.
 - A font is loaded at its first use in a run, so a run that excludes earlier chapters loads
-  it later. Inside a TikZ picture this can change SyncTeX records, and in rare cases move a
-  link target by a fraction of a point; nothing visible. `chapmk check` reports it.
+  it later. Inside a TikZ picture this can change SyncTeX records; nothing visible.
+  `chapmk check` reports it.
+- Link targets inside rotated content (`sidewaysfigure`, `adjustbox` with `rotate`) can move
+  by a few points: pdfTeX's position there depends on unrelated code, also in a plain build.
+  The link still goes to the right page. `chapmk check` reports it.
 
 ## Troubleshooting
 
