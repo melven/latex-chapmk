@@ -17,7 +17,13 @@ def _doc(n: int, groups: list[list[int]]) -> SimpleNamespace:
 
 
 def _state(anchors: dict[str, bool], reads: dict[str, list[tuple[str, int]]]) -> State:
-    return State(0, {}, "", [], {}, anchors=anchors, anchor_reads=reads)
+    """Committed segments ``anchors`` (with an ``H`` fact if true) and ``R`` facts ``reads``."""
+    facts: dict[str, dict[str, list[tuple[str, ...]]]] = {
+        seg: {"H": [()]} if sets else {} for seg, sets in anchors.items()
+    }
+    for seg, rs in reads.items():
+        facts.setdefault(seg, {})["R"] = [(c, str(n)) for c, n in rs]
+    return State(0, {}, "", [], {}, facts=facts)
 
 
 def test_anchor_owner() -> None:

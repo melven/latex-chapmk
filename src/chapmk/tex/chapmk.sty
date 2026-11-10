@@ -177,6 +177,9 @@
   \AddToHook{cmd/pgfpicture/before}{\chapmk@time{picture+}}%
   \AddToHook{cmd/endpgfpicture/after}{\chapmk@time{picture-}}\fi}
 \def\chapmk@main#1{\immediate\write\@mainaux{#1}}
+% a fact of the current segment, "<kind> <seg> <args>" in .frec (records.SEGMENT_FACTS:
+% G, H, R, O, L below); #2 is expanded
+\def\chapmk@fact#1#2{\immediate\write\chapmk@rec{#1 \chapmk@seg\space#2}}
 % segment start marker in the log (§6.13: the driver composes one log from the runs' slices;
 % \include's \clearpage before include/before and include/after puts each segment's pages
 % and messages between its markers)
@@ -218,11 +221,10 @@
   \global\let\chapmk@eh\@evenhead\global\let\chapmk@of\@oddfoot
   \global\let\chapmk@ef\@evenfoot}
 \def\chapmk@gcheck{%
-  \ifx\chapmk@tp\thepage\else\chapmk@grec{pagenumbering}\fi
+  \ifx\chapmk@tp\thepage\else\chapmk@fact{G}{pagenumbering}\fi
   \ifx\chapmk@oh\@oddhead\ifx\chapmk@eh\@evenhead\ifx\chapmk@of\@oddfoot
-    \ifx\chapmk@ef\@evenfoot\else\chapmk@grec{pagestyle}\fi\else\chapmk@grec{pagestyle}\fi
-    \else\chapmk@grec{pagestyle}\fi\else\chapmk@grec{pagestyle}\fi}
-\def\chapmk@grec#1{\immediate\write\chapmk@rec{G \chapmk@seg\space#1}}
+    \ifx\chapmk@ef\@evenfoot\else\chapmk@fact{G}{pagestyle}\fi\else\chapmk@fact{G}{pagestyle}\fi
+    \else\chapmk@fact{G}{pagestyle}\fi\else\chapmk@fact{G}{pagestyle}\fi}
 % anchors read across segments (S19). "R <seg> <command> <line>": \addcontentsline (with
 % hyperref: its link target) or \label (its number and target) used the anchor the segment
 % started with, i.e. one of an earlier segment, e.g. KOMA's listof=totoc after the last
@@ -261,9 +263,8 @@
   \chapmk@hrefold{\chapmk@aread{label}}{\chapmk@labelold{\chapmk@aread{label}}{}}}
 \def\chapmk@Gzero{G0}% G0: no earlier segment
 \def\chapmk@aread#1{\ifx\chapmk@seg\chapmk@Gzero\else
-  \immediate\write\chapmk@rec{R \chapmk@seg\space#1 \the\inputlineno}\fi}
-\def\chapmk@aend{\chapmk@hrefold{\chapmk@labelold{}{\chapmk@arecH}}{\chapmk@arecH}}
-\def\chapmk@arecH{\immediate\write\chapmk@rec{H \chapmk@seg}}
+  \chapmk@fact{R}{#1 \the\inputlineno}\fi}
+\def\chapmk@aend{\chapmk@hrefold{\chapmk@labelold{}{\chapmk@fact{H}{}}}{\chapmk@fact{H}{}}}
 
 % segment transitions
 \def\chapmk@glue@end{\chapmk@aend\chapmk@gexit@rec\chapmk@abs@rec\@mainaux}
@@ -284,7 +285,7 @@
 \def\chapmk@iftrue#1{\ifcsname if@#1\endcsname\expandafter\@firstoftwo\else
   \expandafter\@secondoftwo\fi{\chapmk@iftrue@{#1}}{0}}
 \def\chapmk@iftrue@#1{\expandafter\ifx\csname if@#1\endcsname\iftrue1\else0\fi}
-\def\chapmk@open@rec{\immediate\write\chapmk@rec{O \chapmk@seg\space
+\def\chapmk@open@rec{\chapmk@fact{O}{%
   \ifnum\chapmk@iftrue{twoside}\chapmk@iftrue{openright}=11 1\else0\fi}}
 \AddToHook{include/before}{%
   \chapmk@unit@begin{\CurrentFilePath/\CurrentFile}\gdef\chapmk@absnames{}\chapmk@open@rec
@@ -396,7 +397,7 @@
 % "L <seg> <ext>": a list file read by \@starttoc (lists with other extensions: algorithm's
 % .loa, tocbasic's \DeclareNewTOC); the driver then copies, stores and splices them too, and
 % the segment reads that list (also through a class macro the source scan does not see)
-\AddToHookWithArguments{cmd/@starttoc/before}{\immediate\write\chapmk@rec{L \chapmk@seg\space#1}}
+\AddToHookWithArguments{cmd/@starttoc/before}{\chapmk@fact{L}{#1}}
 \def\chapmk@lmark#1{}
 % a list typeset inside a unit (\tableofcontents in a front-matter unit, a class's preface
 % command) is not opened by a run that excludes that unit: LaTeX would drop every unit's

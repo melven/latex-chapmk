@@ -23,6 +23,22 @@ _REC = re.compile(
 )
 NLO_MARKER = "%chapmk-seg "
 
+#: Per-segment facts (Appendix B): ``.frec`` lines ``<kind> <segment> <args>`` that chapmk.sty
+#: writes with ``\\chapmk@fact``, kept per segment (:attr:`RunRecords.facts`) and committed
+#: with the segment (``State.facts``: units from their run, glue from the last run). Kind ->
+#: number of arguments. A new fact is a writer in chapmk.sty, one entry here and the rule that
+#: reads it.
+SEGMENT_FACTS: dict[str, int] = {
+    "G": 1,  # unit: changed page numbering or style at run time (pagenumbering, pagestyle)
+    "H": 0,  # the segment ends with an anchor or number of its own (S19)
+    "R": 2,  # command, line: an \\addcontentsline or \\label used an earlier anchor (S19)
+    "O": 1,  # unit: starts under twoside and openright (0, 1)
+    "L": 1,  # extension of a list file the segment typesets (\\@starttoc)
+}
+
+#: The facts of one segment: kind -> argument tuples, in record order without repetitions.
+Facts = dict[str, list[tuple[str, ...]]]
+
 
 class RecordError(FallbackError):
     """Records are missing, truncated or inconsistent (falls back to a full build)."""
@@ -194,26 +210,23 @@ class RunRecords:
     eqp_uses: dict[str, set[str]] = field(default_factory=dict)
     #: page layout flags (``twoside``, ``openright``: 0/1)
     layout: dict[str, int] = field(default_factory=dict)
-    #: per compiled unit: starts under twoside+openright (``O`` records)
-    openright: dict[str, bool] = field(default_factory=dict)
-    #: per unit: state it changed at run time that no checkpoint carries (``G`` records:
-    #: ``pagenumbering``, ``pagestyle``): the unit is global
-    global_effects: dict[str, set[str]] = field(default_factory=dict)
-    #: suffixes of the list files read by ``\\@starttoc`` (``L`` records)
-    list_suffixes: set[str] = field(default_factory=set)
-    #: (segment, suffix) of each ``\\@starttoc`` (``L <seg> <ext>``): the segment reads it
-    list_starts: set[tuple[str, str]] = field(default_factory=set)
+    #: segment -> its facts (:data:`SEGMENT_FACTS`)
+    facts: dict[str, Facts] = field(default_factory=dict)
     #: pseudo registers of the kernel's mark classes (running heads) -> class name
     #: (``K <id> <class>``; values: digests of the last mark's text)
     mark_classes: dict[int, str] = field(default_factory=dict)
     #: ``\\marks`` registers outside the kernel's classes that hold marks (``\\mark`` is 0;
     #: ``K primitive <n>``): they cannot be restored for excluded units
     primitive_marks: set[int] = field(default_factory=set)
-    #: segments that set a new current anchor (``H`` records, S19)
-    anchor_sets: set[str] = field(default_factory=set)
-    #: per segment: ``(command, line)`` of each ``\\addcontentsline``/``\\label`` that used the
-    #: anchor the segment started with, i.e. one of an earlier segment (``R`` records, S19)
-    anchor_reads: dict[str, list[tuple[str, int]]] = field(default_factory=dict)
+
+    def fact(self, segment: str, kind: str) -> list[tuple[str, ...]]:
+        """The arguments of ``segment``'s facts of ``kind`` (empty: none)."""
+        return self.facts.get(segment, {}).get(kind, [])
+
+    @property
+    def list_suffixes(self) -> set[str]:
+        """Suffixes of the list files read by ``\\@starttoc`` in any segment (``L`` facts)."""
+        return {"." + args[0] for facts in self.facts.values() for args in facts.get("L", ())}
 
     def reset_registers(self, counter: str) -> set[int]:
         """Registers of the counters reset, directly or transitively, when ``counter`` is
@@ -278,25 +291,13 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
         elif line.startswith("F "):
             seg, _, name = line[2:].partition(" ")
             recs.files.append((seg, name))
-        elif line.startswith("L "):
-            seg, _, ext = line[2:].strip().partition(" ")
-            if not ext:
-                raise ValueError(f"L record without a segment: {line.strip()!r}")
-            recs.list_suffixes.add("." + ext)
-            recs.list_starts.add((seg, "." + ext))
-        elif line.startswith("G "):
-            seg, _, what = line[2:].strip().partition(" ")
-            if not what:
-                raise ValueError(f"G record without a command: {line.strip()!r}")
-            recs.global_effects.setdefault(seg, set()).add(what)
-        elif line.startswith("H "):
-            recs.anchor_sets.add(line[2:].strip())
-        elif line.startswith("R "):
-            seg, command, number = line[2:].split()
-            recs.anchor_reads.setdefault(seg, []).append((command, int(number)))
-        elif line.startswith("O "):
-            seg, _, flag = line[2:].partition(" ")
-            recs.openright[seg] = flag.strip() == "1"
+        elif line.split(" ", 1)[0] in SEGMENT_FACTS:
+            kind, seg, *args = line.split()
+            if len(args) != SEGMENT_FACTS[kind]:
+                raise ValueError(f"{kind} record with {len(args)} arguments: {line.strip()!r}")
+            facts = recs.facts.setdefault(seg, {}).setdefault(kind, [])
+            if tuple(args) not in facts:
+                facts.append(tuple(args))
         elif line.startswith("K primitive "):
             recs.primitive_marks.add(int(line[12:]))
         elif line.startswith("K "):

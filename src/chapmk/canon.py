@@ -181,7 +181,7 @@ def commit_run(
     into ``canon/`` and ``state``. Runs of a parallel batch are committed in document order;
     :func:`run_tools` follows once.
 
-    Unit aux files, pages, vectors, citations, nomenclature entries and aggregates of the
+    Unit aux files, pages, vectors, facts, citations, nomenclature entries and aggregates of the
     compiled units and of the glue come from the run; the canonical main aux keeps the unit
     content of the other units (§6.7.2). List files are committed by :func:`commit_lists`.
     """
@@ -198,6 +198,7 @@ def commit_run(
         state.segments[seg] = SegmentArtifact(
             run_name, tuple(p.index for p in recs.pages if p.segment == seg)
         )
+        state.facts[seg] = {kind: list(args) for kind, args in recs.facts.get(seg, {}).items()}
         if seg in recs.entries:
             exit_ = (
                 recs.checkpoints.get(seg, {})

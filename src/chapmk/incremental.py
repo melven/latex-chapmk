@@ -181,18 +181,6 @@ def _global_files(ctx: Context, run: RunView, attributed: set[str]) -> dict[str,
     return _hashes(ctx, names - attributed)
 
 
-def _store_anchors(state: State, recs: RunRecords, segs: set[str]) -> None:
-    """S19: whether each of ``segs`` sets an anchor and which of its commands used an earlier
-    segment's anchor, from ``recs`` (the run that committed it; the glue: any run)."""
-    for seg in segs:
-        state.anchors[seg] = seg in recs.anchor_sets
-        reads = recs.anchor_reads.get(seg)
-        if reads:
-            state.anchor_reads[seg] = reads
-        else:
-            state.anchor_reads.pop(seg, None)
-
-
 def _anchor_warning(a: Analysis, owner: str, reader: str, command: str, line: int) -> str:
     """The warning for a command that used the anchor of ``owner`` (S19), with the fix."""
     where = f"{a.main.name if is_glue(reader) else a.include_of(reader).name + '.tex'}:{line}"
@@ -360,20 +348,11 @@ class Fixpoint:
         owners_before = set(anchor_owners(a, state))
         with committing(canon, state, [s.name for s in specs]):  # journal (C7)
             for view, recs, compiled in zip(views, all_recs, compiled_by_run, strict=True):
-                commit_run(a, ctx.layout, state, view, compiled)
-                self._attribute(view, compiled)
-                _store_anchors(state, recs, compiled)
                 for seg in compiled:
-                    if seg in recs.openright:
-                        state.openright[seg] = recs.openright[seg]
-                    effects = recs.global_effects.get(seg)
-                    if effects and seg not in state.runtime_global:
+                    if recs.fact(seg, "G") and not state.fact(seg, "G"):
                         new_global[seg] = compiled
-                    if effects:
-                        state.runtime_global[seg] = sorted(effects)
-                    elif seg in state.runtime_global:
-                        del state.runtime_global[seg]
-            _store_anchors(state, all_recs[-1], set(a.glue_segments))  # glue: every run
+                commit_run(a, ctx.layout, state, view, compiled)  # also the facts
+                self._attribute(view, compiled)
             owners = anchor_owners(a, state)
             for owner, uses in owners.items():
                 for reader, command, line in uses:
@@ -402,7 +381,7 @@ class Fixpoint:
                             for s, f in recs.files
                             if s == seg and f.endswith(derived)
                         }
-                        reads |= {ext for s, ext in recs.list_starts if s == seg}
+                        reads |= {"." + ext for (ext,) in recs.fact(seg, "L")}
                     state.units[seg] = UnitInputs(
                         entry=recs.entry_state(seg),
                         imports=imports(scan, pre.values),
@@ -426,7 +405,7 @@ class Fixpoint:
                 glue_after = glue_after or "list files without unit markers (rewritten by the glue)"
             for g, with_g in new_global.items():
                 # later units committed from runs without it miss its page numbering/style
-                what = ", ".join(state.runtime_global[g])
+                what = ", ".join(c for (c,) in state.fact(g, "G"))
                 for seg in a.unit_segments[a.unit_segments.index(g) + 1 :]:
                     if seg not in with_g:
                         dirty_after.setdefault(seg, []).append(
