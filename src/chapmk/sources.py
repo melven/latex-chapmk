@@ -61,7 +61,7 @@ def anchor_owner(analysis: Analysis, state: State, reader: str) -> str | None:
     ``Doc-Start``)."""
     order = analysis.segments
     for seg in reversed(order[: order.index(reader)]):
-        if not state.anchors.get(seg, True):
+        if seg in state.facts and not state.fact(seg, "H"):
             continue
         if is_glue(seg):
             return None
@@ -78,10 +78,10 @@ def anchor_owners(analysis: Analysis, state: State) -> dict[str, list[tuple[str,
     command, line), in document order."""
     owners: dict[str, list[tuple[str, str, int]]] = {}
     for reader in analysis.segments:
-        reads = state.anchor_reads.get(reader)
+        reads = state.fact(reader, "R")
         owner = anchor_owner(analysis, state, reader) if reads else None
         if owner is not None:
-            owners.setdefault(owner, []).extend((reader, c, n) for c, n in reads or ())
+            owners.setdefault(owner, []).extend((reader, c, int(n)) for c, n in reads)
     return owners
 
 
@@ -131,10 +131,10 @@ class UnitSources:
         return self._lint[seg]
 
     def is_global(self, seg: str) -> bool:
-        """Global unit (§6.8.4): a lint hit, state it changed at run time (``G`` records), or
+        """Global unit (§6.8.4): a lint hit, state it changed at run time (``G`` facts), or
         an anchor a later segment uses (S19)."""
         return (
-            seg in self.state.runtime_global
+            bool(self.state.fact(seg, "G"))
             or seg in anchor_owners(self.a, self.state)
             or bool(self.lint(seg))
         )

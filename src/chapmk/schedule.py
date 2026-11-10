@@ -120,7 +120,7 @@ class Schedule:
         odd = frozenset(
             unit_id(k)
             for k, inc in enumerate(self.a.includes, start=1)
-            if inc.heading in UNIT_HEADINGS and self.state.openright.get(unit_id(k), default)
+            if inc.heading in UNIT_HEADINGS and self._openright(unit_id(k), default)
         )
         self.odd = odd
         pred = predict(self.a.segments, self.state.vectors, first, entry, odd)
@@ -132,6 +132,11 @@ class Schedule:
                 out[seg] = (pred[seg][1], modified(self.state.vectors[seg]))
             rewrites[j] = out
         return pred, rewrites
+
+    def _openright(self, unit: str, default: bool) -> bool:
+        """Whether ``unit`` started under twoside and openright (``O`` fact), else ``default``."""
+        flag = self.state.fact(unit, "O")
+        return flag[0] == ("1",) if flag else default
 
     def verify(
         self,

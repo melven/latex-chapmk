@@ -11,8 +11,9 @@ from chapmk.errors import ChapmkError
 from chapmk.facts import DEFAULT_LIST_SUFFIXES
 from chapmk.files import write_atomic
 from chapmk.predict import SegmentVectors
+from chapmk.records import Facts
 
-STATE_VERSION = 8
+STATE_VERSION = 9
 STATE_FILE = "state.json"
 
 
@@ -55,7 +56,9 @@ class State:
     units with reasons and ``glue_pending`` why the glue is invalid, if the last build did not
     reach the fixpoint (e.g. a TeX error). ``vectors`` holds entry, exit and absolute set of
     each segment from its committing run (prediction, §6.9.3); ``eqp_tags`` the eqparbox tags
-    each segment used in its committing run. ``dist_files`` holds the stat signatures
+    each segment used in its committing run; ``facts`` the per-segment facts of the
+    committing run (``records.SEGMENT_FACTS``: units from their run, glue from the last run;
+    every committed segment has an entry). ``dist_files`` holds the stat signatures
     of the distribution files read by the format build and the runs (C4): a change (e.g. a
     ``tlmgr`` update) forces a cold build, so reused pages and new runs never mix package
     versions.
@@ -78,18 +81,15 @@ class State:
     vectors: dict[str, SegmentVectors] = field(default_factory=dict)
     eqp_tags: dict[str, list[str]] = field(default_factory=dict)
     pictures: dict[str, list[str]] = field(default_factory=dict)  # figure keys per segment
-    openright: dict[str, bool] = field(default_factory=dict)  # unit starts on an odd page
-    # units that changed page numbering or page style at run time (G records): global
-    runtime_global: dict[str, list[str]] = field(default_factory=dict)
-    # S19: whether a segment sets a new current anchor (H records; units from their
-    # committing run, glue from the last run) and per segment the commands that used an
-    # anchor of an earlier segment (R records: command, line); see sources.anchor_owner
-    anchors: dict[str, bool] = field(default_factory=dict)
-    anchor_reads: dict[str, list[tuple[str, int]]] = field(default_factory=dict)
+    facts: dict[str, Facts] = field(default_factory=dict)
     # list files of the document: the defaults plus those recorded (L records)
     list_suffixes: list[str] = field(default_factory=lambda: list(DEFAULT_LIST_SUFFIXES))
     dist_files: dict[str, str] = field(default_factory=dict)  # path -> "size:mtime_ns"
     version: int = STATE_VERSION
+
+    def fact(self, segment: str, kind: str) -> list[tuple[str, ...]]:
+        """The arguments of the committed ``segment``'s facts of ``kind`` (empty: none)."""
+        return self.facts.get(segment, {}).get(kind, [])
 
     def run_names(self) -> set[str]:
         """Run directories referenced by the state (others can be garbage-collected)."""
@@ -172,11 +172,9 @@ def load_state(canon_dir: Path) -> State | None:
             },
             eqp_tags={k: list(v) for k, v in data["eqp_tags"].items()},
             pictures={k: list(v) for k, v in data["pictures"].items()},
-            openright={k: bool(v) for k, v in data["openright"].items()},
-            runtime_global={k: list(v) for k, v in data["runtime_global"].items()},
-            anchors={k: bool(v) for k, v in data["anchors"].items()},
-            anchor_reads={
-                k: [(str(c), int(n)) for c, n in v] for k, v in data["anchor_reads"].items()
+            facts={
+                seg: {kind: [tuple(map(str, a)) for a in args] for kind, args in f.items()}
+                for seg, f in data["facts"].items()
             },
             list_suffixes=list(data["list_suffixes"]),
             dist_files={str(k): str(v) for k, v in data["dist_files"].items()},
