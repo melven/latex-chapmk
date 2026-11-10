@@ -995,7 +995,9 @@ Candidates for later:
 | One of TeX's 16 write streams used by chapmk.sty | Documented |
 | Dates fixed at the cold build (N4) | Documented; `chapmk clean` for a new date |
 | PDF features without merge rules (forms, optional content) | Catalog entries are copied with mapped page references; `check` compares the catalog |
-| A font is loaded where a run first uses it: a run that excludes the unit using it first loads it later, e.g. inside a TikZ picture, where the code that runs on first use (`.fd` files, microtype's settings) can leave zero-size nodes (sweep E2: SyncTeX records differ), and a tiny size difference of a tree scaled to the line width moves an anchor by up to 0.14 pt (sweep C2, 6ym6n) | Accepted (user decision, issue #78): invisible; replaying the fonts each unit loads first at excluded units would be costly for rare cases; `chapmk check` reports it |
+| A font is loaded where a run first uses it: a run that excludes the unit using it first loads it later, e.g. inside a TikZ picture, where the code that runs on first use (`.fd` files, microtype's settings) can leave zero-size nodes (sweep E2: SyncTeX records differ) | Accepted (user decision, issue #78): invisible; replaying the fonts each unit loads first at excluded units would be costly for rare cases; `chapmk check` reports it |
+| Link targets in rotated content (`sidewaysfigure`, `adjustbox` with `rotate`): pdfTeX's `/XYZ` position there lies outside the page and its x changes with unrelated code, also in a plain build (a `\def` before `\documentclass` moves it by 0.1 pt; `chapmk-ini.sty` by up to 2.9 pt; a run that excludes an earlier unit by 0.13 pt; sweep C2: 6ym6n, alorenzo175, albertopasqualetto) | Accepted (user decision, issue #78): invisible, the link goes to the right page; `chapmk check` reports it |
+| SyncTeX records of a file the document writes and reads back name its copy in the build directory, which differs between full mode (`full/`) and the runs (`runs/r<n>/`) | Accepted (issue #78): neither name is a source file, there is no correct one; `chapmk check` reports it |
 
 ---
 
