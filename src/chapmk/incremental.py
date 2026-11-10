@@ -225,7 +225,7 @@ class Fixpoint:
         self.sources = UnitSources(self.a, state, ctx.config, load_lint_cache(ctx.layout.canon_dir))
         self.rules = DirtyRules(self.a, state, self.sources.scan, self._warn)
         self.schedule = Schedule(
-            self.a, state, self.sources.is_global, ctx.config.effective_jobs, ctx.say
+            self.a, state, self.sources.global_reasons, ctx.config.effective_jobs, ctx.say
         )
         # one dict for the messages of both (filled from the logs after the first batch)
         self.register_names = self.rules.register_names = self.schedule.register_names

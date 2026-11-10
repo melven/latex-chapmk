@@ -1,12 +1,13 @@
 """What the builder knows about the sources of each unit (design §6.8): token scans (imports,
 list reads) and lint hits (global units, §6.8.4), cached per build; the persistent lint cache
-(``canon/lint-cache.json``, only the entries a build used are kept); the units whose anchor a
-later segment uses (S19, global units)."""
+(``canon/lint-cache.json``, only the entries a build used are kept); the global units
+(§6.8.4: one table of rules, :data:`GLOBAL_RULES`), among them the units whose anchor a later
+segment uses (S19)."""
 
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +16,7 @@ from chapmk.config import Config
 from chapmk.deps import TokenScan, read_text
 from chapmk.files import write_atomic
 from chapmk.lint import LintHit, lint_files
+from chapmk.logs import short_list
 from chapmk.segment import is_glue
 from chapmk.state import State
 
@@ -85,6 +87,32 @@ def anchor_owners(analysis: Analysis, state: State) -> dict[str, list[tuple[str,
     return owners
 
 
+def _lint_rule(src: UnitSources, seg: str) -> str | None:
+    hits = src.lint(seg)
+    return f"lint: {short_list(sorted({h.command for h in hits}), 3)}" if hits else None
+
+
+def _runtime_rule(src: UnitSources, seg: str) -> str | None:
+    changed = [c for (c,) in src.state.fact(seg, "G")]
+    return f"changes {', '.join(changed)} at run time" if changed else None
+
+
+def _anchor_rule(src: UnitSources, seg: str) -> str | None:
+    return "a later part uses its anchor" if seg in anchor_owners(src.a, src.state) else None
+
+
+#: Why a unit is global (§6.8.4): it changes state that no checkpoint carries, so it is compiled
+#: in every run, and when it becomes global, the later segments committed from runs without it
+#: are compiled again (incremental). Each rule gives its reason or None: an A1 lint hit in its
+#: sources, a change at run time (``G`` facts), its anchor used by a later segment (S19). A new
+#: kind of global unit is one rule here.
+GLOBAL_RULES: tuple[Callable[[UnitSources, str], str | None], ...] = (
+    _lint_rule,
+    _runtime_rule,
+    _anchor_rule,
+)
+
+
 class UnitSources:
     """Token scans and lint hits of the sources attributed to each segment (``state``),
     computed on first use; :meth:`forget` drops them after a commit changed the attribution."""
@@ -130,14 +158,13 @@ class UnitSources:
             )
         return self._lint[seg]
 
+    def global_reasons(self, seg: str) -> list[str]:
+        """Why ``seg`` is a global unit (:data:`GLOBAL_RULES`); empty if it is none."""
+        return [r for rule in GLOBAL_RULES if (r := rule(self, seg)) is not None]
+
     def is_global(self, seg: str) -> bool:
-        """Global unit (§6.8.4): a lint hit, state it changed at run time (``G`` facts), or
-        an anchor a later segment uses (S19)."""
-        return (
-            bool(self.state.fact(seg, "G"))
-            or seg in anchor_owners(self.a, self.state)
-            or bool(self.lint(seg))
-        )
+        """Global unit (§6.8.4): any of :data:`GLOBAL_RULES` applies."""
+        return any(rule(self, seg) is not None for rule in GLOBAL_RULES)
 
     def forget(self, segs: Iterable[str]) -> None:
         """Drop the scans and lint hits of ``segs`` and the glue scan (sources re-attributed)."""

@@ -16,7 +16,7 @@ def _planner(n: int, groups: list[list[int]], global_units: set[int]) -> Schedul
     return Schedule(
         analysis,  # type: ignore[arg-type]
         SimpleNamespace(),  # type: ignore[arg-type]
-        lambda seg: seg_index(seg) in global_units,
+        lambda seg: ["lint: \\x"] if seg_index(seg) in global_units else [],
         jobs=1,
     )
 
@@ -29,7 +29,8 @@ def test_plan_groups_and_global_units() -> None:
     # a global unit is in every run; when dirty itself, all later units join
     fp = _planner(5, [[1], [2], [3], [4], [5]], {2})
     sel, reasons = fp.plan({"U4": ["sources changed"]})
-    assert sel == [2, 4] and "compiled in every run" in reasons["U2"][0]
+    assert reasons["U2"] == ["global unit (lint: \\x): compiled in every run for its state"]
+    assert sel == [2, 4]
     sel, reasons = fp.plan({"U2": ["sources changed"]})
-    assert sel == [2, 3, 4, 5] and "follows the global unit c2" in reasons["U5"][0]
+    assert sel == [2, 3, 4, 5] and reasons["U5"] == ["follows the global unit c2 (lint: \\x)"]
     assert fp.plan({})[0] == [2]

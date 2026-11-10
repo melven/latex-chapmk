@@ -18,20 +18,21 @@ from chapmk.state import State
 class Schedule:
     """Planning state of one build: compilation-unit groups, consecutive mispredictions,
     the entries observed in the latest run and the vectors the last prediction used.
-    ``is_global`` tells whether a unit is global (lint, §6.8.4); ``jobs`` is ``-j``."""
+    ``global_reasons`` tells why a unit is global (§6.8.4, ``sources.GLOBAL_RULES``; empty: it
+    is none); ``jobs`` is ``-j``."""
 
     def __init__(
         self,
         analysis: Analysis,
         state: State,
-        is_global: Callable[[str], bool],
+        global_reasons: Callable[[str], list[str]],
         jobs: int,
         say: Callable[[str], None] = lambda _m: None,
     ) -> None:
-        self.a, self.state, self.is_global, self.jobs, self.say = (
+        self.a, self.state, self.global_reasons, self.jobs, self.say = (
             analysis,
             state,
-            is_global,
+            global_reasons,
             jobs,
             say,
         )
@@ -51,7 +52,7 @@ class Schedule:
     def plan(self, dirty: Mapping[str, list[str]]) -> tuple[list[int] | None, dict[str, list[str]]]:
         """Include indices to compile (None = all) and the reasons per unit segment.
 
-        Whole compilation units are compiled. A *global* unit (lint, §6.8.4) changes state
+        Whole compilation units are compiled. A *global* unit (§6.8.4) changes state
         that checkpoints do not restore, so it is part of every run; when it is dirty itself,
         all later units are compiled with it (they see its new state only in the same run).
         """
@@ -63,15 +64,15 @@ class Schedule:
         own = [k for k in sorted(ks) if self.is_global(unit_id(k))]
         if own:
             arg = self.a.includes[own[0] - 1].arg
+            why = "; ".join(self.global_reasons(unit_id(own[0])))
             for k in range(own[0] + 1, n + 1):
                 if k not in ks:
-                    reasons[unit_id(k)] = [f"follows the global unit {arg} (lint)"]
+                    reasons[unit_id(k)] = [f"follows the global unit {arg} ({why})"]
                     ks.add(k)
         for k in range(1, n + 1):
-            if k not in ks and self.is_global(unit_id(k)):
-                reasons[unit_id(k)] = [
-                    "global unit (lint or run-time state): compiled in every run for its state"
-                ]
+            why = "; ".join(self.global_reasons(unit_id(k))) if k not in ks else ""
+            if why:
+                reasons[unit_id(k)] = [f"global unit ({why}): compiled in every run for its state"]
                 ks.update(self.group[k])
         return (None if len(ks) == n else sorted(ks)), reasons
 
@@ -132,6 +133,9 @@ class Schedule:
                 out[seg] = (pred[seg][1], modified(self.state.vectors[seg]))
             rewrites[j] = out
         return pred, rewrites
+
+    def is_global(self, unit: str) -> bool:
+        return bool(self.global_reasons(unit))
 
     def _openright(self, unit: str, default: bool) -> bool:
         """Whether ``unit`` started under twoside and openright (``O`` fact), else ``default``."""

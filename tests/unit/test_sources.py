@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 
 from chapmk.segment import document_order, seg_index
-from chapmk.sources import anchor_owner, anchor_owners
+from chapmk.sources import GLOBAL_RULES, anchor_owner, anchor_owners
 from chapmk.state import State
 
 
@@ -53,3 +53,18 @@ def test_anchor_owner_in_the_same_compilation_unit() -> None:
         _state(sets, {"G2": [("label", 7)], "U3": [("addcontentsline", 1)], "G3": []}),
     )
     assert owners == {"U2": [("G2", "label", 7)]}
+
+
+def test_global_rules() -> None:
+    """Each rule of GLOBAL_RULES gives its reason: a lint hit, a G fact, an anchor owner."""
+    a = _doc(2, [[1], [2]])
+    state = _state({"U1": True, "G1": False, "U2": False}, {"U2": [("label", 3)]})
+    state.facts["U2"]["G"] = [("pagenumbering",), ("pagestyle",)]
+    hits = {"U1": [SimpleNamespace(command="\\color")] * 2}
+    src = SimpleNamespace(a=a, state=state, lint=lambda seg: hits.get(seg, []))
+
+    def reasons(seg: str) -> list[str | None]:
+        return [rule(src, seg) for rule in GLOBAL_RULES]  # type: ignore[arg-type]
+
+    assert reasons("U1") == ["lint: \\color", None, "a later part uses its anchor"]
+    assert reasons("U2") == [None, "changes pagenumbering, pagestyle at run time", None]
