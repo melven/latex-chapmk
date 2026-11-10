@@ -100,6 +100,16 @@ jobs:
             pip install -q -e .
             pytest -n auto --dist worksteal -q -rfE
           '
+      - name: MiKTeX format and font making (from its logs)
+        if: always()
+        run: |
+          # who made formats, fonts or the package database during the tests (cold builds:
+          # "TeX distribution files changed (pdflatex.fmt)")
+          for d in miktex-logs/*/; do
+            echo "== $d"
+            grep -h "started by" "$d"*.log* 2>/dev/null | grep -iE "makefmt|initexmf|makepk|maketfm|mf |makebase|fndb" | cut -c1-300 | tail -40 || true
+            ls -la "$d" "$d"makefmt/* 2>/dev/null | head -40 || true
+          done
       - name: MiKTeX logs (format and font making, package database)
         if: always()
         uses: actions/upload-artifact@v4
