@@ -209,3 +209,20 @@ def test_pdfx_gives_full_builds(tmp_path: Path, capsys: pytest.CaptureFixture[st
         (src / f"{x}.tex").write_text(f"\\chapter{{{x}}}\nText {x}.\n")
     rep = checked(src, capsys)
     assert rep["mode"] == "full" and "pdfx" in rep["reason"], rep
+
+
+def test_pdfx_loaded_by_the_class(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Sweep (osmartormena): a class loads pdfx; its XMP file, written and read in the
+    preamble, makes the format build fail. The reason names pdfx (the format build's
+    recorder file), not the TeX error."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "thesis.cls").write_text("\\LoadClass{book}\n\\RequirePackage[a-2u]{pdfx}\n")
+    (src / "main.tex").write_text(
+        "\\documentclass{thesis}\n\\usepackage{bookmark}\n"
+        "\\begin{document}\n\\include{a}\n\\include{b}\n\\end{document}\n"
+    )
+    for x in "ab":
+        (src / f"{x}.tex").write_text(f"\\chapter{{{x}}}\nText {x}.\n")
+    rep = checked(src, capsys)
+    assert rep["mode"] == "full" and "package 'pdfx' is not supported" in rep["reason"], rep

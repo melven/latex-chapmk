@@ -52,9 +52,10 @@ from chapmk.config import Config
 from chapmk.deps import imports
 from chapmk.dirty import DirtyRules
 from chapmk.errors import FallbackError, TexError
-from chapmk.facts import UNIT_HEADINGS, derived_suffixes, runtime_reason
+from chapmk.facts import UNIT_HEADINGS, derived_suffixes, runtime_reason, unsupported_loaded
 from chapmk.files import changed_files, digest, source_name, write_atomic
 from chapmk.fmt import (
+    FORMAT_NAME,
     FormatInfo,
     ensure_format,
     format_dist_inputs,
@@ -634,8 +635,11 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         ctx.timings.lap("state")
         try:
             fmt = ensure_format(ctx.analysis, ctx.layout, ctx.dist, ctx.env(state.epoch))
-        except TexError as err:
-            raise FallbackError(f"format build failed: {err.first_error}") from err
+        except TexError as err:  # an unsupported package (loaded by the class) may cause it: pdfx
+            why = unsupported_loaded(loaded_names(ctx.layout.fmt_dir / f"{FORMAT_NAME}.fls"))
+            raise FallbackError(
+                why or f"format build failed: {err.first_error}", bool(why)
+            ) from err
         loop = Fixpoint(ctx, state, fmt)
         if reason is not None:
             dirty: dict[str, list[str]] = {seg: ["cold build"] for seg in loop.units}
