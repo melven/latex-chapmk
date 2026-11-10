@@ -56,12 +56,17 @@ def source_reasons(text: str) -> list[str]:
     return [why for pattern, why in UNSUPPORTED_SOURCE.items() if re.search(pattern, text)]
 
 
+def unsupported_loaded(loaded: Collection[str]) -> str | None:
+    """The reason for the first unsupported package among the file names ``loaded``."""
+    pkg = next((p for p in sorted(UNSUPPORTED_PACKAGES) if f"{p}.sty" in loaded), None)
+    return package_reason(pkg, at_runtime=True) if pkg else None
+
+
 def runtime_reason(loaded: Collection[str], main_aux: Sequence[str]) -> str | None:
     """The first fallback reason of a run or format build: ``loaded`` are the file names it
     read (``.fls``, e.g. ``hyperref.sty``), ``main_aux`` the lines of its main aux file."""
-    for pkg in sorted(UNSUPPORTED_PACKAGES):
-        if f"{pkg}.sty" in loaded:
-            return package_reason(pkg, at_runtime=True)
+    if reason := unsupported_loaded(loaded):
+        return reason
     for start, why in UNSUPPORTED_AUX.items():
         if any(line.startswith(start) for line in main_aux):
             return why
