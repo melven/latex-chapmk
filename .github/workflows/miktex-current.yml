@@ -77,6 +77,9 @@ jobs:
             set -e
             w=$(mktemp -d); tar -C /work --exclude=./.test-cache -cf - . | tar -C "$w" -xf -
             ln -s /cache "$w/.test-cache"; cd "$w"
+            # pdflatex.fmt before the tests: MiKTeX makes it at first use, and a test that
+            # recorded it before a parallel test made it again builds cold
+            initexmf --dump=pdflatex >/dev/null
             pip install -q -e .
             pytest -n auto --dist worksteal -q -rfE
           '
@@ -87,6 +90,9 @@ jobs:
             set -e
             w=$(mktemp -d); tar -C /work --exclude=./.test-cache -cf - . | tar -C "$w" -xf -
             ln -s /cache "$w/.test-cache"; cd "$w"
+            # pdflatex.fmt before the tests: MiKTeX makes it at first use, and a test that
+            # recorded it before a parallel test made it again builds cold
+            initexmf --dump=pdflatex >/dev/null
             pip install -q -e .
             pytest -n auto --dist worksteal -q -rfE
           '
