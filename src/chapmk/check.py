@@ -144,37 +144,28 @@ def _page_count(pdf: Path) -> int:
     return int(m.group(1))
 
 
+def _render(pdf: Path, workdir: Path, dpi: int, first: int, last: int) -> list[str]:
+    """SHA-256 of the rendered pages ``first`` to ``last`` (1-based); the images are deleted."""
+    argv = ["pdftoppm", "-r", str(dpi), "-f", str(first), "-l", str(last), str(pdf)]
+    r = run([*argv, str(workdir / "p")], cwd=workdir, env=dict(os.environ))
+    files = sorted(workdir.glob("p-*.ppm"))
+    if not r.ok or len(files) != last - first + 1:
+        raise ToolError(f"pdftoppm failed on {pdf} pages {first}-{last}: {r.output.strip()[-300:]}")
+    digests = [digest(f) for f in files]
+    for f in files:
+        f.unlink()
+    return digests
+
+
 def _rasters(pdf: Path, workdir: Path, dpi: int, chunk: int = 25) -> list[str]:
     """SHA-256 of each rendered page. Pages are rendered in chunks and deleted at once (an
     uncompressed page at 150 dpi has about 6.5 MB; the pgf manual has 1136 pages)."""
     pages = _page_count(pdf)
-    digests: list[str] = []
-    for first in range(1, pages + 1, chunk):
-        last = min(pages, first + chunk - 1)
-        r = run(
-            [
-                "pdftoppm",
-                "-r",
-                str(dpi),
-                "-f",
-                str(first),
-                "-l",
-                str(last),
-                str(pdf),
-                str(workdir / "p"),
-            ],
-            cwd=workdir,
-            env=dict(os.environ),
-        )
-        files = sorted(workdir.glob("p-*.ppm"))
-        if not r.ok or len(files) != last - first + 1:
-            raise ToolError(
-                f"pdftoppm failed on {pdf} pages {first}-{last}: {r.output.strip()[-300:]}"
-            )
-        for f in files:
-            digests.append(digest(f))
-            f.unlink()
-    return digests
+    return [
+        d
+        for first in range(1, pages + 1, chunk)
+        for d in _render(pdf, workdir, dpi, first, min(pages, first + chunk - 1))
+    ]
 
 
 #: largest difference of a /Widths entry tolerated by the raster comparison (per 1000 em)
@@ -226,34 +217,10 @@ def _rasters_with_ref_widths(
 ) -> list[str]:
     """SHA-256 of the pages (0-based) of :func:`ref_widths_copy`, rendered one by one."""
     copy = ref_widths_copy(ref, got, workdir / "ref-widths.pdf")
-    digests = []
     try:
-        for i in pages:
-            r = run(
-                [
-                    "pdftoppm",
-                    "-r",
-                    str(dpi),
-                    "-f",
-                    str(i + 1),
-                    "-l",
-                    str(i + 1),
-                    str(copy),
-                    str(workdir / "w"),
-                ],
-                cwd=workdir,
-                env=dict(os.environ),
-            )
-            files = sorted(workdir.glob("w-*.ppm"))
-            if not r.ok or len(files) != 1:
-                raise ToolError(
-                    f"pdftoppm failed on {copy} page {i + 1}: {r.output.strip()[-300:]}"
-                )
-            digests.append(digest(files[0]))
-            files[0].unlink()
+        return [d for i in pages for d in _render(copy, workdir, dpi, i + 1, i + 1)]
     finally:
         copy.unlink()
-    return digests
 
 
 def _texts(pdf: Path, workdir: Path) -> list[str]:
