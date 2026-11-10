@@ -49,6 +49,28 @@ def test_eqparbox_tag_shared_by_chapters(
     assert checked(src, capsys)["mode"] == "incremental"
 
 
+def test_eqparbox_tag_dropped_by_a_chapter(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A chapter that stops using eqparbox drops its tags, also when its run uses no eqparbox
+    at all: a later width change of a tag it used is not shared (C13) any more, so the build
+    stays incremental (before: full mode, the old tag was kept)."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage{eqparbox}\n\\begin{document}\n"
+        "\\include{a}\n\\include{b}\n\\end{document}\n"
+    )
+    (src / "a.tex").write_text("\\chapter{A}\\eqparbox{shared}{a wide box}|after\n")
+    (src / "b.tex").write_text("\\chapter{B}\\eqparbox{shared}{narrow}|after\n")
+    assert checked(src, capsys, "-j", "1")["mode"] == "cold"
+    edit(src / "b.tex", "\\eqparbox{shared}{narrow}", "narrow")
+    assert checked(src, capsys, "-j", "1")["compiled"] == ["b"]
+    edit(src / "a.tex", "a wide box", "a much wider box")
+    rep = checked(src, capsys, "-j", "1")
+    assert rep["mode"] == "incremental" and rep["compiled"] == ["a"], rep
+
+
 @pytest.mark.parametrize("jobs", ["1", "4"])
 def test_cleveref_across_units(
     copy_corpus,  # type: ignore[no-untyped-def]
