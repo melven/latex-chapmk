@@ -117,6 +117,8 @@ Details: [docs/design.md](https://github.com/melven/latex-chapmk/blob/main/docs/
 - chapmk uses one of TeX's 16 write streams.
 - Files written in the preamble (e.g. `filecontents` before `\begin{document}`) give full
   builds.
+- Source files outside the main file's directory (`\input{../x}`, `\graphicspath{{../fig/}}`)
+  are not found: keep the document in one directory tree.
 - A font is loaded at its first use in a run, so a run that excludes earlier chapters loads
   it later. Inside a TikZ picture this can change SyncTeX records; nothing visible.
   `chapmk check` reports it.
