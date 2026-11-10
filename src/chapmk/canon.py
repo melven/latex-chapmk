@@ -194,11 +194,17 @@ def commit_run(
         if unit_id(k) in compiled:
             (canon / inc.aux_name).parent.mkdir(parents=True, exist_ok=True)
             copy_atomic(run_dir / inc.aux_name, canon / inc.aux_name)
+    run_main = run.main_statements
+    aggregates = list(dict.fromkeys(s for s in run_main if classify(s) == AGGREGATE))
+    by_seg = citations_by_segment(run_main, run.bcf) if run.bcf is not None else None
     for seg in taken:
         state.segments[seg] = SegmentArtifact(
             run_name, tuple(p.index for p in recs.pages if p.segment == seg)
         )
         state.facts[seg] = {kind: list(args) for kind, args in recs.facts.get(seg, {}).items()}
+        state.aggregates[seg] = aggregates
+        if by_seg is not None:
+            state.citations[seg] = by_seg.get(seg, [])
         if seg in recs.entries:
             exit_ = (
                 recs.checkpoints.get(seg, {})
@@ -210,12 +216,6 @@ def commit_run(
                 normalized(exit_),
                 frozenset(recs.absolute.get(seg, ())),
             )
-    for seg in taken:  # Q records
-        state.eqp_tags[seg] = sorted(recs.eqp_uses.get(seg, ()))
-    run_main = run.main_statements
-    aggregates = list(dict.fromkeys(s for s in run_main if classify(s) == AGGREGATE))
-    for seg in taken:
-        state.aggregates[seg] = aggregates
     old_path = canon / f"{job}.aux"
     old_main = statements(read_lines(old_path)) if old_path.is_file() else []
     pages = sum(len(state.segments[s].pages) for s in order if s in state.segments)
@@ -227,10 +227,6 @@ def commit_run(
         pages,
     )
     write_if_changed(old_path, "\n".join(canonical) + "\n")
-    if run.bcf is not None:
-        by_seg = citations_by_segment(run_main, run.bcf)
-        for seg in taken:
-            state.citations[seg] = by_seg.get(seg, [])
     for suffix, found in ((".nlo", recs.nomenclature), (".idx", recs.index)):
         path = canon / f"{job}{suffix}"
         if found or path.is_file():

@@ -26,14 +26,15 @@ NLO_MARKER = "%chapmk-seg "
 #: Per-segment facts (Appendix B): ``.frec`` lines ``<kind> <segment> <args>`` that chapmk.sty
 #: writes with ``\\chapmk@fact``, kept per segment (:attr:`RunRecords.facts`) and committed
 #: with the segment (``State.facts``: units from their run, glue from the last run). Kind ->
-#: number of arguments. A new fact is a writer in chapmk.sty, one entry here and the rule that
-#: reads it.
+#: number of arguments (-1: one, the rest of the line, which may contain spaces). A new fact
+#: is a writer in chapmk.sty, one entry here and the rule that reads it.
 SEGMENT_FACTS: dict[str, int] = {
     "G": 1,  # unit: changed page numbering or style at run time (pagenumbering, pagestyle)
     "H": 0,  # the segment ends with an anchor or number of its own (S19)
     "R": 2,  # command, line: an \\addcontentsline or \\label used an earlier anchor (S19)
     "O": 1,  # unit: starts under twoside and openright (0, 1)
     "L": 1,  # extension of a list file the segment typesets (\\@starttoc)
+    "Q": -1,  # eqparbox tag the segment uses (C13)
 }
 
 #: The facts of one segment: kind -> argument tuples, in record order without repetitions.
@@ -206,8 +207,6 @@ class RunRecords:
     #: elapsed TeX time in seconds at points of the run (``load``, ``begin``, segment ids,
     #: ``end``; the TeX phases of the report), in order
     times: list[tuple[str, float]] = field(default_factory=list)
-    #: eqparbox tags used per segment (``Q`` records)
-    eqp_uses: dict[str, set[str]] = field(default_factory=dict)
     #: page layout flags (``twoside``, ``openright``: 0/1)
     layout: dict[str, int] = field(default_factory=dict)
     #: segment -> its facts (:data:`SEGMENT_FACTS`)
@@ -282,18 +281,20 @@ def _read_frec(path: Path, recs: RunRecords) -> None:
         if line.startswith("P "):
             index, seg, value, label = [*line[2:].split(" ", 3), ""][:4]
             recs.pages.append(PageRecord(int(index), seg, int(value), label))
-        elif line.startswith("Q "):
-            seg, _, tag = line[2:].partition(" ")
-            recs.eqp_uses.setdefault(seg, set()).add(tag.strip())
         elif line.startswith("T "):
             _, point, value = line.split(" ", 2)
             recs.times.append((point, int(value) / 65536))
         elif line.startswith("F "):
             seg, _, name = line[2:].partition(" ")
             recs.files.append((seg, name))
-        elif line.split(" ", 1)[0] in SEGMENT_FACTS:
-            kind, seg, *args = line.split()
-            if len(args) != SEGMENT_FACTS[kind]:
+        elif (kind := line.split(" ", 1)[0]) in SEGMENT_FACTS:
+            n = SEGMENT_FACTS[kind]
+            if n < 0:  # one argument: the rest of the line
+                _, seg, rest = line.split(" ", 2)
+                args = [rest.strip()]
+            else:
+                _, seg, *args = line.split()
+            if len(args) != abs(n):
                 raise ValueError(f"{kind} record with {len(args)} arguments: {line.strip()!r}")
             facts = recs.facts.setdefault(seg, {}).setdefault(kind, [])
             if tuple(args) not in facts:

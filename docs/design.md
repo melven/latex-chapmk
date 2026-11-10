@@ -1043,9 +1043,9 @@ Relevant mechanisms: the `.nlo` stream, biblatex renumbering, longtable and eqpa
 | stream marker | `.nlo`, `.idx` | `%chapmk-seg <seg>` |
 | list-file markers | list files | `\chapmk@lmark{U<k>}`, `\chapmk@lmark{/<seg>}` |
 
-**Segment facts:** the `.frec` records `G`, `H`, `R`, `O` and `L` have the form
+**Segment facts:** the `.frec` records `G`, `H`, `R`, `O`, `L` and `Q` have the form
 `<kind> <seg> <args>` (written by `\chapmk@fact`). They are parsed by one table
-(`records.SEGMENT_FACTS`: kind and number of arguments) and committed with the segment
+(`records.SEGMENT_FACTS`: kind and number of arguments; a `Q` tag is the rest of the line) and committed with the segment
 (`State.facts`); the rules that read them are in the scheduling, the global units and the
 list readers. A new per-segment fact is a writer, one table entry and its rule.
 

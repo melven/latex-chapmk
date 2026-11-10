@@ -40,7 +40,7 @@ UNIT_AUX = "\\relax\n\\chapmk@ckpt{U1}{0=7,276=6,280=-2,}\n\\chapmk@abs{U1}{12,-
 FREC = (
     "F G0 /usr/x/book.cls\nP 0 G0 1 i\nP 1 U1 1 1\nP 2 U1 2 2\nF U1 ch/a.tex\nF U1 plot1.pdf\n"
     "L U1 toc\nG U1 pagenumbering\nH U1 \nR G1 addcontentsline 12\nR G1 label 13\n"
-    "O U1 1\nL U1 toc\n"
+    "O U1 1\nL U1 toc\nQ U1 my tag\nQ G1 x\nQ U1 my tag\n"
 )
 NLO = "%chapmk-seg G0\n%chapmk-seg U1\n\\nomenclatureentry{A$x$}{1}\n%chapmk-seg G1\n"
 
@@ -79,7 +79,14 @@ def test_read_run_records(tmp_path: Path) -> None:
     ]
     assert ("U1", "plot1.pdf") in r.files
     # per-segment facts (SEGMENT_FACTS), in record order without repetitions
-    assert r.facts["U1"] == {"L": [("toc",)], "G": [("pagenumbering",)], "H": [()], "O": [("1",)]}
+    assert r.facts["U1"] == {
+        "L": [("toc",)],
+        "G": [("pagenumbering",)],
+        "H": [()],
+        "O": [("1",)],
+        "Q": [("my tag",)],  # the rest of the line: tags may contain spaces
+    }
+    assert r.fact("G1", "Q") == [("x",)]
     assert r.fact("G1", "R") == [("addcontentsline", "12"), ("label", "13")]
     assert r.fact("G2", "H") == [] and r.list_suffixes == {".toc"}
     assert r.nomenclature == {"G0": [], "U1": ["\\nomenclatureentry{A$x$}{1}"], "G1": []}

@@ -413,7 +413,7 @@
 \def\chapmk@ustart#1{\chapmk@listmarks{#1}}
 
 % eqparbox tags used per segment: "Q <segment> <tag>" for every use
-\def\chapmk@eqp#1{\immediate\write\chapmk@rec{Q \chapmk@seg\space#1}}% expandable (eqparbox uses it in \csname)
+\def\chapmk@eqp#1{\chapmk@fact{Q}{#1}}
 \def\chapmk@eqp@hooks{%
   \AddToHookWithArguments{cmd/eqp@compute@width/before}{\chapmk@eqp{##1}}%
   \AddToHookWithArguments{cmd/eqp@set@min@width/before}{\chapmk@eqp{##1}}}

@@ -208,6 +208,18 @@ def _check_runtime_support(run: RunView, fmt: FormatInfo) -> None:
         raise FallbackError(reason, True)
 
 
+def _check_records(recs: RunRecords) -> None:
+    """Records the incremental builder cannot handle: primitive marks (full mode)."""
+    if recs.primitive_marks:
+        regs = ", ".join(f"\\marks{n}" for n in sorted(recs.primitive_marks))
+        raise FallbackError(
+            f"running heads use primitive marks ({regs}; e.g. \\mark in a package): "
+            "excluded units cannot restore them, so every build is a full build "
+            "(supported: the kernel's mark classes, \\markboth, \\markright, \\InsertMark)",
+            True,
+        )
+
+
 def _write(path: Path, stmts: list[str]) -> None:
     write_atomic(path, "\n".join(stmts) + "\n")
 
@@ -281,36 +293,13 @@ class Fixpoint:
         specs: list[RunSpec] = []
         compiled_by_run: list[set[str]] = []
         for j, group in enumerate(groups):
-            name = state.new_run_name()
             ks = list(range(1, len(self.units) + 1)) if group is None else group
             args = None if group is None else tuple(a.includes[k - 1].arg for k in ks)
-            compiled = {unit_id(k) for k in ks}
-            for seg in sorted(compiled, key=position):
-                for hit in self.sources.lint(seg):
-                    self._warn(hit.message())
-            what = "all units" if args is None else ", ".join(args) if args else "glue only"
-            ctx.say(f"run {name}: {what}")
-            spec = RunSpec(name, args)
-            run_dir = prepare_run_dir(
-                a,
-                ctx.layout,
-                spec,
-                canon_dir=canon if canon.is_dir() else None,
-                deny_names=ctx.config.state_ignore,
-                list_suffixes=state.list_suffixes,
+            specs.append(RunSpec(state.new_run_name(), args))
+            compiled_by_run.append({unit_id(k) for k in ks})
+            self._prepare(
+                specs[-1], compiled_by_run[-1], rewrites.get(j, {}), registers, pictures_text
             )
-            main_aux = run_dir / f"{ctx.job}.aux"
-            if main_aux.is_file():
-                excluded = {seg for seg in self.units if seg not in compiled}
-                stmts = run_input_main_aux(statements(read_lines(main_aux)), excluded)
-                _write(main_aux, stmts)
-            for seg, (exit_, keep) in rewrites.get(j, {}).items():
-                path = run_dir / a.include_of(seg).aux_name
-                stmts = rewrite_checkpoint(statements(read_lines(path)), exit_, registers, keep)
-                _write(path, stmts)
-            (run_dir / PICS_FILE).write_text(pictures_text, encoding="utf-8")
-            specs.append(spec)
-            compiled_by_run.append(compiled)
         all_compiled = set().union(*compiled_by_run)
         pre_self = {seg: pre.unit_self(seg) for seg in all_compiled}
         env = ctx.env(state.epoch)
@@ -326,18 +315,11 @@ class Fixpoint:
         for view in views:  # before the records: an unsupported package can break them
             _check_runtime_support(view, self.fmt)
         all_recs = [v.records for v in views]
-        for recs in all_recs:  # list files with other extensions: stored and spliced from now on
+        for recs in all_recs:
+            _check_records(recs)
+            # list files with other extensions: stored and spliced from now on
             for suffix in sorted(recs.list_suffixes - set(state.list_suffixes)):
                 state.list_suffixes.append(suffix)
-        for recs in all_recs:
-            if recs.primitive_marks:
-                regs = ", ".join(f"\\marks{n}" for n in sorted(recs.primitive_marks))
-                raise FallbackError(
-                    f"running heads use primitive marks ({regs}; e.g. \\mark in a package): "
-                    "excluded units cannot restore them, so every build is a full build "
-                    "(supported: the kernel's mark classes, \\markboth, \\markright, \\InsertMark)",
-                    True,
-                )
         if not self.register_names:
             self.register_names.update(
                 register_names([self.fmt.directory / f"{self.fmt.name}.log", results[0].log])
@@ -366,29 +348,9 @@ class Fixpoint:
             tools = run_tools(a, ctx.layout, ctx.dist, env, state, views, full_run)
             t.lap("tools")
             post = self._view = read_canon(a, canon, state.list_suffixes)
-            derived = tuple(f"{ctx.job}{x}" for x in derived_suffixes(state.list_suffixes))
             for recs, compiled in zip(all_recs, compiled_by_run, strict=True):
                 for seg in compiled:
-                    scan = self.sources.scan(seg)
-                    # the list files it typesets (by command), reads (F records) and starts
-                    # (L records: also \@starttoc in a class macro, e.g. a preface command)
-                    reads = scan.list_reads()
-                    if reads is not None:
-                        reads |= {
-                            f[f.rindex(ctx.job) + len(ctx.job) :]
-                            for s, f in recs.files
-                            if s == seg and f.endswith(derived)
-                        }
-                        reads |= {"." + ext for (ext,) in recs.fact(seg, "L")}
-                    state.units[seg] = UnitInputs(
-                        entry=recs.entry_state(seg),
-                        imports=imports(scan, pre.values),
-                        lists=pre.lists_key(reads) if reads is None or reads else None,
-                        self_stable=pre_self[seg] == post.unit_self(seg),
-                        list_reads=None if reads is None else sorted(reads),
-                    )
-                    changed = set(pre_self[seg]) ^ set(post.unit_self(seg))
-                    self.rules.self_changes[seg] = sorted({command_name(s) for s in changed})
+                    self._store_inputs(seg, recs, pre, post, pre_self[seg])
             state.glue_inputs = pre_glue
             last = all_recs[-1]
             self.schedule.last_entries = {
@@ -402,19 +364,8 @@ class Fixpoint:
             if not lists_complete:
                 glue_after = glue_after or "list files without unit markers (rewritten by the glue)"
             for g in new_global:
-                # a unit found global by this batch (its run's records, files attributed to
-                # it): the later segments committed from runs without it (the glue: the last
-                # run) missed its state
-                with_g = next((c for c in compiled_by_run if g in c), set())
-                why = (
-                    f"after {a.include_of(g).arg}, a global unit "
-                    f"({'; '.join(self.sources.global_reasons(g))})"
-                )
-                for seg in self.units[self.units.index(g) + 1 :]:
-                    if seg not in with_g:
-                        dirty_after.setdefault(seg, []).append(why)
-                if g not in compiled_by_run[-1]:
-                    glue_after = glue_after or why
+                why = self._after_new_global(g, compiled_by_run, dirty_after)
+                glue_after = glue_after or why
             for seg, n in sorted(exported.items()):
                 # the run typeset these pictures inline; embedded, the result equals externalize
                 if is_unit(seg):
@@ -423,26 +374,103 @@ class Fixpoint:
                     glue_after = glue_after or f"pictures exported ({n} in the glue)"
             state.pending, state.glue_pending = dirty_after, glue_after
         t.lap("dirty")
-        reports = []
-        for j, (spec, result) in enumerate(zip(specs, results, strict=True)):
-            reports.append(
-                {
-                    "name": spec.name,
-                    "batch": number,
-                    "selection": None if spec.selection is None else list(spec.selection),
-                    "reasons": {
-                        a.include_of(s).arg: r
-                        for s, r in sorted(dirty.items())
-                        if s in compiled_by_run[j]
-                    },
-                    "glue": glue,
-                    "tools": tools if j == len(specs) - 1 else [],
-                    "seconds": round(result.seconds, 2),
-                    "tex": tex_phases(all_recs[j], result.seconds),
-                    "glue_segments": glue_times(all_recs[j]),
-                }
+        return [
+            {
+                "name": spec.name,
+                "batch": number,
+                "selection": None if spec.selection is None else list(spec.selection),
+                "reasons": {
+                    a.include_of(s).arg: r for s, r in sorted(dirty.items()) if s in compiled
+                },
+                "glue": glue,
+                "tools": tools if j == len(specs) - 1 else [],
+                "seconds": round(result.seconds, 2),
+                "tex": tex_phases(recs, result.seconds),
+                "glue_segments": glue_times(recs),
+            }
+            for j, (spec, result, recs, compiled) in enumerate(
+                zip(specs, results, all_recs, compiled_by_run, strict=True)
             )
-        return reports
+        ]
+
+    def _prepare(
+        self,
+        spec: RunSpec,
+        compiled: set[str],
+        rewrites: Mapping[str, tuple[Vector, frozenset[int]]],
+        registers: Mapping[str, int],
+        pictures_text: str,
+    ) -> None:
+        """The run directory of ``spec`` (§6.5): the canonical files, the main aux without the
+        unit content of the excluded units, their checkpoints rewritten to the predicted exits
+        (``rewrites``, parallel batches), the picture cache's driver file."""
+        ctx, a = self.ctx, self.a
+        for seg in sorted(compiled, key=position):
+            for hit in self.sources.lint(seg):
+                self._warn(hit.message())
+        args = spec.selection
+        what = "all units" if args is None else ", ".join(args) if args else "glue only"
+        ctx.say(f"run {spec.name}: {what}")
+        canon = ctx.layout.canon_dir
+        run_dir = prepare_run_dir(
+            a,
+            ctx.layout,
+            spec,
+            canon_dir=canon if canon.is_dir() else None,
+            deny_names=ctx.config.state_ignore,
+            list_suffixes=self.state.list_suffixes,
+        )
+        main_aux = run_dir / f"{ctx.job}.aux"
+        if main_aux.is_file():
+            excluded = {seg for seg in self.units if seg not in compiled}
+            _write(main_aux, run_input_main_aux(statements(read_lines(main_aux)), excluded))
+        for seg, (exit_, keep) in rewrites.items():
+            path = run_dir / a.include_of(seg).aux_name
+            _write(path, rewrite_checkpoint(statements(read_lines(path)), exit_, registers, keep))
+        (run_dir / PICS_FILE).write_text(pictures_text, encoding="utf-8")
+
+    def _store_inputs(
+        self, seg: str, recs: RunRecords, pre: CanonView, post: CanonView, pre_self: list[str]
+    ) -> None:
+        """What the compiled unit ``seg`` was compiled with (§6.8.1): entry state, imported
+        values, the list files it typesets (by command), reads (F records) and starts (L facts:
+        also \\@starttoc in a class macro, e.g. a preface command), self-data stability."""
+        job = self.ctx.job
+        scan = self.sources.scan(seg)
+        reads = scan.list_reads()
+        if reads is not None:
+            derived = tuple(f"{job}{x}" for x in derived_suffixes(self.state.list_suffixes))
+            reads |= {
+                f[f.rindex(job) + len(job) :]
+                for s, f in recs.files
+                if s == seg and f.endswith(derived)
+            }
+            reads |= {"." + ext for (ext,) in recs.fact(seg, "L")}
+        self.state.units[seg] = UnitInputs(
+            entry=recs.entry_state(seg),
+            imports=imports(scan, pre.values),
+            lists=pre.lists_key(reads) if reads is None or reads else None,
+            self_stable=pre_self == post.unit_self(seg),
+            list_reads=None if reads is None else sorted(reads),
+        )
+        changed = set(pre_self) ^ set(post.unit_self(seg))
+        self.rules.self_changes[seg] = sorted({command_name(s) for s in changed})
+
+    def _after_new_global(
+        self, unit: str, compiled_by_run: list[set[str]], dirty: dict[str, list[str]]
+    ) -> str | None:
+        """A unit found global by this batch (its run's facts, files attributed to it): the
+        later units committed from runs without it are dirty; returns why the glue is invalid
+        if the last run did not compile it either."""
+        with_unit = next((c for c in compiled_by_run if unit in c), set())
+        why = (
+            f"after {self.a.include_of(unit).arg}, a global unit "
+            f"({'; '.join(self.sources.global_reasons(unit))})"
+        )
+        for seg in self.units[self.units.index(unit) + 1 :]:
+            if seg not in with_unit:
+                dirty.setdefault(seg, []).append(why)
+        return why if unit not in compiled_by_run[-1] else None
 
     def _pictures(
         self, views: list[RunView], compiled_by_run: list[set[str]], pre: CanonView
@@ -576,6 +604,29 @@ def _cold_reason(ctx: Context, state: State | None, stamp: str) -> str | None:
     return None
 
 
+def _full_only_stamp(ctx: Context) -> dict[str, Any]:
+    # keyed by the version too: an upgrade may support what forced full mode
+    return {"fingerprints": asdict(ctx.analysis.fingerprints), "chapmk": chapmk.__version__}
+
+
+def _full_only_reason(ctx: Context) -> str | None:
+    """The persistent fallback reason an earlier build stored (``full-only.json``) for the same
+    main file and chapmk version; None if there is none (missing or unreadable: the
+    incremental build is attempted)."""
+    try:
+        data = json.loads((ctx.layout.canon_dir / FULL_ONLY_FILE).read_bytes())
+    except (OSError, ValueError):
+        return None
+    stamp = _full_only_stamp(ctx)
+    if (
+        isinstance(data, dict)
+        and "reason" in data
+        and all(data.get(k) == v for k, v in stamp.items())
+    ):
+        return str(data["reason"])
+    return None
+
+
 def _sync_shadow(ctx: Context) -> None:
     """Bring the shadow tree up to date; list files found by earlier builds are build outputs
     too (excluded)."""
@@ -598,19 +649,9 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
         return _full(ctx, epoch, "--full", start)
     if ctx.analysis.fallback_reasons:
         return _full(ctx, epoch, "; ".join(ctx.analysis.fallback_reasons), start)
-    marker = canon / FULL_ONLY_FILE
-    # keyed by the version too: an upgrade may support what forced full mode
-    stamp_data = {"fingerprints": asdict(ctx.analysis.fingerprints), "chapmk": chapmk.__version__}
-    try:
-        data = json.loads(marker.read_bytes()) if marker.is_file() else {}
-    except (OSError, ValueError):
-        data = {}  # unreadable: ignored (attempt the incremental build)
-    if (
-        isinstance(data, dict)
-        and "reason" in data
-        and all(data.get(k) == v for k, v in stamp_data.items())
-    ):
-        return _full(ctx, epoch, data["reason"], start)
+    persistent = _full_only_reason(ctx)
+    if persistent is not None:
+        return _full(ctx, epoch, persistent, start)
     try:
         try:
             state = load_state(canon)
@@ -698,7 +739,8 @@ def build(ctx: Context, epoch: int, *, full: bool = False) -> BuildReport:
     except FallbackError as fb:
         if fb.persistent:
             canon.mkdir(parents=True, exist_ok=True)
-            write_atomic(marker, json.dumps({**stamp_data, "reason": str(fb)}))
+            data = {**_full_only_stamp(ctx), "reason": str(fb)}
+            write_atomic(canon / FULL_ONLY_FILE, json.dumps(data))
         return _full(ctx, epoch, str(fb), start)
 
 

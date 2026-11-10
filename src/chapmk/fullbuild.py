@@ -13,7 +13,7 @@ import json
 import os
 import shutil
 from collections.abc import Callable, Mapping
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from chapmk.analysis import Analysis
@@ -63,13 +63,10 @@ _NOT_INPUTS = (
 
 @dataclass(frozen=True)
 class FullBuildResult:
-    """Published files and statistics of a full-mode build."""
+    """The published PDF and the number of passes of a full-mode build."""
 
     pdf: Path
-    synctex: Path | None
-    log: Path
     passes: int
-    tool_runs: tuple[str, ...] = field(default=())
 
 
 def _snapshot(outdir: Path) -> dict[Path, str]:
@@ -83,13 +80,12 @@ def _snapshot(outdir: Path) -> dict[Path, str]:
 
 @dataclass
 class ToolState:
-    """Content hashes of the inputs when biber/makeindex last ran, and the tool runs."""
+    """Content hashes of the inputs when biber/BibTeX/makeindex last ran."""
 
     bcf: str | None = None
     bib: str | None = None
     nlo: str | None = None
     idx: str | None = None
-    runs: list[str] = field(default_factory=list)
 
 
 def run_tools(
@@ -107,22 +103,18 @@ def run_tools(
     if bcf.is_file() and digest(bcf) != state.bcf:
         run_biber(dist, job, outdir, cwd, env)
         state.bcf = digest(bcf)
-        state.runs.append("biber")
     bib = bibtex_inputs(outdir)
     if bib is not None and bib != state.bib:
         run_bibtex(dist, job, outdir, cwd, env)
         state.bib = bib
-        state.runs.append("bibtex")
     nlo = outdir / f"{job}.nlo"
     if nlo.is_file() and digest(nlo) != state.nlo:
         run_makeindex(dist, nlo.name, f"{job}.nls", NOMENCL_STYLE, outdir, env)
         state.nlo = digest(nlo)
-        state.runs.append("makeindex")
     idx = outdir / f"{job}.idx"
     if idx.is_file() and digest(idx) != state.idx:
         run_makeindex(dist, idx.name, f"{job}.ind", None, outdir, env, "makeindex-idx.out")
         state.idx = digest(idx)
-        state.runs.append("makeindex (index)")
 
 
 @dataclass(frozen=True)
@@ -144,9 +136,9 @@ def converge(
     *,
     report: Callable[[str], None] = lambda _msg: None,
     max_passes: int = MAX_PASSES,
-) -> tuple[int, ToolState]:
+) -> int:
     """Repeat ``run_pass`` (plus biber/makeindex) until no build file read by a pass changed
-    during it (latexmk's criterion). Returns the number of passes and the tool runs.
+    during it (latexmk's criterion). Returns the number of passes.
 
     Raises :class:`TexError` (``log`` = the run's log) on a failing pass or without fixpoint.
     """
@@ -168,7 +160,7 @@ def converge(
             why.append(result.rerun)
         report(f"pass {n}: " + ("; ".join(why) if why else "stable"))
         if not why:
-            return n, tools
+            return n
     raise TexError(f"no fixpoint after {max_passes} passes (files keep changing)", log=log)
 
 
@@ -243,7 +235,7 @@ def full_build(
         return PassResult(False, run_error(out / f"{job}.log", result.output, layout.path_map()))
 
     try:
-        passes, tools = converge(
+        passes = converge(
             job, out, layout.shadow_dir, dist, env, run_pass, report=report, max_passes=max_passes
         )
     except TexError as err:  # TeX ended normally: its files are complete
@@ -263,7 +255,6 @@ def full_build(
             )
         )
     items.append((copy_bytes(out / f"{job}.pdf"), layout.output(".pdf")))
-    *syn, pdf = publish_all(items)
-    return FullBuildResult(
-        pdf, syn[0] if syn else None, _publish_log(analysis, layout), passes, tuple(tools.runs)
-    )
+    pdf = publish_all(items)[-1]
+    _publish_log(analysis, layout)
+    return FullBuildResult(pdf, passes)

@@ -44,13 +44,6 @@ class OutlineEntry:
     title: bytes
 
 
-@dataclass(frozen=True)
-class MergeStats:
-    pages: int
-    destinations: int
-    outline_items: int
-
-
 def dummy_destinations(log: Path) -> set[str]:
     """Names pdfTeX replaced by dummy destinations (referenced but not defined in the run)."""
     if not log.is_file():
@@ -156,7 +149,7 @@ def merge_pdf(
     outline: Sequence[OutlineEntry],
     catalog_from: Path,
     out: Path,
-) -> MergeStats:
+) -> None:
     """Write the merged PDF to ``out`` (§6.11 steps 1-6).
 
     Named destinations are taken from the run whose pages define them, without the run's
@@ -236,7 +229,6 @@ def merge_pdf(
             fix_metadata_version=False,
         )
         tmp.replace(out)
-        return MergeStats(len(merged.pages), len(chosen), len(outline))
     finally:
         merged.close()
         sources.close()

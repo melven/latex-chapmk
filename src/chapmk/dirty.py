@@ -101,11 +101,9 @@ class DirtyRules:
         tags = sorted({_eqp_tag(k) for k, v in eqp_post.items() if eqp_pre.get(k) != v})
         self._check_shared_tags(tags)
         if tags:
-            # the units that use a changed tag (Q records); unknown owners: all compiled units
-            owners = {
-                seg for seg in self.units if set(tags) & set(self.state.eqp_tags.get(seg, ()))
-            }
-            known = {t for seg_tags in self.state.eqp_tags.values() for t in seg_tags}
+            # the units that use a changed tag (Q facts); unknown owners: all compiled units
+            owners = {seg for seg in self.units if set(tags) & self._eqp_tags(seg)}
+            known = {t for seg in self.state.facts for t in self._eqp_tags(seg)}
             if not set(tags) <= known:
                 owners |= compiled
             for seg in sorted(owners, key=position):
@@ -155,6 +153,9 @@ class DirtyRules:
             glue = f"glue sources changed ({short_list(changed)})"
         return dirty, glue
 
+    def _eqp_tags(self, seg: str) -> set[str]:
+        return {tag for (tag,) in self.state.fact(seg, "Q")}
+
     def _check_shared_tags(self, changed: Sequence[str]) -> None:
         """C13: eqparbox sets all boxes of a tag to the widest one, computed from the boxes
         of one run. A tag used in several segments whose width changed while these were
@@ -163,7 +164,7 @@ class DirtyRules:
             owners = [
                 seg
                 for seg in self.a.segments
-                if tag in self.state.eqp_tags.get(seg, ()) and seg in self.state.segments
+                if tag in self._eqp_tags(seg) and seg in self.state.segments
             ]
             if len({self.state.segments[seg].run for seg in owners}) > 1:
                 names = [self.a.include_of(s).arg if is_unit(s) else s for s in owners]
