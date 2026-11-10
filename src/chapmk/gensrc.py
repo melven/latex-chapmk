@@ -6,12 +6,102 @@ All functions return text; writing files is the caller's job
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import re
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 
 from chapmk.analysis import Analysis
 
 INI_PACKAGE = "chapmk-ini"
 RUNTIME_PACKAGE = "chapmk"
+
+
+@dataclass(frozen=True)
+class FormatProbe:
+    """State a format does not keep (§6.3.3, S13): ``tex`` (end of the format source) types
+    ``chapmk-<name>:<value>`` into the log; ``reason`` maps the value to what the format part
+    did, or None if the format keeps it. ``pattern`` replaces the probe line for a message of
+    pdfTeX's own (group 1: the value)."""
+
+    name: str
+    tex: str
+    reason: Callable[[str], str | None]
+    pattern: str | None = None
+
+    def find(self, log: str) -> str | None:
+        """The reason this probe gives for a format build's log, None if none."""
+        m = re.search(self.pattern or f"chapmk-{re.escape(self.name)}:(.*)", log)
+        return self.reason(m.group(1).strip()) if m else None
+
+
+def _typeout(name: str, test: str, value: str) -> str:
+    return f"{test}\\typeout{{chapmk-{name}:{value}}}\\fi"
+
+
+def _objects(value: str) -> str | None:
+    _, forms, images = (int(v) for v in value.split(","))
+    return f"creates PDF form xobjects or images ({forms}/{images})" if forms or images else None
+
+
+def _written(value: str) -> str:
+    name = value.strip('"').replace("\\jobname ", "\\jobname")
+    return f"writes and closes a file ({name}, e.g. with filecontents)"
+
+
+#: The probes, in the order their reasons are reported. Reserved ``\\pdfobj`` objects are
+#: kept (only form xobjects and images count).
+FORMAT_PROBES: tuple[FormatProbe, ...] = (
+    FormatProbe(
+        "pdf-objects",
+        _typeout(
+            "pdf-objects",
+            "\\ifdefined\\pdflastobj",
+            "\\the\\pdflastobj,\\the\\pdflastxform,\\the\\pdflastximage",
+        ),
+        _objects,
+    ),
+    FormatProbe(  # pdfTeX's warning at the dump
+        "pdf-immediate",
+        "",
+        lambda _: "writes PDF objects immediately (e.g. the cmap package's ToUnicode maps)",
+        pattern=r"dangling objects discarded()",
+    ),
+    FormatProbe(  # the next free colour stack: 1 if none was created
+        "pdf-colorstacks",
+        _typeout(
+            "pdf-colorstacks",
+            "\\ifdefined\\pdfcolorstackinit",
+            "\\the\\numexpr\\pdfcolorstackinit direct{}\\relax",
+        ),
+        lambda v: (
+            f"creates colour stacks ({int(v) - 1}, \\pdfcolorstackinit)" if int(v) > 1 else None
+        ),
+    ),
+    FormatProbe(  # a \\pdfcatalog etc. without a braced argument (chapmk-ini.sty)
+        "pdf-unrecorded",
+        _typeout(
+            "pdf-unrecorded",
+            "\\ifcsname chapmk@pdfunrecorded\\endcsname",
+            "\\csname chapmk@pdfunrecorded\\endcsname",
+        ),
+        lambda v: f"calls \\{v} without a braced argument",
+    ),
+    FormatProbe(  # a file the format part writes and closes, e.g. filecontents (chapmk-ini.sty)
+        "file-written",
+        _typeout(
+            "file-written",
+            "\\ifcsname chapmk@written\\endcsname",
+            "\\csname chapmk@written\\endcsname",
+        ),
+        _written,
+    ),
+)
+
+
+def lost_state(log: str) -> str | None:
+    """What the format part did that a dump loses, from the log of the format build
+    (:data:`FORMAT_PROBES`); None if nothing."""
+    return next((r for p in FORMAT_PROBES if (r := p.find(log))), None)
 
 
 def _ending(line: str) -> str:
@@ -37,17 +127,7 @@ def format_source(analysis: Analysis) -> str:
     )
     if not lines[-1].endswith("\n"):
         lines[-1] += nl
-    check = (
-        "\\ifdefined\\pdflastobj\\typeout{chapmk-pdf-objects:\\the\\pdflastobj,"
-        "\\the\\pdflastxform,\\the\\pdflastximage}\\fi"
-        # S13: the next free colour stack (1: none was created) and unrecorded \pdfcatalog ...
-        "\\ifdefined\\pdfcolorstackinit\\typeout{chapmk-pdf-colorstacks:"
-        "\\the\\numexpr\\pdfcolorstackinit direct{}\\relax}\\fi"
-        "\\ifcsname chapmk@pdfunrecorded\\endcsname\\typeout{chapmk-pdf-unrecorded:"
-        "\\csname chapmk@pdfunrecorded\\endcsname}\\fi"
-        # a file the format part writes and closes (filecontents): chapmk-ini.sty
-        "\\ifcsname chapmk@written\\endcsname\\typeout{chapmk-file-written:"
-        "\\csname chapmk@written\\endcsname}\\fi"
+    check = "".join(p.tex for p in FORMAT_PROBES) + (
         # S13: nodes left on the main vertical list go into a dumped box (chapmk-ini.sty);
         # \csname: the preamble may leave @ "other", and \chapmk@capturemvl would be \chapmk
         # followed by text

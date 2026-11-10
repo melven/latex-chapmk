@@ -5,7 +5,7 @@ import pytest
 from chapmk.analysis import analyse
 from chapmk.config import Config
 from chapmk.files import write_if_changed
-from chapmk.gensrc import format_source, full_mode_input, run_main
+from chapmk.gensrc import FORMAT_PROBES, format_source, full_mode_input, lost_state, run_main
 from chapmk.texsource import split_lines
 
 
@@ -37,9 +37,8 @@ def test_format_source(tmp_path: Path) -> None:
     )
     assert lines[1] == "\\usepackage{tikz}\n"
     # probes of the state a format cannot keep (S13), then the end of the dump
-    probes = ("chapmk-pdf-objects:", "chapmk-pdf-colorstacks:", "chapmk-pdf-unrecorded:")
-    for probe in (*probes, "chapmk-file-written:"):
-        assert probe in lines[-1]
+    for probe in FORMAT_PROBES:
+        assert probe.tex in lines[-1]
     # the catcode of @ the preamble leaves, for the runs (sweep: theo543)
     assert "\\csname chapmk@atcatcode\\endcsname{\\the\\catcode64}" in lines[-1]
     # mylatexformat's font preloading off (sweep B2: fonts as in a plain build)
@@ -103,3 +102,23 @@ def test_write_atomic_keeps_old_file_on_failure(
         write_atomic(p, "new content\n")
     monkeypatch.undo()
     assert p.read_text() == "old\n" and [f.name for f in p.parent.iterdir()] == ["a.aux"]
+
+
+@pytest.mark.parametrize(
+    ("log", "reason"),
+    [
+        ("chapmk-pdf-objects:3,0,0\nchapmk-pdf-colorstacks:1\n", None),  # reserved objects
+        ("chapmk-pdf-objects:3,2,1\n", "creates PDF form xobjects or images (2/1)"),
+        ("2 dangling objects discarded\n", "writes PDF objects immediately"),
+        ("chapmk-pdf-colorstacks:3\n", "creates colour stacks (2, \\pdfcolorstackinit)"),
+        ("chapmk-pdf-unrecorded:pdfcatalog\n", "calls \\pdfcatalog without a braced argument"),
+        ('chapmk-file-written:"\\jobname .xyz"\n', "writes and closes a file (\\jobname.xyz,"),
+    ],
+)
+def test_lost_state(log: str, reason: str | None) -> None:
+    """Each probe of the format source gives its reason (S13); the first one is reported."""
+    got = lost_state(log)
+    assert got == reason if reason is None else got is not None and got.startswith(reason)
+    assert lost_state("chapmk-pdf-colorstacks:2\nchapmk-pdf-unrecorded:pdfinfo\n") == (
+        "creates colour stacks (1, \\pdfcolorstackinit)"
+    )
