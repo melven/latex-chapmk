@@ -549,8 +549,7 @@ cached by file content (`canon/lint-cache.json`).
 **At run time:** a unit that changes the page numbering style (`\thepage`) or the page style
 (head and foot macros) while it is compiled, also through a class macro the lint cannot see
 (e.g. a class switching both in `\@chapter` for chapter 1), writes `G <unit> <command>`; it
-becomes global too (its `G` fact in the state), and later units committed from runs without it
-are recompiled.
+becomes global too (its `G` fact in the state).
 
 **Anchors used across segments** (S19): `\addcontentsline` (with hyperref: its link target) and
 `\label` (its number and target) use the last anchor before them (`\@currentHref`,
@@ -562,8 +561,14 @@ anchor macros still have their values from the segment's start, and the segment 
 create that anchor name or counter number again) and each segment that ends with an anchor of
 its own (`H`). The owner is the nearest earlier segment with `H`; if it is a unit outside the
 reader's compilation unit, it becomes global (`sources.anchor_owner`), with a warning naming
-the command's line and the fix (`\phantomsection` before it). A newly found owner recompiles
-the later units committed from runs without it, and the glue.
+the command's line and the fix (`\phantomsection` before it).
+
+**Global units, one table** (`sources.GLOBAL_RULES`): a unit is global if any rule gives a
+reason: a lint hit, a `G` fact, its anchor used by a later segment. Scheduling and messages use
+the reasons. A unit found global after a batch (by its run's facts, or by the lint of files
+attributed to it only after the run, e.g. a newly `\input` file with a state switch) recompiles
+the later units committed from runs without it, and the glue if the last run did not compile
+it. A new kind of global unit is one rule.
 
 **Slow glue (hint):** a glue block taking ≥ 0.5 s in every run (`T` records) is reported with
 its line range and whether it could move into an `\include` (a hint, not a warning: it depends

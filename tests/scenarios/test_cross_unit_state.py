@@ -208,6 +208,33 @@ def test_state_left_open_at_the_end_of_a_unit(
 
 
 @pytest.mark.parametrize(
+    "switch", ["\\color{red}", "\\large", "\\pagestyle{empty}"], ids=["colour", "size", "style"]
+)
+def test_state_switch_in_a_newly_input_file(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], switch: str
+) -> None:
+    """S18 through a file the unit starts to \\input: the lint sees the switch only after the
+    run (the file is attributed to the unit then), so the run compiled the unit alone. The
+    unit is found global after the batch, and the later units committed from runs without it
+    are compiled again (before: wrong colour and size in b and c; the page style was caught
+    by its G fact)."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "main.tex").write_text(
+        "\\documentclass{book}\n\\usepackage{xcolor}\n\\begin{document}\n"
+        "\\include{a}\n\\include{b}\n\\include{c}\n\\end{document}\n"
+    )
+    for u in "abc":
+        (src / f"{u}.tex").write_text(f"\\chapter{{{u.upper()}}}Text {u}.\\clearpage More {u}.\n")
+    (src / "st.tex").write_text(switch + "\n")
+    checked(src, capsys, "-j", "3")
+    edit(src / "a.tex", "Text a.", "Text a.\n\\input{st}\n")
+    rep = checked(src, capsys, "-j", "3")
+    assert selections(rep)[0] == ["a"] and rep["compiled"] == ["a", "b", "c"], rep
+    assert any("after a, a global unit" in r for r in reasons(rep, "b")), rep
+
+
+@pytest.mark.parametrize(
     "switch", ["\\pagenumbering{arabic}", "\\pagestyle{headings}"], ids=["numbering", "style"]
 )
 def test_page_numbering_switched_in_a_class_macro(
