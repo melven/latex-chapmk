@@ -420,14 +420,15 @@ both cases, so they never enter the unit's list-file section or main-aux slice (
 - per segment: the run that committed it and its page indices; its attributed source files
   with digests; its vectors (entry, exit, absolute set); citations (`.bcf` elements); eqparbox
   tags; picture keys; per unit the inputs it was compiled with (entry, imported values, list
-  files read, self-data stability) and its odd-page flag; per segment whether it sets an
-  anchor and its uses of an earlier segment's anchor (§6.8.4);
+  files read, self-data stability); its facts (Appendix B: odd-page flag, page numbering or
+  style changed at run time, an anchor of its own, uses of an earlier segment's anchor, list
+  files started; §6.8.4);
 - global inputs (source files read by no segment, by the format build, `.bib` files) with
   digests, distribution files with stat signatures, the document's list suffixes, the glue
   input hashes, and pending dirty reasons if a build stopped before the fixpoint.
 
 **Commit of a run** (`canon.commit_run`, in document order within a batch): the aux files of
-its compiled units; for its compiled units and all glue segments the pages, vectors,
+its compiled units; for its compiled units and all glue segments the pages, vectors, facts,
 citations, nomenclature entries and aggregates. The canonical main aux is the run's main aux
 with the unit content of the units it did not compile kept from the previous canonical main
 aux (§6.7.2). Then the list files (§6.7.1) and the tools (§6.10).
@@ -548,7 +549,7 @@ cached by file content (`canon/lint-cache.json`).
 **At run time:** a unit that changes the page numbering style (`\thepage`) or the page style
 (head and foot macros) while it is compiled, also through a class macro the lint cannot see
 (e.g. a class switching both in `\@chapter` for chapter 1), writes `G <unit> <command>`; it
-becomes global too (`State.runtime_global`), and later units committed from runs without it
+becomes global too (its `G` fact in the state), and later units committed from runs without it
 are recompiled.
 
 **Anchors used across segments** (S19): `\addcontentsline` (with hyperref: its link target) and
@@ -1034,6 +1035,12 @@ Relevant mechanisms: the `.nlo` stream, biblatex renumbering, longtable and eqpa
 | mark classes | `.frec` | `K <pseudo register> <class>`; `K primitive <n>` |
 | stream marker | `.nlo`, `.idx` | `%chapmk-seg <seg>` |
 | list-file markers | list files | `\chapmk@lmark{U<k>}`, `\chapmk@lmark{/<seg>}` |
+
+**Segment facts:** the `.frec` records `G`, `H`, `R`, `O` and `L` have the form
+`<kind> <seg> <args>` (written by `\chapmk@fact`). They are parsed by one table
+(`records.SEGMENT_FACTS`: kind and number of arguments) and committed with the segment
+(`State.facts`); the rules that read them are in the scheduling, the global units and the
+list readers. A new per-segment fact is a writer, one table entry and its rule.
 
 Segment ids: `G0..Gn` for glue, `U1..Un` for units (`segment.py`). The driver checks the
 `\chapmk@unit` records against the include order of the analysis.
