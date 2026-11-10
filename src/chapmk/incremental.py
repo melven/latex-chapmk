@@ -52,7 +52,7 @@ from chapmk.config import Config
 from chapmk.deps import imports
 from chapmk.dirty import DirtyRules
 from chapmk.errors import FallbackError, TexError
-from chapmk.facts import UNIT_HEADINGS, UNSUPPORTED_PACKAGES, derived_suffixes
+from chapmk.facts import UNIT_HEADINGS, derived_suffixes, runtime_reason
 from chapmk.files import changed_files, digest, source_name, write_atomic
 from chapmk.fmt import (
     FormatInfo,
@@ -214,19 +214,9 @@ def _anchor_warning(a: Analysis, owner: str, reader: str, command: str, line: in
 def _check_runtime_support(run: RunView, fmt: FormatInfo) -> None:
     """Packages loaded by the format or the run (also those loaded by the class)."""
     loaded = run.loaded | loaded_names(fmt.directory / f"{fmt.name}.fls")
-    for pkg in sorted(UNSUPPORTED_PACKAGES):
-        if f"{pkg}.sty" in loaded:
-            raise FallbackError(f"package {pkg!r} is not supported (loaded at runtime)", True)
-    if any(line.startswith("\\bibdata{") for line in run.main_lines):
-        raise FallbackError(
-            "BibTeX in use (\\bibdata in the aux file, e.g. biblatex with backend=bibtex); "
-            "use biblatex with biber for incremental builds",
-            True,
-        )
-    if "hyperref.sty" in loaded and "bookmark.sty" not in loaded:
-        raise FallbackError(
-            "hyperref without the bookmark package (load bookmark to build incrementally)", True
-        )
+    reason = runtime_reason(loaded, run.main_lines)
+    if reason:
+        raise FallbackError(reason, True)
 
 
 def _write(path: Path, stmts: list[str]) -> None:

@@ -14,7 +14,13 @@ from pathlib import Path, PurePosixPath
 
 from chapmk.config import Config
 from chapmk.errors import AnalysisError
-from chapmk.facts import SECTION_HEADINGS, UNIT_HEADINGS, UNSUPPORTED_PACKAGES
+from chapmk.facts import (
+    SECTION_HEADINGS,
+    UNIT_HEADINGS,
+    UNSUPPORTED_PACKAGES,
+    package_reason,
+    source_reasons,
+)
 from chapmk.segment import document_order, glue_ids, seg_index, unit_ids
 from chapmk.texsource import (
     LineIndex,
@@ -250,7 +256,7 @@ def _fallback_reasons(text: str) -> list[str]:
     for macro in find_macros(text, {"usepackage", "RequirePackage"}):
         for package in split_list(macro.argument or ""):
             if package in UNSUPPORTED_PACKAGES:
-                reasons.append(f"package {package!r} is not supported")
+                reasons.append(package_reason(package))
             if package == "biblatex" and macro.optional:
                 backend = re.search(r"backend\s*=\s*(\w+)", macro.optional)
                 if backend and backend.group(1) != "biber":
@@ -261,10 +267,7 @@ def _fallback_reasons(text: str) -> list[str]:
         backend = re.search(r"backend\s*=\s*(\w+)", macro.argument or "")
         if backend and backend.group(1) != "biber":
             reasons.append(_backend_reason(backend.group(1)))
-    if re.search(r"\\makeglossaries\b", text):
-        reasons.append("\\makeglossaries is not supported")
-    if re.search(r"\\bibliography\s*\{", text):
-        reasons.append("BibTeX (\\bibliography) is not supported; use biblatex with biber")
+    reasons += source_reasons(text)
     # C10: citations outside refsection 0 cannot be patched into the .bcf per run; found
     # here, no build attempt is wasted (the runtime check stays for other ways to start one)
     options = " ".join(
