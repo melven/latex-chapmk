@@ -13,7 +13,7 @@ from chapmk.files import write_atomic
 from chapmk.predict import SegmentVectors
 from chapmk.records import Facts
 
-STATE_VERSION = 9
+STATE_VERSION = 10
 STATE_FILE = "state.json"
 
 
@@ -55,13 +55,12 @@ class State:
     compiled with. ``pending`` holds the dirty
     units with reasons and ``glue_pending`` why the glue is invalid, if the last build did not
     reach the fixpoint (e.g. a TeX error). ``vectors`` holds entry, exit and absolute set of
-    each segment from its committing run (prediction, §6.9.3); ``eqp_tags`` the eqparbox tags
-    each segment used in its committing run; ``facts`` the per-segment facts of the
-    committing run (``records.SEGMENT_FACTS``: units from their run, glue from the last run;
-    every committed segment has an entry). ``dist_files`` holds the stat signatures
-    of the distribution files read by the format build and the runs (C4): a change (e.g. a
-    ``tlmgr`` update) forces a cold build, so reused pages and new runs never mix package
-    versions.
+    each segment from its committing run (prediction, §6.9.3); ``facts`` the per-segment
+    facts of the committing run (``records.SEGMENT_FACTS``, e.g. eqparbox tags: units from
+    their run, glue from the last run; every committed segment has an entry). ``dist_files``
+    holds the stat signatures of the distribution files read by the format build and the
+    runs (C4): a change (e.g. a ``tlmgr`` update) forces a cold build, so reused pages and
+    new runs never mix package versions.
     """
 
     epoch: int
@@ -79,7 +78,6 @@ class State:
     pending: dict[str, list[str]] = field(default_factory=dict)
     glue_pending: str | None = None
     vectors: dict[str, SegmentVectors] = field(default_factory=dict)
-    eqp_tags: dict[str, list[str]] = field(default_factory=dict)
     pictures: dict[str, list[str]] = field(default_factory=dict)  # figure keys per segment
     facts: dict[str, Facts] = field(default_factory=dict)
     # list files of the document: the defaults plus those recorded (L records)
@@ -170,7 +168,6 @@ def load_state(canon_dir: Path) -> State | None:
                 )
                 for seg, v in data["vectors"].items()
             },
-            eqp_tags={k: list(v) for k, v in data["eqp_tags"].items()},
             pictures={k: list(v) for k, v in data["pictures"].items()},
             facts={
                 seg: {kind: [tuple(map(str, a)) for a in args] for kind, args in f.items()}

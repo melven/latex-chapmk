@@ -210,8 +210,6 @@ def commit_run(
                 normalized(exit_),
                 frozenset(recs.absolute.get(seg, ())),
             )
-    for seg in taken:  # Q records
-        state.eqp_tags[seg] = sorted(recs.eqp_uses.get(seg, ()))
     run_main = run.main_statements
     aggregates = list(dict.fromkeys(s for s in run_main if classify(s) == AGGREGATE))
     for seg in taken:
