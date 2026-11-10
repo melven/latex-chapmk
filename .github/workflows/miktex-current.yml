@@ -70,11 +70,13 @@ jobs:
       - name: Reference cache of this job (writable in the container)
         # not kept between runs: the image has the day's packages, and the references depend
         # on the TeX installation; the second test run reuses the references of the first
-        run: mkdir -p .test-cache && chmod 777 .test-cache
+        run: mkdir -p .test-cache miktex-logs && chmod 777 .test-cache miktex-logs
       - name: All tests as root (slow, scenario, acceptance)
         run: |
-          docker run --rm -v "$PWD":/work:ro -v "$PWD/.test-cache":/cache --user root chapmk-miktex bash -c '
+          docker run --rm -v "$PWD":/work:ro -v "$PWD/.test-cache":/cache -v "$PWD/miktex-logs":/logs --user root chapmk-miktex bash -c '
             set -e
+            # the logs of MiKTeX (format and font making, package database), kept for the upload
+            trap "cp -r $HOME/.miktex/texmfs/data/miktex/log /logs/$(id -un) 2>/dev/null || true" EXIT
             w=$(mktemp -d); tar -C /work --exclude=./.test-cache -cf - . | tar -C "$w" -xf -
             ln -s /cache "$w/.test-cache"; cd "$w"
             # pdflatex.fmt before the tests: MiKTeX makes it at first use, and a test that
@@ -86,8 +88,10 @@ jobs:
       - name: All tests as non-root user (slow, scenario, acceptance)
         if: success() || failure()
         run: |
-          docker run --rm -v "$PWD":/work:ro -v "$PWD/.test-cache":/cache chapmk-miktex bash -c '
+          docker run --rm -v "$PWD":/work:ro -v "$PWD/.test-cache":/cache -v "$PWD/miktex-logs":/logs chapmk-miktex bash -c '
             set -e
+            # the logs of MiKTeX (format and font making, package database), kept for the upload
+            trap "cp -r $HOME/.miktex/texmfs/data/miktex/log /logs/$(id -un) 2>/dev/null || true" EXIT
             w=$(mktemp -d); tar -C /work --exclude=./.test-cache -cf - . | tar -C "$w" -xf -
             ln -s /cache "$w/.test-cache"; cd "$w"
             # pdflatex.fmt before the tests: MiKTeX makes it at first use, and a test that
@@ -96,6 +100,13 @@ jobs:
             pip install -q -e .
             pytest -n auto --dist worksteal -q -rfE
           '
+      - name: MiKTeX logs (format and font making, package database)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: miktex-logs-current
+          path: miktex-logs/
+          if-no-files-found: ignore
       - name: Summary
         if: always()
         run: |
