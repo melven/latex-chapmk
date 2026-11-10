@@ -344,20 +344,17 @@ class Fixpoint:
             for reg, name in all_recs[0].mark_classes.items():
                 self.register_names[reg] = f"marks {name}"
         t.lap("records")
-        new_global: dict[str, set[str]] = {}  # unit -> units compiled in its run
-        owners_before = set(anchor_owners(a, state))
+        global_before = {u for u in self.units if self.sources.is_global(u)}
         with committing(canon, state, [s.name for s in specs]):  # journal (C7)
-            for view, recs, compiled in zip(views, all_recs, compiled_by_run, strict=True):
-                for seg in compiled:
-                    if recs.fact(seg, "G") and not state.fact(seg, "G"):
-                        new_global[seg] = compiled
+            for view, compiled in zip(views, compiled_by_run, strict=True):
                 commit_run(a, ctx.layout, state, view, compiled)  # also the facts
-                self._attribute(view, compiled)
-            owners = anchor_owners(a, state)
-            for owner, uses in owners.items():
+                self._attribute(view, compiled)  # lint of newly attributed files
+            for owner, uses in anchor_owners(a, state).items():
                 for reader, command, line in uses:
                     self._warn(_anchor_warning(a, owner, reader, command, line))
-            new_owners = sorted(set(owners) - owners_before, key=position)
+            new_global = [
+                u for u in self.units if u not in global_before and self.sources.is_global(u)
+            ]
             exported = self._pictures(views, compiled_by_run, pre)
             t.lap("commit")
             lists_complete = commit_lists(a, ctx.layout, state, views)
@@ -403,23 +400,19 @@ class Fixpoint:
                 )
             if not lists_complete:
                 glue_after = glue_after or "list files without unit markers (rewritten by the glue)"
-            for g, with_g in new_global.items():
-                # later units committed from runs without it miss its page numbering/style
-                what = ", ".join(c for (c,) in state.fact(g, "G"))
-                for seg in a.unit_segments[a.unit_segments.index(g) + 1 :]:
+            for g in new_global:
+                # a unit found global by this batch (its run's records, files attributed to
+                # it): the later segments committed from runs without it (the glue: the last
+                # run) missed its state
+                with_g = next((c for c in compiled_by_run if g in c), set())
+                why = (
+                    f"after {a.include_of(g).arg}, a global unit "
+                    f"({'; '.join(self.sources.global_reasons(g))})"
+                )
+                for seg in self.units[self.units.index(g) + 1 :]:
                     if seg not in with_g:
-                        dirty_after.setdefault(seg, []).append(
-                            f"after {a.include_of(g).arg}, which changes {what} at run time"
-                        )
-            for owner in new_owners:
-                # a later segment uses its anchor: segments committed from runs without it
-                # (the glue: the last run) used an older anchor
-                with_o = next((c for c in compiled_by_run if owner in c), set())
-                why = f"after {a.include_of(owner).arg}, whose anchor a later part uses"
-                for seg in a.unit_segments[a.unit_segments.index(owner) + 1 :]:
-                    if seg not in with_o:
                         dirty_after.setdefault(seg, []).append(why)
-                if owner not in compiled_by_run[-1]:
+                if g not in compiled_by_run[-1]:
                     glue_after = glue_after or why
             for seg, n in sorted(exported.items()):
                 # the run typeset these pictures inline; embedded, the result equals externalize
