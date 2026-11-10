@@ -4,7 +4,7 @@ All notable changes are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [0.9.0] - unreleased
+## [0.9.0] - 2026-11-10
 
 First test release (formerly developed as `fastinc`).
 
@@ -29,6 +29,10 @@ First test release (formerly developed as `fastinc`).
   recompiled and the time per phase), `chapmk.toml` (docs/configuration.md).
 - A lint for unit bodies that change macros or lengths outside groups, and hints for slow
   parts of the main file that could become `\include`s.
+- Units whose state no checkpoint carries are compiled in every run, with a warning: page
+  numbering or page style changed at run time (also in a class macro), and the anchor of a
+  unit that a later `\addcontentsline` or `\label` uses (e.g. KOMA's `listof=totoc` after
+  the last `\include`; the warning names the line and the fix, `\phantomsection`).
 - Robustness:
   - one build per build directory (others wait, or `--no-wait`);
   - atomic writes and a commit journal (an interrupted build is redone, never read
@@ -60,8 +64,17 @@ First test release (formerly developed as `fastinc`).
   - cases chapmk cannot verify.
 - Edits of the main-file body, the include list, a `.bib` file or files read by the preamble
   give a cold build.
+- Full builds also when the preamble writes and closes a file (e.g. `filecontents` before
+  `\begin{document}`), or creates colour stacks or PDF objects (e.g. `transparent`, pgf
+  fadings) that a format cannot keep.
+- Source files outside the main file's directory are not found.
 - Label or citation keys built by macros, and references hidden in macros inside TikZ
   pictures, are not tracked.
+- Invisible differences a full build does not have (`chapmk check` reports them): a font
+  first loaded inside a picture changes SyncTeX records; link targets inside rotated content
+  (`sidewaysfigure`, `adjustbox` with `rotate`) can move by a few points (pdfTeX's position
+  there changes with unrelated code, also in a plain build); SyncTeX records of a file the
+  document writes and reads back point into the build directory.
 - Dates are fixed at the first build; the merged PDF is larger than a plain one.
 
 [0.9.0]: https://github.com/melven/latex-chapmk/releases/tag/v0.9.0
